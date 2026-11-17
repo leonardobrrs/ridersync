@@ -1,4 +1,5 @@
 import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { del as blobDel, get as blobGet, put as blobPut } from '@vercel/blob';
 import { createReadStream } from 'node:fs';
 import { mkdir, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -70,7 +71,61 @@ export class S3StorageDriver implements StorageDriver {
   }
 }
 
+function assertSafeKey(key: string) {
+  if (!SAFE_KEY.test(key) || key.includes('..')) throw new Error('Chave de armazenamento inválida.');
+}
+
+/**
+ * Vercel Blob em store PRIVADO (STORAGE_DRIVER=vercel-blob). Credenciais vêm do ambiente:
+ * BLOB_READ_WRITE_TOKEN (adicionada ao conectar o store ao projeto) ou OIDC da Vercel + BLOB_STORE_ID.
+ * Os arquivos nunca são expostos por URL pública: a API lê o blob e aplica a política de acesso.
+ */
+export class VercelBlobStorageDriver implements StorageDriver {
+  constructor(private readonly token?: string) {}
+
+  private credentials() {
+    if (!this.token && !process.env.BLOB_STORE_ID) {
+      throw new Error('Vercel Blob não configurado: conecte um Blob store ao projeto (BLOB_READ_WRITE_TOKEN ausente).');
+    }
+    return this.token ? { token: this.token } : {};
+  }
+
+  async put(key: string, data: Buffer, contentType: string): Promise<void> {
+    assertSafeKey(key);
+    await blobPut(key, data, { access: 'private', contentType, addRandomSuffix: false, ...this.credentials() });
+  }
+
+  async get(key: string): Promise<Readable> {
+    assertSafeKey(key);
+    const result = await blobGet(key, { access: 'private', ...this.credentials() });
+    if (!result || result.statusCode !== 200) throw new Error('Objeto não encontrado.');
+    return Readable.fromWeb(result.stream as import('node:stream/web').ReadableStream<Uint8Array>);
+  }
+
+  async delete(key: string): Promise<void> {
+    assertSafeKey(key);
+    await blobDel(key, this.credentials());
+  }
+}
+
+/** Disco local não é persistente na Vercel: falha com mensagem clara em vez de gravar em disco efêmero. */
+class UnavailableStorageDriver implements StorageDriver {
+  private fail(): never {
+    throw new Error('Armazenamento local não é suportado na Vercel. Configure STORAGE_DRIVER=vercel-blob ou s3.');
+  }
+  async put(): Promise<void> {
+    this.fail();
+  }
+  async get(): Promise<Readable> {
+    this.fail();
+  }
+  async delete(): Promise<void> {
+    this.fail();
+  }
+}
+
 export function createStorageDriver(env: Env): StorageDriver {
+  if (env.STORAGE_DRIVER === 'vercel-blob') return new VercelBlobStorageDriver(env.BLOB_READ_WRITE_TOKEN);
   if (env.STORAGE_DRIVER === 's3') {
     const client = new S3Client({
       region: env.S3_REGION,
@@ -83,5 +138,6 @@ export function createStorageDriver(env: Env): StorageDriver {
     });
     return new S3StorageDriver(client, env.S3_BUCKET!);
   }
+  if (process.env.VERCEL) return new UnavailableStorageDriver();
   return new LocalStorageDriver(env.STORAGE_LOCAL_DIR);
 }

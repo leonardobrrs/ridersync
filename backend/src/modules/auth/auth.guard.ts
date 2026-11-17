@@ -1,6 +1,6 @@
 import { CanActivate, ExecutionContext, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { corsOrigins, loadEnv } from '../../config/env';
+import { corsOrigins, loadEnv, originMatcher } from '../../config/env';
 import { AuthedRequest, IS_PUBLIC } from './auth.decorators';
 import { SESSION_COOKIE, SessionService } from './session.service';
 
@@ -14,7 +14,7 @@ import { SESSION_COOKIE, SessionService } from './session.service';
  */
 @Injectable()
 export class AuthGuard implements CanActivate {
-  private readonly origins = new Set(corsOrigins(loadEnv()));
+  private readonly isAllowedOrigin = originMatcher(corsOrigins(loadEnv()));
 
   constructor(
     private readonly reflector: Reflector,
@@ -29,7 +29,7 @@ export class AuthGuard implements CanActivate {
         throw new ForbiddenException({ code: 'CSRF', message: 'Requisição recusada (cabeçalho de origem ausente).' });
       }
       const origin = req.get('origin');
-      if (origin && !this.origins.has(origin) && !isSameOrigin(origin, req.get('host'))) {
+      if (origin && !this.isAllowedOrigin(origin) && !isSameOrigin(origin, req.get('host'))) {
         throw new ForbiddenException({ code: 'CSRF', message: 'Origem não permitida.' });
       }
     }

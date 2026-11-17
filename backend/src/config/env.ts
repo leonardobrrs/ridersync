@@ -13,7 +13,8 @@ const EnvSchema = z
     CORS_ORIGINS: z.string().default('http://localhost:5173'),
     COOKIE_SECURE: bool,
     SESSION_TTL_HOURS: z.coerce.number().int().positive().max(24 * 90).default(168),
-    STORAGE_DRIVER: z.enum(['local', 's3']).default('local'),
+    STORAGE_DRIVER: z.enum(['local', 's3', 'vercel-blob']).default('local'),
+    BLOB_READ_WRITE_TOKEN: z.string().optional(),
     STORAGE_LOCAL_DIR: z.string().default('./storage'),
     S3_BUCKET: z.string().optional(),
     S3_REGION: z.string().optional(),
@@ -51,4 +52,20 @@ export function corsOrigins(env: Env): string[] {
   return env.CORS_ORIGINS.split(',')
     .map((s) => s.trim())
     .filter(Boolean);
+}
+
+const escapeRegex = (s: string) => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * Verificador de origens permitidas (CORS e CSRF). Entradas exatas ou com curinga `*`, que casa
+ * somente caracteres de UM rótulo DNS (`[a-z0-9-]+`, sem ponto) — ex.:
+ * `https://ridersync-front-*-projetao2.vercel.app` aceita as URLs de Preview do projeto, mas não
+ * `https://evil.com/x.vercel.app` nem subdomínios adicionais.
+ */
+export function originMatcher(patterns: string[]): (origin: string) => boolean {
+  const exact = new Set(patterns.filter((p) => !p.includes('*')));
+  const wildcards = patterns
+    .filter((p) => p.includes('*'))
+    .map((p) => new RegExp(`^${p.split('*').map(escapeRegex).join('[a-z0-9-]+')}$`));
+  return (origin: string) => exact.has(origin) || wildcards.some((re) => re.test(origin));
 }

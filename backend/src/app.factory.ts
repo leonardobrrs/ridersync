@@ -5,7 +5,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
-import { corsOrigins, loadEnv } from './config/env';
+import { corsOrigins, loadEnv, originMatcher } from './config/env';
 
 /** Configuração HTTP compartilhada por main.ts e pelos testes de integração. */
 export function configureApp(app: INestApplication) {
@@ -16,8 +16,10 @@ export function configureApp(app: INestApplication) {
   app.setGlobalPrefix('api');
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'same-site' } }));
   app.use(cookieParser());
+  const isAllowedOrigin = originMatcher(corsOrigins(env));
   app.enableCors({
-    origin: corsOrigins(env),
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) =>
+      callback(null, !origin || isAllowedOrigin(origin)),
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
     allowedHeaders: ['Content-Type', 'X-Requested-With'],
