@@ -67,3 +67,18 @@ proposta para perfil privado, autonegociação, upload com tipo falso, link não
 - Notificações em tempo real (hoje: revalidação periódica de 20 s na tela de negociação).
 - Limpeza agendada de sessões expiradas.
 - `deepmerge-ts` (aviso do `npm audit`) vem só do CLI do Prisma 6.
+
+## Vercel Preview / staging (2026-11-17)
+
+Detalhes em `docs/VERCEL_SETUP.md`.
+
+- API (`ridersync`): Node 22.x, `gru1`, Standard Protection mantida + segredo *Protection Bypass for Automation*.
+  Variáveis Preview/Development: `COOKIE_SECURE=true`, `CORS_ORIGINS`, `STORAGE_DRIVER=vercel-blob`,
+  `BLOB_READ_WRITE_TOKEN` (Blob store privado `ridersync-staging-blob`, `gru1`), `DATABASE_URL` (Neon staging, inalterada).
+- Front (`ridersync-front`): Node 22.x; `/api/:path*` → `ridersync-api-staging.vercel.app` por regra de rota do projeto
+  (injeta o bypass no servidor; segredo fora do repo e do navegador). `frontend/vercel.json` só tem o fallback do SPA.
+- Código: `engines.node = 22.x` (backend/frontend), `.vercelignore` na raiz (a CLI não usa o `.gitignore`),
+  `.env.example` documenta `vercel-blob`.
+- Testes reais: driver Vercel Blob (put/get/delete, store privado → 403 sem token); fluxo pelo proxy do front com
+  as variáveis de Development (registro, login, `/auth/me`, CSRF sem cabeçalho e com Origin estranha → 403,
+  upload/leitura/exclusão de foto, logout → 401). Usuário sintético removido do staging; store vazio.

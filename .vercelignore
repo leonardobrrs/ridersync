@@ -1,0 +1,26 @@
+# Upload da Vercel CLI (deploy a partir da raiz; Root Directory = backend | frontend).
+# A CLI não usa o .gitignore: sem este arquivo, .env* locais e artefatos de build seriam enviados.
+node_modules
+**/node_modules
+dist
+**/dist
+coverage
+**/coverage
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
+.neon
+.vercel
+**/.vercel
+backend/storage
+backend/test-storage
+frontend/test-results
+frontend/playwright-report
+frontend/blob-report
+*.log
+*.zip
+*.html
+!frontend/index.html
