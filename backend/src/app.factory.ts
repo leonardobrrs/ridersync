@@ -1,4 +1,4 @@
-import { INestApplication } from '@nestjs/common';
+import { INestApplication, NestApplicationOptions } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -39,10 +39,15 @@ export function configureApp(app: INestApplication) {
   return app;
 }
 
-export async function createApp() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+/** Opções do NestFactory compartilhadas por main.ts e pelos testes. */
+export function appOptions(): NestApplicationOptions {
+  return {
     bodyParser: false,
     logger: loadEnv().NODE_ENV === 'test' ? ['error'] : ['error', 'warn', 'log'],
-  });
+  };
+}
+
+export async function createApp() {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, appOptions());
   return configureApp(app);
 }
