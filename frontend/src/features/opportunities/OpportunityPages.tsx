@@ -1,0 +1,307 @@
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
+import { Link, useParams, useSearchParams } from 'react-router';
+import { FormError } from '../../components/Fields';
+import { Poster } from '../../components/Poster';
+import { Empty, ErrorState, Loading, Status } from '../../components/States';
+import { useToast } from '../../components/Toast';
+import { api, errorMessage, qs } from '../../lib/api';
+import { APPLICATION_STATUS, dateTime, dayMonth, duration, EVENT_STATUS, money } from '../../lib/format';
+import { useMe, useMeta } from '../../lib/hooks';
+import type { ApplicationStatus, EventPublic } from '../../lib/types';
+
+/** Área do artista: "Oportunidades de apresentação" (o mesmo Event que a casa chama de publicação). */
+export function OpportunitiesPage() {
+  const [params, setParams] = useSearchParams();
+  const { data: meta } = useMeta();
+  const f = { q: params.get('q') ?? '', genre: params.get('genre') ?? '', city: params.get('city') ?? '' };
+  const q = useQuery({ queryKey: ['events', f], queryFn: () => api.get<EventPublic[]>(`/public/events${qs(f)}`) });
+  const set = (k: string, v: string) => {
+    const n = new URLSearchParams(params);
+    if (v) n.set(k, v);
+    else n.delete(k);
+    setParams(n);
+  };
+  return (
+    <div className="wrap page">
+      <div className="pagehead">
+        <div>
+          <h1>Oportunidades de apresentação</h1>
+          <p>Vagas abertas por casas de show. Candidate-se com seu perfil individual ou com sua banda.</p>
+        </div>
+      </div>
+      <div className="box cmp-f" style={{ marginBottom: 16 }}>
+        <label className="field">
+          <span>Buscar</span>
+          <input className="input" type="search" defaultValue={f.q} placeholder="Título, casa…" onKeyDown={(e) => e.key === 'Enter' && set('q', (e.target as HTMLInputElement).value)} />
+        </label>
+        <label className="field">
+          <span>Estilo</span>
+          <select className="input" value={f.genre} onChange={(e) => set('genre', e.target.value)}>
+            <option value="">Todos</option>
+            {meta?.genres.map((g) => <option key={g}>{g}</option>)}
+          </select>
+        </label>
+        <label className="field">
+          <span>Cidade</span>
+          <select className="input" value={f.city} onChange={(e) => set('city', e.target.value)}>
+            <option value="">Todas</option>
+            {meta?.cities.map((c) => <option key={c}>{c}</option>)}
+          </select>
+        </label>
+      </div>
+      {q.isLoading && <Loading />}
+      {q.error && <ErrorState error={q.error} retry={q.refetch} />}
+      {q.data?.length === 0 && <Empty title="Nenhuma oportunidade aberta">Volte em breve ou ajuste os filtros.</Empty>}
+      <div className="stack-sm">
+        {q.data?.map((e) => {
+          const d = dayMonth(e.startsAt);
+          return (
+            <article className="prop" key={e.id}>
+              <div className="dt">
+                <b>{d.day}</b>
+                <small>{d.month}</small>
+              </div>
+              <div>
+                <h2 style={{ fontSize: 17, fontWeight: 700 }}>
+                  <Link className="link" to={`/oportunidades/${e.id}`} style={{ color: 'var(--ink)' }}>
+                    {e.title}
+                  </Link>
+                </h2>
+                <p className="muted">
+                  {e.organizer.name} · {(e.venue ?? e.organizer).city} · {e.slots} vaga(s) · inscrições até {dateTime(e.applicationDeadline)}
+                </p>
+                <div className="chips" style={{ marginTop: 6 }}>
+                  {e.genres.map((g) => (
+                    <span key={g} className="chip">
+                      {g}
+                    </span>
+                  ))}
+                  {e.paymentType && <span className="chip">{e.paymentType}</span>}
+                </div>
+              </div>
+              <div className="price" style={{ margin: 0, textAlign: 'right' }}>
+                {e.feeCents != null ? money(e.feeCents) : 'A combinar'}
+                <small>cachê</small>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+interface MyApp {
+  id: string;
+  artistId: string;
+  status: ApplicationStatus;
+  booking: { id: string; status: string } | null;
+}
+
+export function OpportunityPage() {
+  const { eventId } = useParams();
+  const { data: me } = useMe();
+  const qc = useQueryClient();
+  const toast = useToast();
+  const q = useQuery({ queryKey: ['event', eventId], queryFn: () => api.get<EventPublic>(`/public/events/${eventId}`) });
+  const mine = useQuery({
+    queryKey: ['event-my-apps', eventId],
+    queryFn: () => api.get<MyApp[]>(`/events/${eventId}/my-applications`),
+    enabled: !!me,
+  });
+  const identities = [
+    ...(me?.musician ? [{ id: me.musician.id, name: me.musician.name, kind: 'Perfil individual', visibility: me.musician.visibility }] : []),
+    ...(me?.bands.filter((b) => b.role !== 'MEMBER').map((b) => ({ id: b.artist.id, name: b.artist.name, kind: 'Banda', visibility: b.artist.visibility })) ?? []),
+  ];
+  const [artistId, setArtistId] = useState('');
+  const [message, setMessage] = useState('');
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  if (q.isLoading) return <Loading />;
+  if (q.error) return <div className="wrap page"><ErrorState error={q.error} retry={q.refetch} /></div>;
+  const e = q.data!;
+  const appsByArtist = new Map((mine.data ?? []).map((a) => [a.artistId, a]));
+  const selected = artistId || identities.find((i) => !appsByArtist.has(i.id) || appsByArtist.get(i.id)!.status === 'WITHDRAWN')?.id || '';
+
+  const refresh = async () => {
+    await qc.invalidateQueries({ queryKey: ['event-my-apps', eventId] });
+    await qc.invalidateQueries({ queryKey: ['my-applications'] });
+  };
+  const apply = async () => {
+    setErr(null);
+    if (!selected) return setErr('Escolha com qual identidade artística deseja se candidatar.');
+    setBusy(true);
+    try {
+      await api.post(`/events/${e.id}/applications`, { artistId: selected, message });
+      setMessage('');
+      await refresh();
+      toast('Candidatura enviada! Acompanhe em Candidaturas.');
+    } catch (x) {
+      setErr(errorMessage(x));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const withdraw = async (id: string) => {
+    try {
+      await api.post(`/applications/${id}/withdraw`);
+      await refresh();
+      toast('Candidatura retirada.');
+    } catch (x) {
+      toast(errorMessage(x), 'error');
+    }
+  };
+  const place = e.venue ?? e.organizer;
+
+  return (
+    <div className="wrap page">
+      <ol className="bc">
+        <li>
+          <Link to="/oportunidades">Oportunidades</Link>
+        </li>
+        <li aria-current="page">{e.title}</li>
+      </ol>
+      <div className="adp">
+        <div className="stack">
+          <section className="box">
+            <div className="adh">
+              <Status value={e.status} map={EVENT_STATUS} />
+              <h1>{e.title}</h1>
+              <p className="muted">
+                por{' '}
+                <Link className="link" to={`/casas/${e.organizer.slug}`}>
+                  {e.organizer.name}
+                </Link>
+                {e.venue && e.venue.id !== e.organizer.id && <> · local: {e.venue.name}</>}
+              </p>
+            </div>
+            <dl className="attrs">
+              <div>
+                <dt>Apresentação</dt>
+                <dd>{dateTime(e.startsAt)}</dd>
+              </div>
+              <div>
+                <dt>Duração</dt>
+                <dd>{duration(e.durationMinutes)}</dd>
+              </div>
+              <div>
+                <dt>Inscrições até</dt>
+                <dd>{dateTime(e.applicationDeadline)}</dd>
+              </div>
+              <div>
+                <dt>Vagas</dt>
+                <dd>{e.slots}</dd>
+              </div>
+              <div>
+                <dt>Local</dt>
+                <dd>
+                  {place.neighborhood ? `${place.neighborhood}, ` : ''}
+                  {place.city}/{place.state}
+                </dd>
+              </div>
+              <div>
+                <dt>Pagamento</dt>
+                <dd>
+                  {e.paymentType ?? '—'} {e.feeCents != null && `· ${money(e.feeCents)}`}
+                </dd>
+              </div>
+            </dl>
+            {e.genres.length > 0 && (
+              <div className="chips">
+                {e.genres.map((g) => (
+                  <span className="chip" key={g}>
+                    {g}
+                  </span>
+                ))}
+              </div>
+            )}
+            {e.description && <p className="prose">{e.description}</p>}
+            {e.conditions && (
+              <div className="sec">
+                <h2>Condições</h2>
+                <p className="prose">{e.conditions}</p>
+              </div>
+            )}
+            {e.requirements && (
+              <div className="sec">
+                <h2>Requisitos</h2>
+                <p className="prose">{e.requirements}</p>
+              </div>
+            )}
+          </section>
+        </div>
+        <aside className="side">
+          <section className="box" aria-label="Candidatura">
+            <Poster name={e.organizer.name} photoUrl={e.organizer.photoUrl} top={[place.city, place.state]} bottom={[e.organizer.venueKind ?? '', '']} />
+            {!e.acceptingApplications && <div className="inline-msg info">Inscrições encerradas para esta oportunidade.</div>}
+            {!me && e.acceptingApplications && (
+              <Link className="btn cue block" to={`/entrar?next=/oportunidades/${e.id}`}>
+                Entrar para se candidatar
+              </Link>
+            )}
+            {me && mine.data && mine.data.length > 0 && (
+              <ul className="list-plain">
+                {mine.data.map((a) => {
+                  const ident = identities.find((i) => i.id === a.artistId);
+                  return (
+                    <li key={a.id} className="row between">
+                      <span>
+                        <strong>{ident?.name ?? 'Identidade'}</strong> <Status value={a.status} map={APPLICATION_STATUS} />
+                      </span>
+                      {(a.status === 'PENDING' || a.status === 'ACCEPTED') && !a.booking && (
+                        <button className="btn sm ghost danger" type="button" onClick={() => withdraw(a.id)}>
+                          Retirar
+                        </button>
+                      )}
+                      {a.booking && (
+                        <Link className="btn sm" to={`/painel/negociacoes/${a.booking.id}`}>
+                          Negociação
+                        </Link>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            {me && e.acceptingApplications && identities.length === 0 && (
+              <p className="hint">
+                Para se candidatar, <Link className="link" to="/painel/perfil">crie seu perfil</Link> ou administre uma banda.
+              </p>
+            )}
+            {me && e.acceptingApplications && identities.length > 0 && (
+              <div className="form">
+                <FormError message={err} />
+                <label className="field">
+                  <span>Candidatar-se como</span>
+                  <select className="input" value={selected} onChange={(x) => setArtistId(x.target.value)}>
+                    <option value="">Selecione…</option>
+                    {identities.map((i) => {
+                      const existing = appsByArtist.get(i.id);
+                      const blocked = existing && existing.status !== 'WITHDRAWN';
+                      return (
+                        <option key={i.id} value={i.id} disabled={!!blocked}>
+                          {i.name} ({i.kind}){i.visibility !== 'PUBLIC' ? ' — perfil privado' : ''}
+                          {blocked ? ' — já candidatado' : ''}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Mensagem para a casa</span>
+                  <textarea className="input" maxLength={1500} value={message} onChange={(x) => setMessage(x.target.value)} style={{ minHeight: 90 }} />
+                </label>
+                <button className="btn cue block" type="button" onClick={apply} disabled={busy}>
+                  {busy ? 'Enviando…' : 'Enviar candidatura'}
+                </button>
+                <p className="hint">Somente perfis públicos podem se candidatar. A seleção não confirma a contratação.</p>
+              </div>
+            )}
+          </section>
+        </aside>
+      </div>
+    </div>
+  );
+}

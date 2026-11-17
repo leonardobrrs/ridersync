@@ -1,0 +1,559 @@
+INSTRUÇÕES DE IMPLEMENTAÇÃO — RIDERSYNC
+Frontend React + Backend Monólito Modular
+Versão: 1.1 — editais adiados para versão futura
+
+====================================================================
+1. OBJETIVO DESTE ARQUIVO
+====================================================================
+
+Este arquivo estabelece as decisões técnicas e as regras de execução que devem orientar o desenvolvimento da plataforma RiderSync, também descrita como Plataforma de Profissionalização Artística.
+
+Use estas instruções como referência permanente ao trabalhar no repositório com Claude Code/Claude Opus ou outro agente de programação.
+
+A plataforma deve ajudar músicos independentes, bandas e casas de show/espaços culturais a organizar sua presença profissional, divulgar portfólios e riders técnicos, descobrir oportunidades de apresentação, receber candidaturas e negociar contratações. Editais/oportunidades culturais estão adiados e fora do MVP atual.
+
+O escopo inicial é voltado a músicos, bandas e casas de show/espaços culturais de Alagoas.
+
+DECISÕES TÉCNICAS FIXADAS:
+- Frontend: React + TypeScript + Vite.
+- Backend: Node.js + TypeScript + NestJS.
+- Arquitetura: monólito modular no backend.
+- Comunicação frontend/backend: API REST.
+- Banco de dados: PostgreSQL.
+- ORM e migrations: Prisma.
+- Validação: Zod.
+- Documentação da API: Swagger/OpenAPI.
+- Testes backend: Jest + Supertest.
+- Ambiente local: Docker Compose.
+
+Não substituir essas decisões por outra stack sem autorização explícita do responsável pelo projeto.
+
+====================================================================
+2. PRINCÍPIO ARQUITETURAL: MONÓLITO MODULAR
+====================================================================
+
+O backend deve ser uma única aplicação NestJS, executada e implantada como uma unidade. Os módulos representam separações internas por domínio, não serviços independentes.
+
+O frontend React será uma SPA responsiva que consome a API REST do backend. A existência de dois diretórios ou projetos de build (frontend e backend) NÃO significa que a arquitetura seja de microserviços. O backend continua sendo uma única aplicação monolítica modular.
+
+Estrutura inicial sugerida para o repositório:
+
+/
+  frontend/                 Aplicação React + TypeScript + Vite
+  backend/                  Aplicação NestJS (monólito modular)
+  docs/                     Documentação técnica e decisões
+  docker-compose.yml        Ambiente local, inicialmente PostgreSQL
+  README.md                 Instalação, execução e comandos
+
+A estrutura exata pode ser adaptada ao repositório existente, mas deve preservar a separação entre frontend e backend sem dividir o backend em serviços implantáveis independentes.
+
+Regras arquiteturais obrigatórias:
+- Um único backend NestJS.
+- Um único banco PostgreSQL para os módulos do MVP.
+- Módulos internos organizados por domínio e com responsabilidades claras.
+- Comunicação do frontend com o backend por API REST documentada.
+- Regras de negócio, validação de permissões e integridade devem existir no backend; nunca confiar apenas na interface.
+- Utilizar transações quando uma operação alterar várias entidades que precisam permanecer consistentes.
+- Utilizar chaves estrangeiras, índices, constraints e unicidade no banco sempre que aplicável.
+- Não criar microserviços, Redis, filas, CQRS, event sourcing ou infraestrutura distribuída no MVP.
+- Não criar abstrações genéricas ou camadas extras sem necessidade comprovada.
+
+O monólito deve ser modular e organizado, mas não excessivamente abstrato. Prefira código simples, explícito e fácil de testar.
+
+====================================================================
+3. STACK DO FRONTEND
+====================================================================
+
+Tecnologias principais:
+- React.
+- TypeScript.
+- Vite.
+- React Router para rotas e navegação.
+- TanStack Query para consultas, cache e sincronização de dados da API.
+- React Hook Form para formulários.
+- Zod para validação dos dados dos formulários.
+
+Diretrizes:
+- Desenvolver uma única aplicação React responsiva para desktop e celular.
+- Não manter versões independentes de desktop e mobile.
+- Não utilizar os arquivos HTML atuais como páginas finais isoladas.
+- Reimplementar os fluxos e componentes em React, reaproveitando as decisões visuais, os estilos, os textos, a estrutura de navegação e os comportamentos úteis dos protótipos.
+- Organizar componentes por funcionalidade e responsabilidade.
+- Evitar componentes gigantes que concentrem várias páginas ou regras de negócio.
+- Manter o estado remoto da API no TanStack Query; não duplicar desnecessariamente os mesmos dados em estados locais.
+- Manter estados de interface locais (modal aberto, aba selecionada, filtros temporários etc.) no próprio componente ou em solução simples apropriada.
+- Centralizar a configuração do cliente HTTP, tratamento de erros e configuração da URL da API.
+- Tratar carregamento, erro, ausência de dados, sucesso e permissões insuficientes nas telas.
+- Implementar feedback claro para ações como salvar, editar, excluir, enviar candidatura e responder proposta.
+- Garantir responsividade, acessibilidade básica, navegação por teclado e labels adequados nos formulários.
+
+Não introduzir Next.js, Vue, Angular ou outro framework de frontend. A decisão do projeto é React + Vite.
+
+Estilo visual:
+- Utilizar RiderSync celular.html e RiderSyncpc.html como referências de interface e experiência.
+- Preservar a identidade visual já estabelecida quando ela fizer sentido: linguagem visual inspirada em equipamentos e cases de palco, amarelo como cor de destaque, superfícies claras/escurecidas, tipografia e componentes consistentes.
+- Reaproveitar ideias de marketplace, cards, filtros, perfis, portfólios, riders, inventário técnico e propostas.
+- Unificar os protótipos em uma única experiência responsiva.
+- Não sacrificar usabilidade, legibilidade ou acessibilidade para copiar um detalhe visual.
+- Evitar emojis como substitutos de ícones da interface.
+
+Os protótipos usam dados fictícios e armazenamento local no navegador. Isso serve apenas para demonstração. Na aplicação real, os dados persistentes devem ser obtidos e gravados pela API e pelo PostgreSQL.
+
+====================================================================
+4. STACK E ORGANIZAÇÃO DO BACKEND
+====================================================================
+
+Tecnologias:
+- Node.js em versão LTS compatível com NestJS.
+- TypeScript.
+- NestJS.
+- PostgreSQL.
+- Prisma ORM.
+- Zod, integrado ao NestJS por pipes/adaptadores adequados.
+- REST API.
+- Swagger/OpenAPI.
+- Jest para testes unitários.
+- Supertest para testes de integração HTTP.
+- Docker Compose para ambiente local.
+
+Organização interna sugerida:
+
+backend/src/
+  modules/
+    auth/
+    users/
+    profiles/
+    bands/
+    organizations/
+    marketplace/
+    riders/
+    events/
+    bookings/
+    performances/
+  common/
+  config/
+  prisma/ ou integração equivalente com o diretório Prisma
+
+A organização pode ser ajustada se o NestJS já tiver uma estrutura criada. O importante é manter fronteiras de domínio claras.
+
+Responsabilidades:
+- Controllers: recebem requisições HTTP, aplicam guards/pipes e chamam os casos de uso.
+- Services: implementam e coordenam os casos de uso.
+- Regras de domínio: concentram decisões de negócio específicas, sem depender da interface.
+- Prisma: acesso e persistência no banco.
+- Guards/policies: autenticação e autorização no servidor.
+
+Evitar controllers com regras extensas, acesso ao banco espalhado por toda a aplicação ou regras críticas implementadas somente no frontend.
+
+====================================================================
+5. MÓDULOS E RESPONSABILIDADES DO DOMÍNIO
+====================================================================
+
+5.1 Identidade e acesso
+- User representa a conta de uma pessoa.
+- Implementar cadastro, login, logout e recuperação de acesso conforme o escopo definido.
+- Não adotar um papel global fixo como ARTIST ou VENUE no usuário.
+- Uma pessoa pode possuir perfil individual, participar de várias bandas e administrar uma ou mais organizações.
+- Proteger recursos privados e operações por autenticação e autorização no backend.
+
+5.2 Perfil individual
+- MusicianProfile representa a identidade profissional individual.
+- Deve ser independente dos dados de autenticação da conta.
+- Pode conter nome artístico, biografia, localização, estilos musicais, instrumentos/habilidades, contatos públicos, portfólio e rider próprio.
+- A visibilidade pública deve ser aplicada nas consultas do backend, não apenas escondida na interface.
+
+5.3 Bandas e integrantes
+- Band representa a identidade artística coletiva.
+- BandMember representa a associação entre pessoa e banda.
+- A banda possui perfil, portfólio e rider próprios, independentes dos dados individuais dos integrantes.
+- Papéis iniciais: OWNER, ADMIN e MEMBER.
+- OWNER e ADMIN podem realizar ações administrativas conforme as permissões definidas; MEMBER não deve ter permissões administrativas.
+- Implementar convites com estado pendente e aceite/recusa.
+- Impedir que uma banda fique sem responsável válido. A remoção ou rebaixamento do último OWNER deve ser bloqueada até que exista transferência válida.
+- Não copiar automaticamente dados do perfil individual para o perfil da banda.
+
+5.4 Organizações/casas de show
+- Organization representa o estabelecimento contratante.
+- No MVP, utilizar o tipo VENUE para casas de show e espaços culturais.
+- OrganizationMember representa o vínculo entre pessoa e organização.
+- Papéis iniciais: OWNER e ADMIN.
+- Uma pessoa autorizada pode administrar mais de uma organização.
+- A organização pode manter endereço, capacidade, descrição, imagens, contatos públicos e inventário de equipamentos.
+
+5.5 Marketplace
+- Visitantes devem poder explorar perfis públicos sem criar conta.
+- Listar músicos e bandas com dados destinados à divulgação.
+- Permitir busca e filtros essenciais: nome, estilo musical, localização e características relevantes de apresentação.
+- Respeitar as configurações de visibilidade e nunca expor credenciais, mensagens ou dados privados.
+- A tela pública de perfil deve apresentar portfólio, informações profissionais e rider conforme a política de exposição definida.
+
+5.6 Riders e inventário técnico
+- TechnicalRider representa o rider de uma identidade artística individual ou coletiva.
+- RiderItem representa um item e sua quantidade necessária.
+- VenueEquipmentItem representa um item e sua quantidade disponível em uma casa de show.
+- O rider de músico e o rider de banda devem ser independentes.
+- O inventário da casa deve ser independente dos riders dos artistas.
+- Utilizar catálogo ou identificadores consistentes para os itens comparáveis; não depender exclusivamente de texto livre.
+- Permitir observações e itens personalizados fora do catálogo, mas esses itens devem ficar como necessidade de conferência, sem equivalência presumida.
+
+A comparação deve ocorrer sob demanda, no backend, por regras determinísticas e explicáveis:
+- COMPATÍVEL: quantidade disponível igual ou superior à quantidade necessária.
+- PARCIALMENTE_DISPONÍVEL: existe quantidade positiva, mas inferior à necessária.
+- INDISPONÍVEL: item ausente do inventário ou quantidade disponível igual a zero.
+- VERIFICAÇÃO/CONFERÊNCIA: item personalizado ou sem correspondência explícita no catálogo.
+
+A resposta da API deve apresentar, por item: nome, unidade, quantidade necessária, quantidade disponível, estado e justificativa.
+
+Não presumir que equipamentos diferentes sejam substitutos. Não implementar recomendação inteligente, equivalência automática ou otimização avançada no MVP.
+
+5.7 Eventos e oportunidades de apresentação
+- Event representa uma publicação com oportunidade de apresentação.
+- No MVP, começar com eventos publicados como oportunidades com vagas e prazo de candidatura.
+- Separar organizerId (organização responsável pela publicação) de venueId (local físico), que pode ser opcional.
+- Estados iniciais sugeridos: DRAFT, OPEN, CLOSED, COMPLETED e CANCELLED.
+- Somente usuários autorizados da organização podem criar, editar, publicar ou encerrar eventos.
+- O artista deve visualizar a seção como “Oportunidades de apresentação”; a casa de show pode utilizar “Eventos” ou “Publicações”.
+
+5.8 Candidaturas
+- EventApplication representa a candidatura de um músico ou banda a um evento.
+- Não confundir candidatura com contratação.
+- Estados iniciais sugeridos: PENDING, ACCEPTED, REJECTED e WITHDRAWN.
+- Impedir duplicidade de candidatura para a mesma identidade artística e evento, conforme a regra definida.
+- Apenas responsáveis autorizados pelo evento podem analisar candidaturas.
+- Aceitar uma candidatura não confirma automaticamente a contratação.
+
+5.9 Contratações e negociações
+- Booking representa o processo de negociação ou acordo comercial.
+- BookingOffer registra propostas e contrapropostas, preservando histórico.
+- BookingMessage registra mensagens vinculadas à negociação.
+- A negociação pode começar por proposta direta no marketplace ou a partir de uma candidatura selecionada.
+- Os dois caminhos devem convergir para o mesmo módulo de Booking.
+- Apenas participantes autorizados podem consultar ou enviar mensagens/ofertas.
+- Não sobrescrever uma oferta anterior ao registrar contraproposta.
+- A confirmação da contratação deve ser uma transição explícita, autorizada e auditável.
+- A plataforma não processa, custodia ou repassa pagamentos. Pagamentos são externos.
+
+5.10 Apresentações
+- Performance representa uma apresentação efetivamente realizada ou registrada.
+- Não confundir Booking confirmado com Performance realizada.
+- Agenda complexa, recorrências e conflitos avançados ficam fora do MVP.
+
+5.11 Editais e oportunidades culturais — ADIADOS
+- A funcionalidade de editais/oportunidades culturais está fora do escopo do MVP atual.
+- Não implementar CulturalOpportunity, OpportunityRequirement, catálogo de editais, telas, rotas, endpoints, serviços, migrations, comparação de requisitos, extração de PDFs ou testes relacionados.
+- Não criar estrutura antecipada para essa funcionalidade sem solicitação expressa.
+- Reativar somente mediante decisão explícita do responsável pelo projeto.
+
+====================================================================
+6. REGRAS DE MODELAGEM E INTEGRIDADE
+====================================================================
+
+Entidades centrais previstas:
+- User
+- MusicianProfile
+- Band
+- BandMember
+- Organization
+- OrganizationMember
+- Event
+- EventApplication
+- Booking
+- BookingOffer
+- BookingMessage
+- Performance
+- TechnicalRider
+- RiderItem
+- VenueEquipmentItem
+
+A abstração Artist ainda precisa ser avaliada antes de cristalizar o esquema definitivo. Ela só deve ser criada se simplificar de fato operações compartilhadas por MusicianProfile e Band, como marketplace, candidaturas, bookings e riders. Não utilizar uma referência polimórfica “tipo + id” sem integridade referencial.
+
+Antes de fechar o schema Prisma, revisar as relações, cardinalidades, constraints e regras do domínio. Não inventar entidades ou atributos apenas para antecipar funcionalidades futuras.
+
+Integridade mínima esperada:
+- E-mail e identificadores relevantes com unicidade.
+- Chaves estrangeiras para relações entre entidades.
+- Unicidade de memberships conforme as regras de vínculo.
+- Proteção contra candidatura duplicada.
+- Integridade da associação entre rider e sua identidade proprietária.
+- Integridade da associação entre inventário e organização do tipo VENUE.
+- Garantia de responsável válido para banda/organização.
+- Validação de transições de estado no servidor.
+- Proteção contra acesso a recursos pertencentes a outro usuário/organização.
+
+====================================================================
+7. AUTENTICAÇÃO, AUTORIZAÇÃO E SEGURANÇA
+====================================================================
+
+A estratégia de autenticação deve ser decidida e documentada antes de sua implementação completa. Para uma SPA React e API NestJS, avaliar preferencialmente sessão/cookie seguro HttpOnly, SameSite e Secure em produção, considerando a configuração de domínio e implantação. Não armazenar tokens sensíveis em localStorage.
+
+Regras obrigatórias:
+- Autenticação e autorização no backend.
+- Verificar a associação do usuário à banda ou organização antes de permitir operações.
+- Não confiar em IDs, papéis ou permissões enviados pelo frontend.
+- Validar e normalizar entradas recebidas pela API.
+- Não expor senhas, hashes, tokens, e-mails privados ou mensagens em endpoints públicos.
+- Aplicar limites e validações para upload de arquivos.
+- Validar tipo, tamanho e extensão dos arquivos recebidos.
+- Usar variáveis de ambiente para segredos e credenciais.
+- Não versionar arquivos .env com segredos reais.
+- Tratar erros sem expor stack traces ou informações sensíveis ao usuário final.
+
+A escolha final de cookie/sessão ou outra estratégia deve ser registrada em docs/DECISOES_TECNICAS.md.
+
+====================================================================
+8. ARQUIVOS, IMAGENS E PORTFÓLIO
+====================================================================
+
+- Arquivos grandes não devem ser armazenados diretamente em campos do PostgreSQL.
+- O banco deve guardar metadados e referências dos arquivos.
+- Utilizar armazenamento de objetos compatível com S3 em ambiente de produção.
+- Manter o código desacoplado do provedor específico.
+- Definir como imagens, documentos e materiais de portfólio serão enviados, substituídos e removidos.
+- Para desenvolvimento local, adotar uma solução simples e documentada; não criar infraestrutura complexa antes de ser necessária.
+- Links externos de áudio/vídeo podem ser armazenados como URLs validadas, sem tentar baixar ou hospedar o conteúdo no MVP.
+
+====================================================================
+9. TESTES E CRITÉRIOS DE QUALIDADE
+====================================================================
+
+Não considerar uma funcionalidade concluída apenas porque a tela existe ou o endpoint responde.
+
+Testar especialmente:
+- Cadastro, login e logout.
+- Acesso público versus privado.
+- Permissões de OWNER, ADMIN e MEMBER.
+- Convites e aceite/recusa de integrantes.
+- Proteção do último OWNER.
+- Separação entre perfil individual e perfil da banda.
+- Separação entre rider artístico e inventário da casa.
+- Comparação de quantidades do rider.
+- Tratamento de itens fora do catálogo.
+- Unicidade de candidaturas.
+- Transições válidas de Event e EventApplication.
+- Criação de Booking a partir de candidatura e de proposta direta.
+- Histórico de ofertas e mensagens.
+- Acesso restrito às negociações.
+- Diferença entre booking confirmado e apresentação realizada.
+
+Usar:
+- Jest para testes unitários de serviços e regras de domínio.
+- Supertest para integração dos endpoints.
+- Testes de frontend e de navegador para os fluxos críticos; Playwright pode ser adotado para testes E2E.
+
+Criar testes para regras de negócio com resultados determinísticos. Não utilizar somente snapshots ou testes superficiais de renderização.
+
+====================================================================
+10. PRIORIDADES DO MVP
+====================================================================
+
+DECISÃO DE ESCOPO ATUALIZADA: EDITAIS/OPORTUNIDADES CULTURAIS ESTÃO ADIADOS.
+Não implementar entidades, telas, endpoints, serviços, migrations, integrações,
+comparações de requisitos ou testes relacionados a editais até nova autorização.
+
+P0 — Essencial para validar a proposta:
+1. Autenticação e usuários.
+2. Perfil individual.
+3. Bandas, integrantes, convites e memberships.
+4. Casa de show e responsáveis.
+5. Marketplace básico e perfis públicos.
+6. Portfólio básico.
+7. Rider de músico/banda.
+8. Inventário técnico da casa.
+9. Comparação básica de rider.
+10. Publicação de eventos/oportunidades de apresentação.
+11. Candidaturas e análise.
+12. Propostas, contrapropostas, mensagens e negociação.
+
+P1 — Importante, mas simplificável:
+- Dashboard resumido.
+- Histórico de apresentações.
+- Agenda básica de apresentações confirmadas.
+- Notificações essenciais.
+- Filtros adicionais.
+- Refinamentos de visualização e cadastro técnico.
+
+P2 — Fora do MVP inicial:
+- Processamento de pagamentos.
+- Personas completas de produtoras, agências e festivais.
+- Recomendação automática de artistas ou oportunidades por IA.
+- Editais/oportunidades culturais em geral (adiados integralmente para versão futura).
+- Interpretação automática de editais em PDF.
+- Análise documental automatizada.
+- Substituição inteligente de equipamentos.
+- Otimização avançada de riders.
+- Agenda avançada e gestão complexa de programação.
+- Estatísticas avançadas.
+- Microserviços e infraestrutura distribuída.
+
+Se o prazo apertar, reduzir profundidade e variedade de dados antes de remover a coerência dos fluxos centrais. Preservar a comparação básica de riders, limitando inicialmente a variedade de equipamentos suportados. Editais permanecem adiados e não devem ser iniciados sem nova autorização.
+
+====================================================================
+11. ORDEM DE IMPLEMENTAÇÃO
+====================================================================
+
+Trabalhar em fatias verticais. Cada fatia deve incluir interface, API, regras de domínio, persistência, autorização e testes necessários.
+
+Ordem sugerida:
+
+ETAPA 0 — Inspeção e planejamento
+- Inspecionar o repositório e os arquivos existentes.
+- Identificar o que já funciona e o que é apenas protótipo.
+- Mapear telas, fluxos e dados dos dois protótipos HTML.
+- Registrar decisões pendentes e riscos.
+- Não sobrescrever ou apagar trabalho existente sem justificativa e autorização.
+
+ETAPA 1 — Fundação técnica
+- Configurar frontend React + TypeScript + Vite.
+- Configurar backend NestJS como monólito modular.
+- Configurar PostgreSQL e Docker Compose.
+- Configurar Prisma e migrations iniciais.
+- Configurar Zod, Swagger/OpenAPI, tratamento de erros e logs.
+- Definir autenticação e autorização.
+- Criar testes mínimos de infraestrutura.
+
+ETAPA 2 — Identidade e perfil individual
+- Cadastro e autenticação.
+- Criar, editar e publicar MusicianProfile.
+- Separar dados privados e públicos.
+- Portfólio inicial.
+
+ETAPA 3 — Bandas e memberships
+- Criar banda.
+- Gerenciar integrantes.
+- Convites e aceite/recusa.
+- Papéis OWNER, ADMIN e MEMBER.
+- Perfil, portfólio e rider próprios da banda.
+
+ETAPA 4 — Organizações/casas de show
+- Criar organização do tipo VENUE.
+- Gerenciar responsáveis.
+- Perfil público do estabelecimento.
+- Inventário técnico inicial.
+
+ETAPA 5 — Marketplace
+- Listagem pública de músicos e bandas.
+- Páginas de perfil.
+- Busca e filtros essenciais.
+- Respeito às regras de visibilidade.
+
+ETAPA 6 — Riders e comparação
+- Cadastro de rider.
+- Cadastro de itens e quantidades.
+- Catálogo técnico.
+- Inventário da casa.
+- Serviço de comparação no backend.
+- Exibição de resultados e justificativas no React.
+
+ETAPA 7 — Eventos e candidaturas
+- Publicar oportunidade de apresentação.
+- Listar e consultar oportunidades.
+- Enviar e retirar candidatura conforme as regras.
+- Analisar, aceitar e rejeitar candidaturas.
+
+ETAPA 8 — Booking e negociação
+- Criar proposta direta.
+- Iniciar booking a partir de candidatura selecionada.
+- Registrar ofertas e contrapropostas.
+- Trocar mensagens.
+- Confirmar ou encerrar negociação.
+
+ETAPA 9 — Acabamento e entrega
+- Dashboard simples.
+- Agenda/histórico básicos, se couberem no prazo.
+- Revisão de responsividade e acessibilidade.
+- Testes de regressão e E2E dos fluxos essenciais.
+- Revisão de segurança e permissões.
+- Documentação de instalação, execução e demonstração.
+
+Não iniciar todas as etapas ao mesmo tempo. Concluir e validar uma fatia antes de expandir para a seguinte.
+
+====================================================================
+12. COMO O AGENTE DE PROGRAMAÇÃO DEVE TRABALHAR
+====================================================================
+
+Antes de alterar código:
+1. Ler este arquivo e a documentação do produto/arquitetura.
+2. Inspecionar a estrutura real do repositório.
+3. Identificar a etapa atual e o estado dos arquivos.
+4. Listar dependências e impactos da mudança.
+5. Apresentar um plano curto para tarefas que envolvam múltiplos arquivos ou domínios.
+
+Durante a implementação:
+- Trabalhar em alterações pequenas e verificáveis.
+- Seguir as decisões técnicas deste documento.
+- Não recriar funcionalidades que já estejam implementadas e funcionando.
+- Não modificar arquivos não relacionados à tarefa.
+- Não substituir componentes ou bibliotecas sem motivo técnico concreto.
+- Não criar código fictício para simular persistência real.
+- Não deixar dados de demonstração misturados com dados de produção.
+- Não implementar regras críticas somente no frontend.
+- Não criar endpoints genéricos que contornem a autorização específica por entidade.
+- Não adicionar dependências sem necessidade clara.
+- Documentar mudanças relevantes no schema, API e decisões técnicas.
+
+Após cada alteração:
+1. Executar lint e verificação de tipos, se configurados.
+2. Executar os testes relacionados.
+3. Executar build do projeto afetado.
+4. Corrigir regressões introduzidas pela mudança.
+5. Informar exatamente o que foi alterado e quais comandos foram executados.
+6. Declarar explicitamente qualquer teste que não tenha sido executado.
+
+Não afirmar que algo está concluído se foi apenas implementado parcialmente ou não foi validado. Não ocultar erros de build ou testes. Não avançar para muitas funcionalidades novas enquanto existirem falhas relevantes na etapa atual.
+
+Ao finalizar cada etapa, atualizar a documentação de progresso com:
+- Funcionalidades concluídas.
+- Arquivos/módulos principais alterados.
+- Migrations criadas.
+- Testes executados e resultados.
+- Problemas conhecidos.
+- Próxima etapa recomendada.
+
+====================================================================
+13. DEFINIÇÃO DE PRONTO (DEFINITION OF DONE)
+====================================================================
+
+Uma funcionalidade só pode ser considerada pronta quando:
+- O fluxo principal funciona ponta a ponta.
+- A API valida os dados de entrada.
+- A autorização é aplicada no backend.
+- A persistência está funcionando no PostgreSQL.
+- Os estados de carregamento, erro, vazio e sucesso estão tratados no frontend.
+- As regras de negócio relevantes possuem testes.
+- Não existem erros conhecidos de build ou de tipos relacionados à alteração.
+- A interface funciona em desktop e celular quando a tela for responsiva.
+- A documentação necessária foi atualizada.
+
+A tela isolada não é uma entrega funcional. Uma funcionalidade exige integração real entre React, API, regras de domínio e PostgreSQL.
+
+====================================================================
+14. REFERÊNCIAS DO PROJETO
+====================================================================
+
+Utilizar como referências fornecidas:
+
+1. Arquitetura_Plataforma_Profissionalizacao_Artistica_v1.2.md
+   Documento de produto, arquitetura conceitual, entidades, regras de negócio, prioridades, histórias de usuário e critérios de conclusão do MVP.
+
+2. RiderSync celular.html
+   Referência de interface e experiência mobile, com dados demonstrativos e interações locais.
+
+3. RiderSyncpc.html
+   Referência de interface e experiência desktop, com dados demonstrativos e interações locais.
+
+4. riderSync entidades.txt
+   Lista inicial de campos e conceitos para músicos, bandas, casas de show e riders. Deve ser interpretada em conjunto com a arquitetura mais recente, que detalha melhor as entidades e regras.
+
+Quando houver diferença entre os protótipos e o documento de arquitetura, priorizar o documento de arquitetura para regras de domínio e este arquivo para as decisões técnicas fixadas. Os protótipos são referência visual/funcional e não devem prevalecer sobre regras de segurança, integridade ou escopo do MVP.
+
+====================================================================
+15. DIRETRIZ FINAL
+====================================================================
+
+Construir o RiderSync como uma aplicação com frontend React + TypeScript + Vite e backend NestJS em monólito modular, utilizando PostgreSQL e Prisma. O frontend será uma SPA responsiva e consumirá uma API REST do único backend. Manter o domínio dividido em módulos internos, sem microserviços.
+
+Priorizar uma experiência útil e integrada para músicos/bandas e casas de show. Preservar os fluxos centrais, a separação correta das entidades, a autorização por vínculo, a integridade dos dados e a comparação determinística de riders. Editais/oportunidades culturais estão adiados e fora do MVP atual.
+
+Aproveitar os protótipos existentes como referência de interface e comportamento, reconstruindo a aplicação real em React e conectando todas as funcionalidades à API e ao banco de dados.
+
+Desenvolver por etapas pequenas, com testes e validação contínua. Não confundir velocidade de geração de código com conclusão funcional do produto.

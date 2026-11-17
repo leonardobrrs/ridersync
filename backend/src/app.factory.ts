@@ -1,0 +1,48 @@
+import { INestApplication } from '@nestjs/common';
+import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
+import { AppModule } from './app.module';
+import { corsOrigins, loadEnv } from './config/env';
+
+/** Configuração HTTP compartilhada por main.ts e pelos testes de integração. */
+export function configureApp(app: INestApplication) {
+  const env = loadEnv();
+  const express = app as NestExpressApplication;
+  express.set('trust proxy', 1);
+  express.disable('x-powered-by');
+  app.setGlobalPrefix('api');
+  app.use(helmet({ crossOriginResourcePolicy: { policy: 'same-site' } }));
+  app.use(cookieParser());
+  app.enableCors({
+    origin: corsOrigins(env),
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'X-Requested-With'],
+  });
+  express.useBodyParser('json', { limit: '256kb' });
+
+  if (env.NODE_ENV !== 'production' || process.env.SWAGGER === 'true') {
+    const config = new DocumentBuilder()
+      .setTitle('RiderSync API')
+      .setDescription(
+        'API REST do monólito modular RiderSync (MVP). Autenticação por cookie HttpOnly `rs_session`. ' +
+          'Requisições que alteram estado exigem o cabeçalho `X-Requested-With: RiderSync`.',
+      )
+      .setVersion('0.1.0')
+      .addCookieAuth('rs_session')
+      .build();
+    SwaggerModule.setup('api/docs', app, SwaggerModule.createDocument(app, config));
+  }
+  return app;
+}
+
+export async function createApp() {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    bodyParser: false,
+    logger: loadEnv().NODE_ENV === 'test' ? ['error'] : ['error', 'warn', 'log'],
+  });
+  return configureApp(app);
+}

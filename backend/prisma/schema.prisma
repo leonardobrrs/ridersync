@@ -1,0 +1,564 @@
+// RiderSync — modelo relacional do MVP.
+// Decisões documentadas em docs/DECISOES_TECNICAS.md.
+// Constraints que o Prisma não expressa (CHECK) são adicionadas via SQL nas migrations.
+// Editais/oportunidades culturais estão ADIADOS: não adicionar modelos relacionados.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ───────────────────────── Identidade e acesso ─────────────────────────
+
+/// Conta de uma pessoa. Não possui papel global (ARTIST/VENUE).
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique /// normalizado em minúsculas
+  name         String
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sessions            Session[]
+  musicianProfile     MusicianProfile?
+  bandMemberships     BandMember[]         @relation("BandMemberUser")
+  bandInvitesSent     BandMember[]         @relation("BandMemberInviter")
+  orgMemberships      OrganizationMember[] @relation("OrgMemberUser")
+  orgInvitesSent      OrganizationMember[] @relation("OrgMemberInviter")
+  bandsCreated        Band[]
+  uploadedMedia       MediaAsset[]
+  eventsCreated       Event[]
+  applicationsSent    EventApplication[]   @relation("ApplicationSubmitter")
+  applicationsDecided EventApplication[]   @relation("ApplicationDecider")
+  bookingsCreated     Booking[]            @relation("BookingCreator")
+  bookingsConfirmed   Booking[]            @relation("BookingConfirmer")
+  offersAuthored      BookingOffer[]       @relation("OfferAuthor")
+  offersResponded     BookingOffer[]       @relation("OfferResponder")
+  messages            BookingMessage[]
+  bookingChanges      BookingStatusChange[]
+  performances        Performance[]
+}
+
+/// Sessão server-side. O cookie HttpOnly carrega um token aleatório; aqui fica apenas o hash SHA-256.
+model Session {
+  id         String   @id @default(uuid()) @db.Uuid
+  tokenHash  String   @unique
+  userId     String   @db.Uuid
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime @default(now())
+  userAgent  String?
+
+  @@index([userId])
+}
+
+// ───────────────────────── Identidades artísticas ─────────────────────────
+
+enum ArtistKind {
+  SOLO
+  BAND
+}
+
+enum Visibility {
+  PRIVATE
+  PUBLIC
+}
+
+/// Identidade artística profissional (músico individual OU banda).
+/// Referencia exatamente um subtipo por FK explícita — CHECK "Artist_exactly_one_subtype".
+/// Os dados de perfil são da própria identidade; banda nunca herda dados dos integrantes.
+model Artist {
+  id                String           @id @default(uuid()) @db.Uuid
+  kind              ArtistKind
+  musicianProfileId String?          @unique @db.Uuid
+  musicianProfile   MusicianProfile? @relation(fields: [musicianProfileId], references: [id], onDelete: Cascade)
+  bandId            String?          @unique @db.Uuid
+  band              Band?            @relation(fields: [bandId], references: [id], onDelete: Cascade)
+
+  slug            String      @unique
+  name            String
+  headline        String      @default("") /// ex.: "Voz e violão", "Quarteto de forró"
+  bio             String      @default("")
+  city            String?
+  state           String      @default("AL") @db.Char(2)
+  genres          String[]
+  formats         String[] /// Solo, Duo, Trio, Com banda
+  careerStartYear Int?
+  baseFeeCents    Int? /// "cachê a partir de" — referência; pagamentos são externos
+  contactEmail    String? /// contato público escolhido pelo artista (não é o e-mail da conta)
+  contactPhone    String?
+  instagram       String?
+  website         String?
+  photoId         String?     @unique @db.Uuid
+  photo           MediaAsset? @relation("ArtistPhoto", fields: [photoId], references: [id], onDelete: SetNull)
+  visibility      Visibility  @default(PRIVATE)
+  publishedAt     DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  portfolioItems PortfolioItem[]
+  rider          TechnicalRider?
+  applications   EventApplication[]
+  bookings       Booking[]
+  performances   Performance[]
+
+  @@index([visibility, kind])
+  @@index([city])
+}
+
+/// Perfil profissional individual — separado das credenciais (User).
+model MusicianProfile {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @unique @db.Uuid
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mainInstrument String?
+  instruments    String[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  artist Artist?
+}
+
+/// Grupo musical com identidade própria (dados públicos em Artist com kind=BAND).
+model Band {
+  id          String   @id @default(uuid()) @db.Uuid
+  createdById String?  @db.Uuid
+  createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  artist  Artist?
+  members BandMember[]
+}
+
+enum BandRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+/// Estado do vínculo. INVITED não é membership ativa.
+enum MembershipStatus {
+  INVITED
+  ACTIVE
+  DECLINED
+  CANCELLED
+  REMOVED
+  LEFT
+}
+
+model BandMember {
+  id          String           @id @default(uuid()) @db.Uuid
+  bandId      String           @db.Uuid
+  band        Band             @relation(fields: [bandId], references: [id], onDelete: Cascade)
+  userId      String           @db.Uuid
+  user        User             @relation("BandMemberUser", fields: [userId], references: [id], onDelete: Cascade)
+  role        BandRole
+  status      MembershipStatus
+  instrument  String? /// função/instrumento na banda (informativo)
+  invitedById String?          @db.Uuid
+  invitedBy   User?            @relation("BandMemberInviter", fields: [invitedById], references: [id], onDelete: SetNull)
+  invitedAt   DateTime?
+  respondedAt DateTime?
+  joinedAt    DateTime?
+  endedAt     DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@unique([bandId, userId])
+  @@index([userId, status])
+}
+
+// ───────────────────────── Organizações (casas de show) ─────────────────────────
+
+enum OrganizationType {
+  VENUE
+}
+
+enum OrgRole {
+  OWNER
+  ADMIN
+}
+
+model Organization {
+  id           String           @id @default(uuid()) @db.Uuid
+  type         OrganizationType @default(VENUE)
+  slug         String           @unique
+  name         String
+  venueKind    String? /// Casa de show, Bar com música, Teatro, Espaço cultural
+  description  String           @default("")
+  addressLine  String?
+  neighborhood String?
+  city         String
+  state        String           @default("AL") @db.Char(2)
+  capacity     Int?
+  contactEmail String? /// contato público do estabelecimento
+  contactPhone String?
+  instagram    String?
+  website      String?
+  photoId      String?          @unique @db.Uuid
+  photo        MediaAsset?      @relation("OrgPhoto", fields: [photoId], references: [id], onDelete: SetNull)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  members         OrganizationMember[]
+  equipment       VenueEquipmentItem[]
+  organizedEvents Event[]              @relation("EventOrganizer")
+  hostedEvents    Event[]              @relation("EventVenue")
+  bookings        Booking[]
+  performances    Performance[]
+
+  @@unique([id, type])
+  @@index([city])
+}
+
+model OrganizationMember {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @db.Uuid
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String           @db.Uuid
+  user           User             @relation("OrgMemberUser", fields: [userId], references: [id], onDelete: Cascade)
+  role           OrgRole
+  status         MembershipStatus
+  invitedById    String?          @db.Uuid
+  invitedBy      User?            @relation("OrgMemberInviter", fields: [invitedById], references: [id], onDelete: SetNull)
+  invitedAt      DateTime?
+  respondedAt    DateTime?
+  joinedAt       DateTime?
+  endedAt        DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@unique([organizationId, userId])
+  @@index([userId, status])
+}
+
+// ───────────────────────── Arquivos e portfólio ─────────────────────────
+
+enum MediaKind {
+  IMAGE
+  DOCUMENT
+}
+
+/// Metadados de arquivo. O conteúdo fica no storage (local ou S3), nunca no PostgreSQL.
+model MediaAsset {
+  id           String    @id @default(uuid()) @db.Uuid
+  storageKey   String    @unique
+  kind         MediaKind
+  mimeType     String
+  sizeBytes    Int
+  originalName String
+  uploadedById String    @db.Uuid
+  uploadedBy   User      @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
+  createdAt    DateTime  @default(now())
+
+  artistPhoto   Artist?        @relation("ArtistPhoto")
+  orgPhoto      Organization?  @relation("OrgPhoto")
+  portfolioItem PortfolioItem?
+}
+
+enum PortfolioKind {
+  AUDIO
+  VIDEO
+  PHOTO
+  DOCUMENT
+  LINK
+}
+
+/// Item de portfólio: link externo validado (url) OU arquivo enviado (mediaId) — CHECK exatamente um.
+model PortfolioItem {
+  id          String        @id @default(uuid()) @db.Uuid
+  artistId    String        @db.Uuid
+  artist      Artist        @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  kind        PortfolioKind
+  title       String
+  description String        @default("")
+  url         String?
+  mediaId     String?       @unique @db.Uuid
+  media       MediaAsset?   @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  position    Int           @default(0)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([artistId, position])
+}
+
+// ───────────────────────── Rider técnico e inventário ─────────────────────────
+
+/// Catálogo com IDs estáveis (slugs). Comparação de rider só por ID explícito.
+model EquipmentCatalogItem {
+  id        String  @id /// ex.: "mic-din"
+  name      String
+  unit      String
+  category  String
+  sortOrder Int     @default(0)
+  active    Boolean @default(true)
+
+  riderItems     RiderItem[]
+  equipmentItems VenueEquipmentItem[]
+}
+
+/// Rider de UMA identidade artística (músico ou banda). Independente de outros riders.
+model TechnicalRider {
+  id        String   @id @default(uuid()) @db.Uuid
+  artistId  String   @unique @db.Uuid
+  artist    Artist   @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  notes     String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items RiderItem[]
+}
+
+/// Item catalogado (catalogItemId) OU personalizado (customName) — CHECK exatamente um; quantidade > 0.
+model RiderItem {
+  id            String                @id @default(uuid()) @db.Uuid
+  riderId       String                @db.Uuid
+  rider         TechnicalRider        @relation(fields: [riderId], references: [id], onDelete: Cascade)
+  catalogItemId String?
+  catalogItem   EquipmentCatalogItem? @relation(fields: [catalogItemId], references: [id], onDelete: Restrict)
+  customName    String?
+  customUnit    String?
+  quantity      Int
+  notes         String                @default("")
+  createdAt     DateTime              @default(now())
+
+  @@unique([riderId, catalogItemId])
+  @@index([riderId])
+}
+
+/// Inventário da casa — pertence a uma Organization do tipo VENUE (FK composta + CHECK).
+model VenueEquipmentItem {
+  id               String                @id @default(uuid()) @db.Uuid
+  organizationId   String                @db.Uuid
+  organizationType OrganizationType      @default(VENUE)
+  organization     Organization          @relation(fields: [organizationId, organizationType], references: [id, type], onDelete: Cascade)
+  catalogItemId    String?
+  catalogItem      EquipmentCatalogItem? @relation(fields: [catalogItemId], references: [id], onDelete: Restrict)
+  customName       String?
+  customUnit       String?
+  quantity         Int
+  notes            String                @default("")
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  @@unique([organizationId, catalogItemId])
+  @@index([organizationId])
+}
+
+// ───────────────────────── Eventos e candidaturas ─────────────────────────
+
+enum EventStatus {
+  DRAFT
+  OPEN
+  CLOSED
+  COMPLETED
+  CANCELLED
+}
+
+/// Oportunidade de apresentação. organizerId (responsável) ≠ venueId (local físico, opcional).
+model Event {
+  id                  String        @id @default(uuid()) @db.Uuid
+  organizerId         String        @db.Uuid
+  organizer           Organization  @relation("EventOrganizer", fields: [organizerId], references: [id], onDelete: Cascade)
+  venueId             String?       @db.Uuid
+  venue               Organization? @relation("EventVenue", fields: [venueId], references: [id], onDelete: SetNull)
+  title               String
+  description         String        @default("")
+  startsAt            DateTime
+  durationMinutes     Int?
+  applicationDeadline DateTime
+  slots               Int
+  genres              String[]
+  paymentType         String? /// Cachê fixo, Bilheteria, Couvert artístico, A combinar
+  feeCents            Int?
+  conditions          String        @default("")
+  requirements        String        @default("")
+  status              EventStatus   @default(DRAFT)
+  publishedAt         DateTime?
+  closedAt            DateTime?
+  completedAt         DateTime?
+  cancelledAt         DateTime?
+  createdById         String?       @db.Uuid
+  createdBy           User?         @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  applications EventApplication[]
+  bookings     Booking[]
+
+  @@index([status, applicationDeadline])
+  @@index([organizerId])
+}
+
+enum ApplicationStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+}
+
+/// Candidatura — NÃO é contratação. Única por (evento, identidade artística).
+model EventApplication {
+  id            String            @id @default(uuid()) @db.Uuid
+  eventId       String            @db.Uuid
+  event         Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  artistId      String            @db.Uuid
+  artist        Artist            @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  submittedById String?           @db.Uuid
+  submittedBy   User?             @relation("ApplicationSubmitter", fields: [submittedById], references: [id], onDelete: SetNull)
+  message       String            @default("")
+  status        ApplicationStatus @default(PENDING)
+  decidedAt     DateTime?
+  decidedById   String?           @db.Uuid
+  decidedBy     User?             @relation("ApplicationDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+  decisionNote  String?
+  withdrawnAt   DateTime?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  booking Booking?
+
+  @@unique([eventId, artistId])
+  @@index([artistId])
+}
+
+// ───────────────────────── Contratação e negociação ─────────────────────────
+
+enum BookingOrigin {
+  DIRECT
+  APPLICATION
+}
+
+/// NEGOTIATING → AGREED (oferta aceita) → CONFIRMED (confirmação explícita da casa).
+/// DECLINED/CANCELLED encerram. CONFIRMED ≠ apresentação realizada ≠ pagamento.
+enum BookingStatus {
+  NEGOTIATING
+  AGREED
+  CONFIRMED
+  DECLINED
+  CANCELLED
+}
+
+enum BookingSide {
+  VENUE
+  ARTIST
+}
+
+model Booking {
+  id             String            @id @default(uuid()) @db.Uuid
+  origin         BookingOrigin
+  organizationId String            @db.Uuid
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  artistId       String            @db.Uuid
+  artist         Artist            @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  eventId        String?           @db.Uuid
+  event          Event?            @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  applicationId  String?           @unique @db.Uuid
+  application    EventApplication? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+  title          String
+  status         BookingStatus     @default(NEGOTIATING)
+  createdById    String?           @db.Uuid
+  createdBy      User?             @relation("BookingCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  confirmedAt    DateTime?
+  confirmedById  String?           @db.Uuid
+  confirmedBy    User?             @relation("BookingConfirmer", fields: [confirmedById], references: [id], onDelete: SetNull)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  offers        BookingOffer[]
+  messages      BookingMessage[]
+  statusChanges BookingStatusChange[]
+  performance   Performance?
+
+  @@index([organizationId, status])
+  @@index([artistId, status])
+}
+
+enum OfferStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  SUPERSEDED
+  WITHDRAWN
+}
+
+/// Proposta/contraproposta imutável quanto aos termos. Uma contraproposta cria nova linha
+/// e marca a anterior como SUPERSEDED (termos preservados).
+model BookingOffer {
+  id              String        @id @default(uuid()) @db.Uuid
+  bookingId       String        @db.Uuid
+  booking         Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  authorId        String?       @db.Uuid
+  author          User?         @relation("OfferAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  authorSide      BookingSide
+  previousOfferId String?       @unique @db.Uuid
+  previousOffer   BookingOffer? @relation("OfferChain", fields: [previousOfferId], references: [id], onDelete: SetNull)
+  nextOffer       BookingOffer? @relation("OfferChain")
+  performanceAt   DateTime
+  durationMinutes Int
+  feeCents        Int
+  terms           String        @default("")
+  status          OfferStatus   @default(PENDING)
+  respondedAt     DateTime?
+  respondedById   String?       @db.Uuid
+  respondedBy     User?         @relation("OfferResponder", fields: [respondedById], references: [id], onDelete: SetNull)
+  createdAt       DateTime      @default(now())
+
+  @@index([bookingId, createdAt])
+}
+
+model BookingMessage {
+  id         String      @id @default(uuid()) @db.Uuid
+  bookingId  String      @db.Uuid
+  booking    Booking     @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  authorId   String?     @db.Uuid
+  author     User?       @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  authorSide BookingSide
+  body       String
+  createdAt  DateTime    @default(now())
+
+  @@index([bookingId, createdAt])
+}
+
+/// Trilha de auditoria das transições de estado do Booking.
+model BookingStatusChange {
+  id         String         @id @default(uuid()) @db.Uuid
+  bookingId  String         @db.Uuid
+  booking    Booking        @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  fromStatus BookingStatus?
+  toStatus   BookingStatus
+  actorId    String?        @db.Uuid
+  actor      User?          @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actorSide  BookingSide?
+  note       String?
+  createdAt  DateTime       @default(now())
+
+  @@index([bookingId, createdAt])
+}
+
+// ───────────────────────── Apresentações ─────────────────────────
+
+/// Apresentação registrada como realizada. Distinta de Event, EventApplication e Booking confirmado.
+model Performance {
+  id             String       @id @default(uuid()) @db.Uuid
+  bookingId      String       @unique @db.Uuid
+  booking        Booking      @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  artistId       String       @db.Uuid
+  artist         Artist       @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  performedAt    DateTime
+  notes          String       @default("")
+  registeredById String?      @db.Uuid
+  registeredBy   User?        @relation(fields: [registeredById], references: [id], onDelete: SetNull)
+  createdAt      DateTime     @default(now())
+
+  @@index([artistId, performedAt])
+  @@index([organizationId, performedAt])
+}
