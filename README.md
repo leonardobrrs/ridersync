@@ -230,5 +230,6 @@ Veja `backend/.env.example`. Principais: `DATABASE_URL`, `CORS_ORIGINS`, `COOKIE
 - [`docs/DECISOES_TECNICAS.md`](docs/DECISOES_TECNICAS.md) — modelo de dados, permissões, estados, segurança, armazenamento
 - [`docs/IMPLEMENTATION_PROGRESS.md`](docs/IMPLEMENTATION_PROGRESS.md) — progresso por fatia e resultados de testes
 - [`docs/DEMO.md`](docs/DEMO.md) — roteiro de demonstração
+- [`docs/NEON_SETUP.md`](docs/NEON_SETUP.md) — banco Neon (branch `ridersync-staging`), scripts `*:neon:staging` e pendências para a Vercel
 - [`docs/INSTRUCOES_IMPLEMENTACAO_RIDERSYNC_v1.1.txt`](docs/INSTRUCOES_IMPLEMENTACAO_RIDERSYNC_v1.1.txt) e `docs/references/` — referências de produto
 - Swagger: `http://localhost:3000/api/docs`

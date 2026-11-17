@@ -21,5 +21,9 @@
     "test": "npm run test -w backend && npm run test -w frontend",
     "test:e2e": "npm run test:e2e -w frontend",
     "build": "npm run build -w backend && npm run build -w frontend"
+  },
+  "dependencies": {
+    "@neon/config": "^1.14.2",
+    "@neon/env": "^2.1.5"
   }
 }
