@@ -74,7 +74,7 @@ porta `5432`). O arquivo `backend/.env` não é versionado.
 Só se for rodar os **testes de integração**, crie também o `backend/.env.test` (aponta para o banco `ridersync_test`):
 
 ```bash
-sed 's#/ridersync?#/ridersync_test?#; s#NODE_ENV=development#NODE_ENV=test#; s#./storage#./test-storage#' \
+sed 's#/ridersync?#/ridersync_test?#; s#NODE_ENV=development#NODE_ENV=test#; s#./storage#./test-storage#; s#^MAIL_DEV_OUTBOX_DIR=$#MAIL_DEV_OUTBOX_DIR=./test-storage/mail#' \
   backend/.env.example > backend/.env.test
 echo "THROTTLE_AUTH_LIMIT=10000" >> backend/.env.test
 ```
