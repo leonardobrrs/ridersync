@@ -101,7 +101,7 @@ a.handle:hover{text-decoration:underline}
 .pf-mini img{width:100%;height:100%;object-fit:cover}
 
 /* ── Página inicial: categorias, shows confirmados e oportunidades ── */
-.cat.sm{min-width:70px;font-weight:600}
+.cat.sm{min-width:70px;font-weight:600;white-space:nowrap}
 .cat.sm .ci{width:38px;height:38px}
 .vsep{flex:none;width:1px;align-self:stretch;margin:6px 6px;background:var(--line)}
 .promo-wide{grid-template-columns:minmax(0,1fr) auto;align-items:center}
