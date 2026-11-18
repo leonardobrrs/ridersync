@@ -380,6 +380,7 @@ model MediaAsset {
   artistPhoto   Artist?        @relation("ArtistPhoto")
   orgPhoto      Organization?  @relation("OrgPhoto")
   portfolioItem PortfolioItem?
+  eventImage    Event?         @relation("EventImage")
 }
 
 enum PortfolioKind {
@@ -510,6 +511,8 @@ model Event {
   locationState       String?         @db.Char(2)
   filledAt            DateTime?
   postponedAt         DateTime?
+  imageId             String?         @unique @db.Uuid
+  image               MediaAsset?     @relation("EventImage", fields: [imageId], references: [id], onDelete: SetNull)
   title               String
   description         String          @default("")
   startsAt            DateTime

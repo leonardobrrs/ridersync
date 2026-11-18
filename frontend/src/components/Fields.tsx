@@ -1,6 +1,7 @@
 import { useId, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
 import type { FieldError, FieldValues, Path, UseFormSetError } from 'react-hook-form';
 import { ApiError } from '../lib/api';
+import { maskPhoneBR } from '../lib/phone';
 
 interface BaseProps {
   label: string;
@@ -33,6 +34,25 @@ export function TextField({ label, error, hint, ...rest }: BaseProps & InputHTML
       <input id={id} className="input" aria-invalid={!!error} aria-describedby={describedBy(id, hint, error?.message)} {...rest} />
       <Extra id={id} hint={hint} error={error} />
     </div>
+  );
+}
+
+/** Telefone com máscara automática: (82) 3333-4444 ou (82) 99999-8888, conforme a quantidade de dígitos. */
+export function PhoneField({ onChange, ...rest }: BaseProps & InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <TextField
+      type="tel"
+      inputMode="tel"
+      autoComplete="tel-national"
+      placeholder="(82) 99999-9999"
+      maxLength={16}
+      {...rest}
+      onChange={(e) => {
+        // Formata antes de repassar: o formulário (RHF) já recebe o valor mascarado.
+        e.target.value = maskPhoneBR(e.target.value);
+        onChange?.(e);
+      }}
+    />
   );
 }
 

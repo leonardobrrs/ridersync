@@ -6,7 +6,7 @@ import { Icon } from '../../components/Icon';
 import { Poster } from '../../components/Poster';
 import { Empty, ErrorState } from '../../components/States';
 import { api, qs } from '../../lib/api';
-import { dayMonth, money } from '../../lib/format';
+import { date, dayMonth, money } from '../../lib/format';
 import { useMe, useMeta } from '../../lib/hooks';
 import type { ArtistCard, EventPublic, HomeData, Paged, PublicShow, VenueCard } from '../../lib/types';
 import { InstrumentLabel } from '../../components/InstrumentLabel';
@@ -94,17 +94,33 @@ export function ShowCard({ s }: { s: PublicShow }) {
   );
 }
 
-function OpportunityTile({ e }: { e: EventPublic }) {
+/** Oportunidade em formato de card (mesma grade dos anúncios). Usa a imagem do evento ou um cartaz gerado. */
+export function OpportunityCard({ e }: { e: EventPublic }) {
+  const d = dayMonth(e.startsAt);
+  const where = e.location.name ?? e.organizer.name;
   return (
-    <Link className="opp-tile" to={`/oportunidades/${e.id}`}>
-      <strong title={e.title}>{e.title}</strong>
-      <span>
-        {e.location.name ?? e.organizer.name} · {e.location.city}
-      </span>
-      <small>
-        {e.slots} vaga(s) · {e.feeCents != null ? money(e.feeCents) : (e.paymentType ?? 'Cachê a combinar')}
-      </small>
-    </Link>
+    <article className="ad opp-card">
+      <Link to={`/oportunidades/${e.id}`} aria-label={`${e.title} — ver oportunidade`}>
+        <span className="tape">{e.visibility === 'PRIVATE' ? 'Evento privado' : `${e.slots} vaga${e.slots > 1 ? 's' : ''}`}</span>
+        <Poster name={e.title} photoUrl={e.imageThumbUrl} top={[`${d.day} ${d.month}`, e.location.city ?? '']} bottom={[e.genres.slice(0, 2).join(' · '), e.paymentType ?? '']} />
+        <div className="ad-b">
+          <h3 title={e.title}>{e.title}</h3>
+          <span className="handle" title={where}>
+            {where}
+          </span>
+          <span className="sub">
+            Show em {d.day} de {d.month} · {e.location.city ?? '—'}
+          </span>
+          <span className="price">
+            {e.feeCents != null ? money(e.feeCents) : (e.paymentType ?? 'A combinar')}
+            <small>cachê</small>
+          </span>
+          <span className="loc">
+            <span>Inscrições até {date(e.applicationDeadline)}</span>
+          </span>
+        </div>
+      </Link>
+    </article>
   );
 }
 
@@ -115,7 +131,7 @@ const CATEGORIES = [
   { kind: 'VENUE', label: 'Casas de show', icon: 'venue' },
 ];
 
-function CategoryBar({ params, set }: { params: URLSearchParams; set: (patch: Record<string, string>) => void }) {
+function CategoryBar({ params, set, personal }: { params: URLSearchParams; set: (patch: Record<string, string>) => void; personal: boolean }) {
   const { data: meta } = useMeta();
   const kind = params.get('kind') ?? '';
   const instrument = params.get('instrument') ?? '';
@@ -125,9 +141,9 @@ function CategoryBar({ params, set }: { params: URLSearchParams; set: (patch: Re
         {CATEGORIES.map((c) => (
           <button key={c.label} type="button" className="cat" aria-pressed={!instrument && kind === c.kind} onClick={() => set({ kind: c.kind, instrument: '' })}>
             <span className="ci">
-              <Icon name={c.icon} size={22} />
+              <Icon name={c.kind === '' && personal ? 'home' : c.icon} size={22} />
             </span>
-            {c.label}
+            {c.kind === '' && personal ? 'Para você' : c.label}
           </button>
         ))}
         <span className="vsep" aria-hidden="true" />
@@ -144,8 +160,10 @@ function CategoryBar({ params, set }: { params: URLSearchParams; set: (patch: Re
   );
 }
 
-function Filters({ params, set, venues }: { params: URLSearchParams; set: (patch: Record<string, string>) => void; venues: boolean }) {
+/** venues: só casas; feed: feed do artista (oportunidades + casas: cidade e estilo); artists: busca de artistas. */
+function Filters({ params, set, mode }: { params: URLSearchParams; set: (patch: Record<string, string>) => void; mode: 'venues' | 'feed' | 'artists' }) {
   const { data: meta } = useMeta();
+  const venues = mode === 'venues';
   return (
     <>
       <label className="fgroup">
@@ -155,7 +173,15 @@ function Filters({ params, set, venues }: { params: URLSearchParams; set: (patch
           {meta?.allCities.map((c) => <option key={c}>{c}</option>)}
         </select>
       </label>
-      {venues ? (
+      {mode === 'feed' ? (
+        <label className="fgroup">
+          <span className="lbl">Estilo procurado</span>
+          <select className="input" value={params.get('genre') ?? ''} onChange={(e) => set({ genre: e.target.value })}>
+            <option value="">Todos os estilos</option>
+            {meta?.genres.map((g) => <option key={g}>{g}</option>)}
+          </select>
+        </label>
+      ) : venues ? (
         <label className="fgroup">
           <span className="lbl">Tipo de espaço</span>
           <select className="input" value={params.get('venueKind') ?? ''} onChange={(e) => set({ venueKind: e.target.value })}>
@@ -170,6 +196,13 @@ function Filters({ params, set, venues }: { params: URLSearchParams; set: (patch
             <select className="input" value={params.get('genre') ?? ''} onChange={(e) => set({ genre: e.target.value })}>
               <option value="">Todos os estilos</option>
               {meta?.genres.map((g) => <option key={g}>{g}</option>)}
+            </select>
+          </label>
+          <label className="fgroup">
+            <span className="lbl">Instrumento</span>
+            <select className="input" value={params.get('instrument') ?? ''} onChange={(e) => set({ instrument: e.target.value })}>
+              <option value="">Qualquer instrumento</option>
+              {meta?.instruments.map((i) => <option key={i}>{i}</option>)}
             </select>
           </label>
           <label className="fgroup">
@@ -197,10 +230,21 @@ function Strip({ title, action, children }: { title: string; action?: ReactNode;
   );
 }
 
+/**
+ * Página inicial com feed por tipo de conta (reunião de 18/11):
+ *  - visitante: vitrine completa (shows confirmados, oportunidades, artistas e casas);
+ *  - artista/banda: "Para você" mostra só o que ele procura — oportunidades abertas e casas de show, em cards.
+ *    As abas Músicos/Bandas continuam listando todos os perfis;
+ *  - contratante/casa: "Para você" mostra quem ele contrata — artistas e bandas — e os shows confirmados
+ *    (referência do circuito). Oportunidades (vagas para artistas) e outras casas saem do feed; as casas
+ *    continuam na aba "Casas de show".
+ * Com busca por texto, todos veem o resultado completo (artistas e casas).
+ */
 export function MarketplacePage() {
   const [params, setParams] = useSearchParams();
   const { data: me } = useMe();
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const accountType = me?.user.accountType ?? null;
   const kind = params.get('kind') ?? '';
   const venuesOnly = kind === 'VENUE';
   const page = Number(params.get('page') ?? '1') || 1;
@@ -216,15 +260,26 @@ export function MarketplacePage() {
   };
   const active = ['q', 'genre', 'city', 'kind', 'format', 'instrument', 'venueKind'].filter((k) => params.get(k));
   const showHome = active.length === 0 && page === 1;
+  // A busca por texto (barra do topo: "músico, banda ou casa") sempre mostra o resultado completo para todos.
+  const artistFeed = accountType === 'ARTIST' && kind === '' && !filters.q && !filters.instrument && !filters.format;
+  const contractorFeed = accountType === 'CONTRACTOR' && kind === '' && !filters.q;
+  const showArtists = !venuesOnly && !artistFeed;
+  const showVenues = venuesOnly || artistFeed || (!contractorFeed && !kind && !filters.instrument && !filters.genre && !filters.format);
 
-  const home = useQuery({ queryKey: ['home'], queryFn: () => api.get<HomeData>('/public/home'), enabled: showHome });
+  const home = useQuery({ queryKey: ['home'], queryFn: () => api.get<HomeData>('/public/home'), enabled: showHome && !artistFeed });
+  const eventFilters = { q: filters.q, genre: filters.genre, city: filters.city };
+  // Mesma chave da página de oportunidades: o cache é compartilhado. Com sessão de artista inclui eventos privados.
+  const opportunities = useQuery({
+    queryKey: ['events', eventFilters],
+    queryFn: () => api.get<EventPublic[]>(`/public/events${qs(eventFilters)}`),
+    enabled: artistFeed,
+  });
   const artists = useQuery({
     queryKey: ['artists', filters],
     queryFn: () => api.get<Paged<ArtistCard>>(`/public/artists${qs({ ...filters, pageSize: 24 })}`),
     placeholderData: keepPreviousData,
-    enabled: !venuesOnly,
+    enabled: showArtists,
   });
-  const showVenues = venuesOnly || (!kind && !filters.instrument && !filters.genre && !filters.format);
   const venues = useQuery({
     queryKey: ['venues', { q: filters.q, city: filters.city, kind: params.get('venueKind') ?? '' }],
     queryFn: () => api.get<VenueCard[]>(`/public/venues${qs({ q: filters.q, city: filters.city, kind: params.get('venueKind') ?? '' })}`),
@@ -247,15 +302,34 @@ export function MarketplacePage() {
     ? `Resultados para “${filters.q}”`
     : filters.instrument
       ? `${filters.instrument} em ${place}`
-      : `${{ '': 'Músicos, bandas e casas', SOLO: 'Músicos', BAND: 'Bandas', VENUE: 'Casas de show' }[kind] ?? 'Artistas'} em ${place}`;
+      : artistFeed
+        ? `Oportunidades e casas de show em ${place}`
+        : contractorFeed
+          ? `Músicos e bandas para contratar em ${place}`
+          : `${{ '': 'Músicos, bandas e casas', SOLO: 'Músicos', BAND: 'Bandas', VENUE: 'Casas de show' }[kind] ?? 'Artistas'} em ${place}`;
   const venueList = venues.data ?? [];
+  const oppList = opportunities.data ?? [];
+  const filterMode = venuesOnly ? 'venues' : artistFeed ? 'feed' : 'artists';
+  const hasVenue = me?.organizations.some((o) => o.type === 'VENUE');
+
+  const summary = venuesOnly
+    ? venues.data
+      ? `${venueList.length} casa(s) de show`
+      : 'Carregando…'
+    : artistFeed
+      ? opportunities.data && venues.data
+        ? `${oppList.length} oportunidade(s) aberta(s) e ${venueList.length} casa(s) de show`
+        : 'Carregando…'
+      : artists.data
+        ? `${artists.data.total} perfil(is) público(s)${showVenues && venueList.length ? ` e ${venueList.length} casa(s)` : ''}`
+        : 'Carregando…';
 
   return (
     <>
-      <CategoryBar params={params} set={set} />
+      <CategoryBar params={params} set={set} personal={!!accountType} />
       <div className="wrap mk">
         <aside className="filters" aria-label="Filtros">
-          <Filters params={params} set={set} venues={venuesOnly} />
+          <Filters params={params} set={set} mode={filterMode} />
         </aside>
         <section aria-labelledby="res-title" className="stack" style={{ minWidth: 0 }}>
           {!me && (
@@ -272,15 +346,26 @@ export function MarketplacePage() {
               </Link>
             </div>
           )}
+          {contractorFeed && showHome && (
+            <div className="promo promo-wide">
+              <div className="stack-sm">
+                <strong>Precisa de música ao vivo?</strong>
+                <span>Publique um evento e receba candidaturas, ou convide um artista direto pelo perfil dele.</span>
+              </div>
+              <Link className="btn cue" to={hasVenue ? '/painel/casas' : '/painel/eventos/novo'}>
+                Publicar evento
+              </Link>
+            </div>
+          )}
 
-          {showHome && home.data && home.data.shows.length > 0 && (
+          {showHome && !artistFeed && home.data && home.data.shows.length > 0 && (
             <Strip title="Próximos shows confirmados">
               {home.data.shows.map((s) => (
                 <ShowCard key={s.id} s={s} />
               ))}
             </Strip>
           )}
-          {showHome && home.data && home.data.opportunities.length > 0 && (
+          {showHome && !accountType && home.data && home.data.opportunities.length > 0 && (
             <Strip
               title="Oportunidades abertas"
               action={
@@ -290,7 +375,7 @@ export function MarketplacePage() {
               }
             >
               {home.data.opportunities.map((e) => (
-                <OpportunityTile key={e.id} e={e} />
+                <OpportunityCard key={e.id} e={e} />
               ))}
             </Strip>
           )}
@@ -299,13 +384,7 @@ export function MarketplacePage() {
             <div>
               <h1 id="res-title">{title}</h1>
               <p className="muted" aria-live="polite">
-                {venuesOnly
-                  ? venues.data
-                    ? `${venueList.length} casa(s) de show`
-                    : 'Carregando…'
-                  : artists.data
-                    ? `${artists.data.total} perfil(is) público(s)${showVenues && venueList.length ? ` e ${venueList.length} casa(s)` : ''}`
-                    : 'Carregando…'}
+                {summary}
                 {active.length > 0 && (
                   <>
                     {' · '}
@@ -320,7 +399,7 @@ export function MarketplacePage() {
               <button className="btn sm fbtn" type="button" onClick={() => setFiltersOpen(true)}>
                 <Icon name="list" size={16} /> Filtros{active.length ? ` (${active.length})` : ''}
               </button>
-              {!venuesOnly && (
+              {showArtists && (
                 <>
                   <label className="sr-only" htmlFor="sort">
                     Ordenar
@@ -334,27 +413,58 @@ export function MarketplacePage() {
             </div>
           </div>
 
-          {(artists.error || venues.error) && <ErrorState error={artists.error ?? venues.error} retry={() => (artists.refetch(), venues.refetch())} />}
-          {!venuesOnly && artists.isLoading && (
+          {(artists.error || venues.error || opportunities.error) && (
+            <ErrorState error={artists.error ?? venues.error ?? opportunities.error} retry={() => (artists.refetch(), venues.refetch(), opportunities.refetch())} />
+          )}
+
+          {artistFeed && (
+            <section className="stack" aria-label="Oportunidades abertas">
+              <div className="rhead">
+                <h2 className="sec-title">Oportunidades abertas</h2>
+                <Link className="link" to="/oportunidades">
+                  Ver todas
+                </Link>
+              </div>
+              {opportunities.isLoading && (
+                <div className="ads">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div className="skel" key={i} />
+                  ))}
+                </div>
+              )}
+              {opportunities.data && oppList.length === 0 && (
+                <Empty title="Nenhuma oportunidade aberta com esses filtros">Volte em breve ou procure casas de show abaixo e envie seu perfil.</Empty>
+              )}
+              {oppList.length > 0 && (
+                <div className="ads">
+                  {oppList.slice(0, 12).map((e) => (
+                    <OpportunityCard key={e.id} e={e} />
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+
+          {showArtists && artists.isLoading && (
             <div className="ads">
               {Array.from({ length: 8 }).map((_, i) => (
                 <div className="skel" key={i} />
               ))}
             </div>
           )}
-          {!venuesOnly && artists.data && artists.data.items.length === 0 && (!showVenues || venueList.length === 0) && (
+          {showArtists && artists.data && artists.data.items.length === 0 && (!showVenues || venueList.length === 0) && (
             <Empty title="Nenhum resultado com esses filtros" action={active.length ? <button className="btn sm" type="button" onClick={clear}>Limpar filtros</button> : undefined}>
               Tente outra cidade, outro estilo ou outro termo de busca.
             </Empty>
           )}
-          {!venuesOnly && artists.data && artists.data.items.length > 0 && (
+          {showArtists && artists.data && artists.data.items.length > 0 && (
             <div className="ads" style={{ opacity: artists.isPlaceholderData ? 0.6 : 1 }}>
               {artists.data.items.map((a) => (
                 <ArtistAd key={a.id} a={a} />
               ))}
             </div>
           )}
-          {!venuesOnly && totalPages > 1 && (
+          {showArtists && totalPages > 1 && (
             <nav className="row pager" aria-label="Paginação">
               <button className="btn sm" type="button" disabled={page <= 1} onClick={() => set({ page: String(page - 1) })}>
                 Anterior
@@ -383,11 +493,11 @@ export function MarketplacePage() {
               )}
             </section>
           )}
-          {venuesOnly && venues.data && venueList.length === 0 && <Empty title="Nenhuma casa de show encontrada" />}
+          {(venuesOnly || artistFeed) && venues.data && venueList.length === 0 && <Empty title="Nenhuma casa de show encontrada" />}
         </section>
         <Dialog open={filtersOpen} onClose={() => setFiltersOpen(false)} title="Filtros">
           <div className="stack">
-            <Filters params={params} set={set} venues={venuesOnly} />
+            <Filters params={params} set={set} mode={filterMode} />
             <button className="btn cue block" type="button" onClick={() => setFiltersOpen(false)}>
               Ver resultados
             </button>

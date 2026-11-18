@@ -1,5 +1,7 @@
-import { Controller, Get, Module, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
-import { ApiCookieAuth, ApiTags } from '@nestjs/swagger';
+import { Controller, Delete, Get, Module, Param, ParseUUIDPipe, Patch, Post, Put, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { ApiConsumes, ApiCookieAuth, ApiTags } from '@nestjs/swagger';
+import type { UploadedFile as File } from '../media/media.service';
+import { uploadInterceptor } from '../media/upload';
 import { z } from 'zod';
 import { ApiZodBody, ApiZodQuery, ZBody, ZQuery } from '../../common/zod';
 import { AuthUser, CurrentUser, OptionalUser, Public } from '../auth/auth.decorators';
@@ -76,6 +78,20 @@ export class EventsController {
   @ApiZodBody(UpdateEventSchema)
   update(@CurrentUser() user: AuthUser, @Param('eventId', ParseUUIDPipe) eventId: string, @ZBody(UpdateEventSchema) body: z.infer<typeof UpdateEventSchema>) {
     return this.events.update(user.id, eventId, body);
+  }
+
+  @ApiCookieAuth()
+  @Put('events/:eventId/image')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(uploadInterceptor())
+  setImage(@CurrentUser() user: AuthUser, @Param('eventId', ParseUUIDPipe) eventId: string, @UploadedFile() file: File) {
+    return this.events.setImage(user.id, eventId, file);
+  }
+
+  @ApiCookieAuth()
+  @Delete('events/:eventId/image')
+  removeImage(@CurrentUser() user: AuthUser, @Param('eventId', ParseUUIDPipe) eventId: string) {
+    return this.events.removeImage(user.id, eventId);
   }
 
   @ApiCookieAuth()

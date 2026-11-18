@@ -10,6 +10,7 @@ import { Tabs } from '../../components/Tabs';
 import { useToast } from '../../components/Toast';
 import { api } from '../../lib/api';
 import { dayMonth, money, PORTFOLIO_KIND } from '../../lib/format';
+import { formatPhone, phoneDigits } from '../../lib/phone';
 import { useMe } from '../../lib/hooks';
 import type { BookingDetail, OrgEventRow, PortfolioItem, PublicArtist, Rider, UpcomingEvent } from '../../lib/types';
 import { OfferForm } from '../bookings/OfferForm';
@@ -404,7 +405,9 @@ export function ArtistPublicPage() {
               {a.contacts.phone && (
                 <div>
                   <dt>Telefone</dt>
-                  <dd>{a.contacts.phone}</dd>
+                  <dd>
+                    <a className="link" href={`tel:+55${phoneDigits(a.contacts.phone)}`}>{formatPhone(a.contacts.phone)}</a>
+                  </dd>
                 </div>
               )}
               {a.contacts.website && (

@@ -66,3 +66,20 @@ test('página inicial com muitos shows confirmados sem rolagem horizontal', asyn
   await expect(page.getByText('Artista de teste 1', { exact: true })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });
+
+/** Reunião 18/11: logo sem fundo esticado e, no celular, sem a fileira de instrumentos (vai para "Filtros"). */
+test('logo do tamanho do texto e filtro de instrumentos só fora do celular', async ({ page }) => {
+  await page.goto('/');
+  const logo = await page.locator('.hdr .logo').boundingBox();
+  expect(logo!.width, 'fundo amarelo da logo não pode esticar').toBeLessThan(200);
+  const width = page.viewportSize()!.width;
+  const chips = page.locator('.cats .cat.sm');
+  if (width <= 700) {
+    await expect(chips.first()).toBeHidden();
+    await page.getByRole('button', { name: /Filtros/ }).click();
+    await expect(page.getByRole('dialog', { name: 'Filtros' }).getByLabel('Instrumento')).toBeVisible();
+  } else {
+    await expect(chips.first()).toBeVisible();
+  }
+  await expectNoHorizontalOverflow(page);
+});

@@ -9,6 +9,9 @@ import { createPublicMusicianProfile, localInput, newUser, PASSWORD, pickChip, s
 test.describe.configure({ mode: 'serial' });
 
 /** O sistema nunca usa alert/confirm/prompt do navegador. */
+/** PNG 32×18 válido gerado com sharp (o servidor reprocessa para WebP). */
+const PNG_CARTAZ = 'iVBORw0KGgoAAAANSUhEUgAAACAAAAASCAIAAAC1qksFAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAKElEQVQ4jWP4f8KKpohh1IITo0FkNZqK/o9mNKvRouL/aGl6grYVDgDVEIJ9Y1AmEwAAAABJRU5ErkJggg==';
+
 const forbidNativeDialogs = (page: Page) =>
   page.on('dialog', (d) => {
     throw new Error(`Diálogo nativo do navegador inesperado: ${d.message()}`);
@@ -137,8 +140,12 @@ test('MVP: perfil, banda, convite e transferência, casa, evento, vagas, negocia
   await vera.page.getByLabel('Vagas').fill('1');
   await vera.page.getByLabel('Cachê oferecido (R$)').fill('800');
   await pickChip(vera.page, /Estilos procurados/, 'MPB');
+  // Imagem do evento (exibida no card)
+  await vera.page.locator('input[type="file"]').setInputFiles({ name: 'cartaz.png', mimeType: 'image/png', buffer: Buffer.from(PNG_CARTAZ, 'base64') });
+  await expect(vera.page.locator('.picker-prev.wide img')).toBeVisible();
   await vera.page.getByRole('button', { name: 'Salvar rascunho' }).click();
   await toast(vera.page, 'Rascunho criado');
+  await expect(vera.page.locator('img.ev-cover')).toHaveAttribute('src', /^\/api\/media\//);
   const eventManageUrl = vera.page.url();
   const eventId = eventManageUrl.split('/').pop()!;
 
@@ -147,8 +154,10 @@ test('MVP: perfil, banda, convite e transferência, casa, evento, vagas, negocia
   await vera.page.getByRole('button', { name: 'Publicar e abrir inscrições' }).click();
   await expect(vera.page.getByText('Inscrições abertas').first()).toBeVisible();
 
-  // ── Candidatura ──
+  // ── Candidatura (oportunidades em cards, com a imagem do evento) ──
   await ana.page.goto('/oportunidades');
+  const card = ana.page.locator('article.opp-card', { hasText: eventTitle });
+  await expect(card.locator('img')).toHaveAttribute('src', /^\/api\/media\/.+\?v=thumb$/);
   await ana.page.getByRole('link', { name: eventTitle }).click();
   await ana.page.getByLabel('Candidatar-se como').selectOption({ label: `${artistName} (Perfil individual)` });
   await ana.page.getByLabel('Mensagem para a casa').fill('Tenho repertório autoral para a noite.');
@@ -204,6 +213,18 @@ test('MVP: perfil, banda, convite e transferência, casa, evento, vagas, negocia
   await vera.page.getByRole('button', { name: 'Confirmar contratação' }).click();
   await vera.page.getByRole('dialog', { name: 'Confirmar contratação' }).getByRole('button', { name: 'Confirmar contratação' }).click();
   await toast(vera.page, 'Contratação confirmada');
+
+  // ── Conversa: Enter envia, Shift+Enter quebra a linha ──
+  const chatBox = ana.page.getByRole('region', { name: 'Mensagens' });
+  const chatInput = chatBox.getByLabel('Nova mensagem');
+  await chatInput.fill('Chego às 19h para a passagem de som.');
+  await chatInput.press('Shift+Enter');
+  await expect(chatInput).toHaveValue('Chego às 19h para a passagem de som.\n');
+  await chatInput.press('Enter');
+  await expect(chatBox.locator('.bubble.me', { hasText: 'Chego às 19h para a passagem de som.' })).toBeVisible();
+  await expect(chatInput).toHaveValue('');
+  await vera.page.reload();
+  await expect(vera.page.getByRole('region', { name: 'Mensagens' }).getByText('Chego às 19h para a passagem de som.')).toBeVisible();
 
   // ── Agenda, perfil público (abas, próximos eventos, sem comparação) e página inicial ──
   await ana.page.goto('/painel/agenda');

@@ -251,3 +251,20 @@ Decisões do responsável que **substituem** regras anteriores (ordem de autorid
 7. **Barra inferior**: altura em `--tabbar-h`, `safe-area-inset-*`, alvos ≥ 44 px, item ativo sempre marcado ("Painel"
    nas subpáginas sem atalho próprio), número variável de itens, barra de salvar acima dela; em telas de toque some com
    o teclado aberto e volta com atraso (não rouba o toque que fechou o teclado).
+
+## Reunião de 18/11 (`docs/reuniao18_11.md`)
+
+- **Feed por tipo de conta** (aba "Para você" da página inicial):
+  - *Artista/banda*: o objetivo é conseguir apresentações → só **oportunidades abertas** (inclusive privadas, que só
+    artistas veem) e **casas de show**, em cards. As abas Músicos/Bandas continuam listando todos os perfis.
+  - *Contratante/casa*: o objetivo é contratar → **artistas e bandas** e os **shows confirmados** (referência do
+    circuito). Oportunidades são vagas para artistas e saem do feed, do menu do topo e da barra inferior; outras casas
+    não são alvo do contratante e ficam só na aba "Casas de show". Chamada "Publicar evento" no topo do feed.
+  - *Visitante*: vitrine completa (precisa entender a plataforma antes de escolher o tipo de conta).
+  - A busca por texto sempre mostra o resultado completo (artistas e casas), para qualquer conta.
+- **Imagem do evento**: `Event.imageId` → `MediaAsset` (mesmo pipeline das fotos: reprocessada, sem EXIF, miniatura).
+  Visibilidade igual à do evento: público → todos; privado → contas de artista e organizador; rascunho → organizador.
+- **Celular**: a fileira de instrumentos saiu da barra de categorias (poluía a tela); o filtro de instrumento ficou no
+  painel "Filtros". Chat da negociação em painel sobreposto aberto por uma barra fixa; no desktop continua na lateral.
+- **Telefone**: máscara só no frontend (o backend já aceitava o formato); exibição pública formatada com link `tel:`.
+- **Menus**: um único hook (`useDismiss`) fecha menus/painéis ao tocar fora (`pointerdown`) e com Esc.

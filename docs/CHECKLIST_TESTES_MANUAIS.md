@@ -67,3 +67,17 @@ Marque ✔/✘ e anote o problema.
 - [ ] Confirmar duas contratações do mesmo artista em horários sobrepostos → a segunda mostra "Conflito de agenda".
 - [ ] Horários consecutivos (19h–22h e 22h–23h) → ambas confirmam.
 - [ ] Evento com todas as vagas confirmadas: candidatura e nova proposta são recusadas; o evento continua na agenda.
+
+## Reunião 18/11
+- [ ] Celular: a página inicial não mostra a fileira de instrumentos; o filtro de instrumento está em "Filtros" (abas Músicos/Bandas).
+- [ ] Celular: a logo do RiderSync mantém o fundo amarelo do tamanho do texto em qualquer largura (320, 360, 390, 412 px e tablet).
+- [ ] Negociação no celular: barra "Mensagens" fixa no rodapé; ao tocar abre a conversa por cima da página; fecha no X, no fundo escuro e com Esc.
+- [ ] Chat: Enter envia; Shift+Enter quebra a linha; se o envio falhar, o texto continua no campo.
+- [ ] Conta de artista, "Para você": só oportunidades e casas de show em cards; abas Músicos/Bandas listam todos os perfis; busca por nome encontra artistas.
+- [ ] Conta de contratante, "Para você": artistas e shows confirmados; sem "Oportunidades" no feed, no menu do topo e na barra inferior.
+- [ ] "Próximos shows" (casa e perfil do artista) e cards de show: nome, título, local e horário em linhas separadas, sem textos colados.
+- [ ] Telefone/WhatsApp (perfil e casa): ao digitar 82999998888 vira (82) 99999-8888; 8233334444 vira (82) 3333-4444; número incompleto é recusado.
+- [ ] Menu do perfil e sino fecham ao clicar/tocar fora e com Esc.
+- [ ] Criar evento (casa e evento particular) com imagem; a imagem aparece no card da oportunidade e na página do evento; "Remover imagem" funciona na edição.
+- [ ] Evento privado com imagem: visitante e contratante não abrem a imagem; contas de artista sim.
+- [ ] Contratante: o menu do perfil lista a(s) casa(s) de show e leva direto à gestão; no celular, "Minha casa" na barra inferior.

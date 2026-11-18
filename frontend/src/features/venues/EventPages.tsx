@@ -8,6 +8,7 @@ import { CityField } from '../../components/CityField';
 import { ConfirmButton, Dialog, TextPromptDialog } from '../../components/Dialog';
 import { applyServerErrors, ChipPicker, FormError, SelectField, TextArea, TextField } from '../../components/Fields';
 import { PageHead } from '../../components/Layout';
+import { ImagePicker, uploadForm } from '../../components/Media';
 import { Poster } from '../../components/Poster';
 import { Empty, ErrorState, Loading, Status } from '../../components/States';
 import { useToast } from '../../components/Toast';
@@ -76,6 +77,21 @@ const toPayload = (v: EventValues, independent: boolean) => ({
   requirements: v.requirements,
 });
 
+/** Alteração da imagem pedida no formulário: novo arquivo, remoção da atual ou nada. */
+type ImageChange = { file: File } | 'remove' | null;
+
+/** Aplica a alteração de imagem depois de salvar o evento. Falha no envio não desfaz o evento salvo. */
+async function applyImageChange(eventId: string, change: ImageChange, toast: (m: string, t?: 'error') => void): Promise<EventManage | null> {
+  if (!change) return null;
+  try {
+    if (change === 'remove') return await api.delete<EventManage>(`/events/${eventId}/image`);
+    return await api.upload<EventManage>('PUT', `/events/${eventId}/image`, uploadForm(change.file));
+  } catch (err) {
+    toast(`O evento foi salvo, mas a imagem não pôde ser atualizada: ${errorMessage(err)}`, 'error');
+    return null;
+  }
+}
+
 const VISIBILITY_HELP: Record<EventVisibility, string> = {
   PUBLIC: 'Aparece para todos: página inicial, oportunidades e agenda pública dos artistas.',
   PRIVATE: 'Aparece só para contas de artista (para se candidatarem). Não vai para a página inicial e, na agenda do artista, aparece apenas como “Evento privado”.',
@@ -90,17 +106,19 @@ function EventForm({
   initial?: Partial<EventManage>;
   independent: boolean;
   submitLabel: string;
-  onSubmit: (p: ReturnType<typeof toPayload>) => Promise<unknown>;
+  onSubmit: (p: ReturnType<typeof toPayload>, image: ImageChange) => Promise<unknown>;
 }) {
   const { data: meta } = useMeta();
   const [formError, setFormError] = useState<string | null>(null);
+  const [image, setImage] = useState<File | null>(null);
+  const [removeImage, setRemoveImage] = useState(false);
   const form = useForm<EventValues>({ resolver: zodResolver(EventFormSchema(independent)), defaultValues: toValues(initial) });
   const e = form.formState.errors;
   const visibility = useWatch({ control: form.control, name: 'visibility' });
   const submit = form.handleSubmit(async (v) => {
     setFormError(null);
     try {
-      await onSubmit(toPayload(v, independent));
+      await onSubmit(toPayload(v, independent), image ? { file: image } : removeImage ? 'remove' : null);
     } catch (err) {
       setFormError(applyServerErrors(err, form.setError));
     }
@@ -109,6 +127,18 @@ function EventForm({
     <form className="box form" onSubmit={submit} noValidate aria-label="Dados do evento">
       <FormError message={formError} />
       <TextField label="Título" {...form.register('title')} error={e.title} />
+      <ImagePicker
+        label="Imagem do evento (opcional)"
+        wide
+        value={image}
+        onChange={(f) => {
+          setImage(f);
+          setRemoveImage(false);
+        }}
+        currentUrl={removeImage ? null : initial?.imageUrl}
+        onRemoveCurrent={() => setRemoveImage(true)}
+        hint="Aparece no card do evento. Prefira uma imagem horizontal (cartaz, foto do palco ou do local)."
+      />
       <TextArea label="Descrição" {...form.register('description')} error={e.description} />
       <fieldset className="stack-sm">
         <legend>Visibilidade do evento</legend>
@@ -173,8 +203,9 @@ export function NewEventPage() {
       <EventForm
         independent={false}
         submitLabel="Salvar rascunho"
-        onSubmit={async (p) => {
+        onSubmit={async (p, image) => {
           const ev = await api.post<EventManage>(`/organizations/${orgId}/events`, p);
+          await applyImageChange(ev.id, image, toast);
           await qc.invalidateQueries({ queryKey: ['org-events', orgId] });
           toast('Rascunho criado.');
           navigate(`/painel/eventos/${ev.id}`);
@@ -211,7 +242,7 @@ export function IndependentEventsPage() {
       <div className="stack-sm">
         {q.data?.map((e) => (
           <article className="prow" key={e.id}>
-            <Poster name={e.title} top={[date(e.startsAt), '']} bottom={[e.statusLabel, '']} />
+            <Poster name={e.title} photoUrl={e.imageThumbUrl} top={[date(e.startsAt), '']} bottom={[e.statusLabel, '']} />
             <div>
               <h3>
                 <Link className="link" to={`/painel/eventos/${e.id}`}>
@@ -249,8 +280,9 @@ export function NewIndependentEventPage() {
       <EventForm
         independent
         submitLabel="Salvar rascunho"
-        onSubmit={async (p) => {
+        onSubmit={async (p, image) => {
           const ev = await api.post<EventManage>('/me/independent-events', p);
+          await applyImageChange(ev.id, image, toast);
           await qc.invalidateQueries({ queryKey: ['me'] });
           await qc.invalidateQueries({ queryKey: ['org-events'] });
           toast('Rascunho criado.');
@@ -415,14 +447,23 @@ export function EventManagePage() {
           initial={ev}
           independent={independent}
           submitLabel="Salvar alterações"
-          onSubmit={async (p) => {
-            qc.setQueryData(key, await api.patch<EventManage>(`/events/${ev.id}`, p));
+          onSubmit={async (p, image) => {
+            const saved = await api.patch<EventManage>(`/events/${ev.id}`, p);
+            qc.setQueryData(key, (await applyImageChange(ev.id, image, toast)) ?? saved);
+            await qc.invalidateQueries({ queryKey: ['org-events', ev.organizerId] });
             setEditing(false);
             toast('Evento atualizado.');
           }}
         />
       ) : (
         <section className="box">
+          {ev.imageUrl ? (
+            <img className="ev-cover" src={ev.imageUrl} alt={`Imagem do evento ${ev.title}`} />
+          ) : (
+            ['DRAFT', 'OPEN', 'FILLED', 'CLOSED'].includes(ev.status) && (
+              <p className="hint">Sem imagem: o card usa um cartaz gerado. Para adicionar uma imagem, clique em “Editar”.</p>
+            )
+          )}
           <dl className="attrs">
             <div>
               <dt>Vagas ocupadas</dt>

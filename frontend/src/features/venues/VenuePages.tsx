@@ -8,7 +8,8 @@ import { CityField } from '../../components/CityField';
 import { ConfirmButton } from '../../components/Dialog';
 import { ImagePicker, prepareImage, uploadForm } from '../../components/Media';
 import { TransferOwnershipDialog } from '../../components/TransferOwnershipDialog';
-import { applyServerErrors, FormError, SelectField, TextArea, TextField } from '../../components/Fields';
+import { applyServerErrors, PhoneField, FormError, SelectField, TextArea, TextField } from '../../components/Fields';
+import { formatPhone, isValidPhoneBR } from '../../lib/phone';
 import { PageHead } from '../../components/Layout';
 import { Avatar, Poster } from '../../components/Poster';
 import { Empty, ErrorState, Loading, Status } from '../../components/States';
@@ -29,7 +30,7 @@ const OrgSchema = z.object({
   state: z.string().length(2),
   capacity: z.string().trim().refine((v) => v === '' || (/^\d+$/.test(v) && Number(v) > 0), 'Capacidade inválida.'),
   contactEmail: z.string().trim().refine((v) => v === '' || z.email().safeParse(v).success, 'E-mail inválido.'),
-  contactPhone: z.string().trim().max(20),
+  contactPhone: z.string().trim().max(20).refine(isValidPhoneBR, 'Telefone incompleto. Use DDD + número, ex.: (82) 99999-9999.'),
   instagram: z.string().trim().max(31),
   website: z.string().trim().refine((v) => v === '' || /^https:\/\/[^\s]+\.[^\s]+/.test(v), 'Use um link começando com https://'),
 });
@@ -45,7 +46,7 @@ const toOrgValues = (o?: Partial<OrgDetail>): OrgValues => ({
   state: o?.state ?? 'AL',
   capacity: o?.capacity ? String(o.capacity) : '',
   contactEmail: o?.contactEmail ?? '',
-  contactPhone: o?.contactPhone ?? '',
+  contactPhone: formatPhone(o?.contactPhone),
   instagram: o?.instagram ?? '',
   website: o?.website ?? '',
 });
@@ -89,7 +90,7 @@ function OrgFields({ form }: { form: ReturnType<typeof useForm<OrgValues>> }) {
         <legend>Contatos públicos do estabelecimento</legend>
         <div className="row2">
           <TextField label="E-mail" type="email" {...form.register('contactEmail')} error={e.contactEmail} />
-          <TextField label="Telefone" {...form.register('contactPhone')} error={e.contactPhone} />
+          <PhoneField label="Telefone/WhatsApp" {...form.register('contactPhone')} error={e.contactPhone} />
           <TextField label="Instagram" {...form.register('instagram')} error={e.instagram} />
           <TextField label="Site" {...form.register('website')} error={e.website} />
         </div>
