@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { mediaUrl } from '../media/media.service';
+import { mediaThumbUrl, mediaUrl } from '../media/media.service';
 import { publicationIssues } from './artist.schemas';
 
 /** Seleção explícita de campos públicos — nunca serializar o registro Prisma inteiro. */
@@ -34,7 +34,8 @@ export function toArtistCard(a: PublicArtistCardRow) {
     formats: a.formats,
     careerStartYear: a.careerStartYear,
     baseFeeCents: a.baseFeeCents,
-    photoUrl: mediaUrl(a.photoId),
+    photoUrl: mediaThumbUrl(a.photoId),
+    photoLargeUrl: mediaUrl(a.photoId),
     mainInstrument: a.musicianProfile?.mainInstrument ?? null,
     instruments: a.musicianProfile?.instruments ?? [],
   };
@@ -46,6 +47,7 @@ export const portfolioSelect = {
   title: true,
   description: true,
   url: true,
+  thumbnailUrl: true,
   mediaId: true,
   position: true,
   media: { select: { mimeType: true, originalName: true, sizeBytes: true } },
@@ -58,6 +60,7 @@ export function toPortfolioItem(p: Prisma.PortfolioItemGetPayload<{ select: type
     title: p.title,
     description: p.description,
     url: p.url ?? mediaUrl(p.mediaId),
+    thumbnailUrl: p.thumbnailUrl ?? (p.media?.mimeType.startsWith('image/') ? mediaThumbUrl(p.mediaId) : null),
     isUpload: !!p.mediaId,
     file: p.media ? { mimeType: p.media.mimeType, name: p.media.originalName, sizeBytes: p.media.sizeBytes } : null,
     position: p.position,

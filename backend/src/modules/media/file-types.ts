@@ -5,8 +5,9 @@ export interface DetectedType {
   kind: 'IMAGE' | 'DOCUMENT';
 }
 
-export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-export const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
+// Abaixo do limite de corpo das funções da Vercel (4,5 MB); o navegador reduz fotos maiores antes do envio.
+export const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+export const MAX_DOCUMENT_BYTES = 4 * 1024 * 1024;
 
 export function detectFileType(buf: Buffer): DetectedType | null {
   if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return { mime: 'image/jpeg', ext: 'jpg', kind: 'IMAGE' };

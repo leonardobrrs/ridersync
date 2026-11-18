@@ -22,10 +22,13 @@ function ScheduleList({ items, empty }: { items: ScheduleItem[]; empty: string }
             </span>
             <span>
               <Link className="link" to={`/painel/negociacoes/${i.id}`}>
-                {i.artist.name} @ {i.organization.name}
-              </Link>
+                {i.artist.name} — {i.event?.title ?? i.organization.name}
+              </Link>{' '}
+              {i.event?.visibility === 'PRIVATE' && <span className="st draft">Evento privado</span>}
               <small className="hint" style={{ display: 'block' }}>
-                {dateTime(i.performanceAt)} · {duration(i.durationMinutes)} · {money(i.feeCents)} · contratação confirmada
+                {dateTime(i.performanceAt)} · {duration(i.durationMinutes)} · {money(i.feeCents)}
+                {i.event?.locationName ? ` · ${i.event.locationName}` : ` · ${i.organization.name}`}
+                {i.event?.locationCity ?? i.organization.city ? `, ${i.event?.locationCity ?? i.organization.city}` : ''}
               </small>
             </span>
           </li>
@@ -44,11 +47,11 @@ export function DashboardPage() {
   return (
     <>
       <PageHead title={`Olá, ${me?.user.name.split(' ')[0] ?? ''}`} subtitle="Seu ponto de partida: pendências e próximos compromissos." />
-      {!d.hasMusicianProfile && !d.managesBands && !d.managesVenues && (
+      {me?.user.accountType === 'ARTIST' && !d.hasMusicianProfile && !d.managesBands && (
         <div className="hero">
           <div>
             <h2>Monte seu perfil profissional</h2>
-            <p>Músico? Crie seu perfil individual. Tem banda ou casa de show? Cadastre também.</p>
+            <p>Crie seu perfil individual e, se tiver banda, cadastre-a também. Depois, publique para aparecer no marketplace.</p>
           </div>
           <div className="promo-acts">
             <Link className="btn cue" to="/painel/perfil">
@@ -57,8 +60,24 @@ export function DashboardPage() {
             <Link className="btn" to="/painel/bandas">
               Criar banda
             </Link>
-            <Link className="btn" to="/painel/casas">
+          </div>
+        </div>
+      )}
+      {me?.user.accountType === 'CONTRACTOR' && !d.managesVenues && (
+        <div className="hero">
+          <div>
+            <h2>Comece a contratar</h2>
+            <p>Tem casa de show, bar ou teatro? Cadastre o estabelecimento. Vai contratar para um evento particular? Crie o evento sem casa.</p>
+          </div>
+          <div className="promo-acts">
+            <Link className="btn cue" to="/painel/casas">
               Cadastrar casa
+            </Link>
+            <Link className="btn" to="/painel/eventos/novo">
+              Criar evento particular
+            </Link>
+            <Link className="btn" to="/">
+              Buscar artistas
             </Link>
           </div>
         </div>
@@ -226,7 +245,7 @@ export function SchedulePage() {
   const s = q.data!;
   return (
     <>
-      <PageHead title="Apresentações" subtitle="Contratações confirmadas e histórico de apresentações realizadas. Pagamentos não são controlados pela plataforma." />
+      <PageHead title="Agenda" subtitle="Contratações confirmadas e histórico de apresentações realizadas. Eventos privados aparecem com o selo “Evento privado” e não são divulgados publicamente." />
       <section className="box">
         <h2 className="lbl">Próximas (contratação confirmada)</h2>
         <ScheduleList items={s.upcoming} empty="Nenhuma apresentação futura confirmada." />
@@ -248,7 +267,7 @@ export function SchedulePage() {
                 <tr>
                   <th>Data</th>
                   <th>Artista</th>
-                  <th>Casa</th>
+                  <th>Contratante</th>
                   <th>Observações</th>
                 </tr>
               </thead>

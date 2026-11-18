@@ -12,8 +12,8 @@ describe('regras de Booking', () => {
     expect(() => assertBookingTransition('DECLINED', 'NEGOTIATING')).toThrow();
     expect(() => assertBookingTransition('CANCELLED', 'CONFIRMED')).toThrow();
   });
-  it('apenas a casa confirma', () => {
-    expect(() => assertCanConfirm('AGREED', 'ARTIST')).toThrow(/casa/);
+  it('apenas o contratante (casa ou contratante individual) confirma', () => {
+    expect(() => assertCanConfirm('AGREED', 'ARTIST')).toThrow(/contratante/);
     expect(() => assertCanConfirm('AGREED', 'VENUE')).not.toThrow();
   });
   it('não responde à própria proposta nem a proposta já respondida', () => {

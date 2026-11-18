@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { conflict, notFound, unprocessable } from '../../common/errors';
+import { resolveVideoThumbnail } from '../../common/video-thumbnail';
 import { uniqueSlug } from '../../common/slug';
 import { PrismaService, Tx } from '../../prisma/prisma.service';
 import { AccessService } from '../access/access.service';
@@ -54,6 +55,7 @@ export class ArtistsService {
   // ─────────── Perfil individual ───────────
 
   async createMusicianProfile(userId: string, input: z.infer<typeof CreateMusicianSchema>) {
+    await this.access.assertAccountType(userId, 'ARTIST');
     const { mainInstrument, instruments, ...artistInput } = input;
     const existing = await this.prisma.musicianProfile.findUnique({ where: { userId }, select: { id: true } });
     if (existing) throw conflict('PROFILE_EXISTS', 'Você já possui um perfil individual.');
@@ -158,7 +160,8 @@ export class ArtistsService {
   async addPortfolioLink(userId: string, artistId: string, input: z.infer<typeof PortfolioLinkSchema>) {
     await this.access.assertCanManageArtist(userId, artistId);
     const position = await this.nextPosition(artistId);
-    const item = await this.prisma.portfolioItem.create({ data: { artistId, ...input, position }, select: portfolioSelect });
+    const thumbnailUrl = await resolveVideoThumbnail(input.url);
+    const item = await this.prisma.portfolioItem.create({ data: { artistId, ...input, thumbnailUrl, position }, select: portfolioSelect });
     return toPortfolioItem(item);
   }
 

@@ -174,3 +174,7 @@ A suíte Jest/Supertest **não** foi executada contra o Neon (ela trunca tabelas
 8. **Production**: ainda sem schema. Migrar somente com autorização, após validar em staging
    (`npm run db:migrate:neon -w backend`), e decidir se `production` deve ficar protegida no Neon.
 9. Opcional: integração Neon ↔ Vercel para branches de preview automáticas.
+
+> **Windows:** os scripts `*:neon:staging` usam `sh -c '…'` e só funcionam com shell POSIX. Pelo `npm run` no Windows
+> (que usa `cmd.exe`) eles terminam sem fazer nada. No Git Bash, rode a mesma cadeia diretamente em `backend/`:
+> `npx dotenv -o -e .env.neon-staging -- sh -c '[ "$NEON_BRANCH" = ridersync-staging ] || exit 1; DATABASE_URL="$DATABASE_URL_UNPOOLED" npx prisma migrate deploy'`.

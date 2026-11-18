@@ -1,18 +1,23 @@
 import { Injectable } from '@nestjs/common';
-import { EventStatus, Prisma } from '@prisma/client';
+import { Event, EventStatus, Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { GENRES, PAYMENT_TYPES } from '../../common/domain-lists';
 import { conflict, notFound, unprocessable } from '../../common/errors';
-import { genres, moneyCents, text } from '../../common/validation';
-import { PrismaService } from '../../prisma/prisma.service';
+import { uniqueSlug } from '../../common/slug';
+import { alCity, genres, moneyCents, optionalText, text, uf } from '../../common/validation';
+import { PrismaService, Tx } from '../../prisma/prisma.service';
 import { AccessService } from '../access/access.service';
 import { publicArtistCardSelect, toArtistCard } from '../artists/artist.presenter';
-import { mediaUrl } from '../media/media.service';
+import { mediaThumbUrl } from '../media/media.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { EventLifecycleService } from './event-lifecycle.service';
 import {
   acceptsApplications,
+  ACTIVE_EVENT_STATUSES,
   assertApplicationTransition,
   assertEventTransition,
   EDITABLE_EVENT_STATUSES,
+  EVENT_STATUS_LABEL,
 } from './event.rules';
 
 const isoDate = z.iso.datetime({ offset: true, error: 'Data/hora inválida.' }).transform((s) => new Date(s));
@@ -29,7 +34,12 @@ const EventFields = {
   feeCents: moneyCents.nullable(),
   conditions: z.string().trim().max(2000),
   requirements: z.string().trim().max(2000),
+  visibility: z.enum(['PUBLIC', 'PRIVATE']),
   venueId: z.uuid().nullable(),
+  locationName: optionalText(120, 'Nome do local'),
+  locationAddress: optionalText(160, 'Endereço'),
+  locationCity: alCity.nullable(),
+  locationState: uf.nullable(),
 };
 const deadlineBeforeStart = (v: { startsAt?: Date; applicationDeadline?: Date }) =>
   !v.startsAt || !v.applicationDeadline || v.applicationDeadline.getTime() <= v.startsAt.getTime();
@@ -48,14 +58,35 @@ export const CreateEventSchema = z
   .refine(deadlineBeforeStart, deadlineMsg);
 export const UpdateEventSchema = z.object(EventFields).partial().strict().refine(deadlineBeforeStart, deadlineMsg);
 
-export const EventTransitionSchema = z.object({ action: z.enum(['publish', 'close', 'reopen', 'complete', 'cancel']) });
+/** Evento de contratante independente (ex.: aniversário): sem casa de show, local descrito livremente. */
+export const IndependentEventSchema = z
+  .object(EventFields)
+  .partial()
+  .extend({
+    title: EventFields.title,
+    startsAt: EventFields.startsAt,
+    applicationDeadline: EventFields.applicationDeadline,
+    slots: EventFields.slots,
+    locationCity: alCity,
+  })
+  .strict()
+  .refine(deadlineBeforeStart, deadlineMsg);
+
+export const EventTransitionSchema = z.object({ action: z.enum(['publish', 'close', 'reopen', 'complete', 'cancel', 'postpone']), reason: z.string().trim().max(500).optional() }).strict();
 const ACTION_TARGET: Record<z.infer<typeof EventTransitionSchema>['action'], EventStatus> = {
   publish: 'OPEN',
   close: 'CLOSED',
   reopen: 'OPEN',
   complete: 'COMPLETED',
   cancel: 'CANCELLED',
+  postpone: 'POSTPONED',
 };
+
+export const RescheduleSchema = z
+  .object({ startsAt: isoDate, applicationDeadline: isoDate, reason: z.string().trim().max(500).optional() })
+  .strict()
+  .refine(deadlineBeforeStart, deadlineMsg)
+  .refine((v) => v.startsAt.getTime() > Date.now(), { path: ['startsAt'], message: 'A nova data deve estar no futuro.' });
 
 export const ApplySchema = z.object({ artistId: z.uuid(), message: z.string().trim().max(1500).default('') }).strict();
 export const DecisionSchema = z.object({ note: z.string().trim().max(500).optional() }).strict();
@@ -65,9 +96,10 @@ export const EventSearchSchema = z.object({
   q: z.preprocess(emptyToUndef, z.string().trim().max(80).optional()),
   genre: z.preprocess(emptyToUndef, z.enum(GENRES).optional()),
   city: z.preprocess(emptyToUndef, z.string().trim().max(80).optional()),
+  visibility: z.preprocess(emptyToUndef, z.enum(['PUBLIC', 'PRIVATE']).optional()),
 });
 
-const orgPublicSelect = { id: true, slug: true, name: true, city: true, state: true, neighborhood: true, venueKind: true, photoId: true } as const;
+const orgPublicSelect = { id: true, slug: true, name: true, type: true, city: true, state: true, neighborhood: true, venueKind: true, photoId: true } as const;
 
 const eventPublicSelect = {
   id: true,
@@ -83,16 +115,45 @@ const eventPublicSelect = {
   conditions: true,
   requirements: true,
   status: true,
+  visibility: true,
   publishedAt: true,
+  postponedAt: true,
+  locationName: true,
+  locationAddress: true,
+  locationCity: true,
+  locationState: true,
   organizer: { select: orgPublicSelect },
   venue: { select: orgPublicSelect },
 } satisfies Prisma.EventSelect;
 
 type OrgPublic = Prisma.OrganizationGetPayload<{ select: typeof orgPublicSelect }>;
-const orgOut = (o: OrgPublic | null) => (o ? { ...o, photoId: undefined, photoUrl: mediaUrl(o.photoId) } : null);
+type EventPublicRow = Prisma.EventGetPayload<{ select: typeof eventPublicSelect }>;
 
-function eventOut<T extends { organizer: OrgPublic; venue: OrgPublic | null; status: EventStatus; applicationDeadline: Date }>(e: T) {
-  return { ...e, organizer: orgOut(e.organizer)!, venue: orgOut(e.venue), acceptingApplications: acceptsApplications(e, new Date()) };
+/** Contratante individual não expõe slug/página pública: só nome e cidade. */
+const orgOut = (o: OrgPublic | null) =>
+  o ? { id: o.id, slug: o.type === 'VENUE' ? o.slug : null, name: o.name, type: o.type, city: o.city, state: o.state, neighborhood: o.neighborhood, venueKind: o.venueKind, photoUrl: mediaThumbUrl(o.photoId) } : null;
+
+export function eventLocation(e: Pick<EventPublicRow, 'venue' | 'locationName' | 'locationAddress' | 'locationCity' | 'locationState'>) {
+  if (e.venue) return { name: e.venue.name, address: null, city: e.venue.city, state: e.venue.state, venueSlug: e.venue.type === 'VENUE' ? e.venue.slug : null };
+  return { name: e.locationName, address: e.locationAddress, city: e.locationCity, state: e.locationState, venueSlug: null };
+}
+
+function eventOut(e: EventPublicRow, filledSlots?: number) {
+  const { organizer, venue, locationName: _n, locationAddress: _a, locationCity: _c, locationState: _s, ...rest } = e;
+  return {
+    ...rest,
+    statusLabel: EVENT_STATUS_LABEL[e.status],
+    organizer: orgOut(organizer)!,
+    venue: orgOut(venue),
+    location: eventLocation(e),
+    acceptingApplications: acceptsApplications(e, new Date()),
+    ...(filledSlots !== undefined ? { filledSlots } : {}),
+  };
+}
+
+interface Viewer {
+  id: string;
+  accountType: 'ARTIST' | 'CONTRACTOR' | null;
 }
 
 @Injectable()
@@ -100,7 +161,15 @@ export class EventsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly access: AccessService,
+    private readonly lifecycle: EventLifecycleService,
+    private readonly notifications: NotificationsService,
   ) {}
+
+  private async viewer(userId: string | null): Promise<Viewer | null> {
+    if (!userId) return null;
+    const u = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true, accountType: true } });
+    return u ? { id: u.id, accountType: u.accountType } : null;
+  }
 
   private async assertVenue(venueId: string | null | undefined) {
     if (!venueId) return;
@@ -110,42 +179,91 @@ export class EventsService {
 
   private async loadForManage(userId: string, eventId: string) {
     const event = await this.prisma.event.findUnique({ where: { id: eventId } });
-    if (!event) throw notFound('Publicação não encontrada.');
+    if (!event) throw notFound('Evento não encontrado.');
     await this.access.assertOrgMember(userId, event.organizerId);
     return event;
   }
 
-  // ─────────── Gestão pela casa ───────────
+  /** Pessoas a avisar sobre mudanças do evento: responsáveis das identidades com candidatura ativa ou negociação. */
+  private async participantUserIds(tx: Tx, eventId: string) {
+    const [apps, bookings] = await Promise.all([
+      tx.eventApplication.findMany({ where: { eventId, status: { in: ['PENDING', 'ACCEPTED'] } }, select: { artistId: true } }),
+      tx.booking.findMany({ where: { eventId, status: { in: ['NEGOTIATING', 'AGREED', 'CONFIRMED'] } }, select: { artistId: true } }),
+    ]);
+    const artistIds = [...new Set([...apps, ...bookings].map((r) => r.artistId))];
+    const users = await Promise.all(artistIds.map((id) => this.access.artistManagerUserIds(id, tx)));
+    return users.flat();
+  }
+
+  // ─────────── Criação ───────────
 
   async create(userId: string, organizerId: string, input: z.infer<typeof CreateEventSchema>) {
     await this.access.assertOrgMember(userId, organizerId);
-    const venueId = input.venueId === undefined ? organizerId : input.venueId;
+    const organizer = await this.prisma.organization.findUniqueOrThrow({ where: { id: organizerId }, select: { type: true, city: true, state: true } });
+    const venueId = input.venueId === undefined ? (organizer.type === 'VENUE' ? organizerId : null) : input.venueId;
     await this.assertVenue(venueId);
-    const event = await this.prisma.event.create({
-      data: {
-        organizerId,
-        venueId,
-        createdById: userId,
-        title: input.title,
-        description: input.description ?? '',
-        startsAt: input.startsAt,
-        durationMinutes: input.durationMinutes ?? null,
-        applicationDeadline: input.applicationDeadline,
-        slots: input.slots,
-        genres: input.genres ?? [],
-        paymentType: input.paymentType ?? null,
-        feeCents: input.feeCents ?? null,
-        conditions: input.conditions ?? '',
-        requirements: input.requirements ?? '',
-        status: 'DRAFT',
-      },
-      select: { id: true },
-    });
+    if (!venueId && !input.locationCity) {
+      throw unprocessable('LOCATION_REQUIRED', 'Informe o local do evento (cidade e, se quiser, endereço).');
+    }
+    const event = await this.prisma.event.create({ data: this.createData(userId, organizerId, venueId, input), select: { id: true } });
     return this.manageDetail(userId, event.id);
   }
 
+  /** Contratante independente: cria (na primeira vez) o perfil de contratação individual e o evento. */
+  async createIndependent(userId: string, input: z.infer<typeof IndependentEventSchema>) {
+    await this.access.assertAccountType(userId, 'CONTRACTOR');
+    const id = await this.prisma.$transaction(async (tx) => {
+      const orgId = await this.ensureIndividualOrganization(tx, userId, input.locationCity);
+      if (input.venueId) await this.assertVenue(input.venueId);
+      const e = await tx.event.create({ data: this.createData(userId, orgId, input.venueId ?? null, input), select: { id: true } });
+      return e.id;
+    });
+    return this.manageDetail(userId, id);
+  }
+
+  async ensureIndividualOrganization(tx: Tx, userId: string, city: string) {
+    const existing = await tx.organizationMember.findFirst({
+      where: { userId, status: 'ACTIVE', organization: { type: 'INDIVIDUAL' } },
+      select: { organizationId: true },
+    });
+    if (existing) return existing.organizationId;
+    const user = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { name: true } });
+    const slug = await uniqueSlug(`contratante-${user.name}`, async (s) => !!(await tx.organization.findUnique({ where: { slug: s }, select: { id: true } })));
+    const org = await tx.organization.create({ data: { type: 'INDIVIDUAL', slug, name: user.name, city, state: 'AL' } });
+    await tx.organizationMember.create({ data: { organizationId: org.id, userId, role: 'OWNER', status: 'ACTIVE', joinedAt: new Date() } });
+    return org.id;
+  }
+
+  private createData(userId: string, organizerId: string, venueId: string | null, input: z.infer<typeof CreateEventSchema>): Prisma.EventUncheckedCreateInput {
+    return {
+      organizerId,
+      venueId,
+      createdById: userId,
+      title: input.title,
+      description: input.description ?? '',
+      startsAt: input.startsAt,
+      durationMinutes: input.durationMinutes ?? null,
+      applicationDeadline: input.applicationDeadline,
+      slots: input.slots,
+      genres: input.genres ?? [],
+      paymentType: input.paymentType ?? null,
+      feeCents: input.feeCents ?? null,
+      conditions: input.conditions ?? '',
+      requirements: input.requirements ?? '',
+      visibility: input.visibility ?? 'PUBLIC',
+      locationName: venueId ? null : (input.locationName ?? null),
+      locationAddress: venueId ? null : (input.locationAddress ?? null),
+      locationCity: venueId ? null : (input.locationCity ?? null),
+      locationState: venueId ? null : 'AL',
+      status: 'DRAFT',
+    };
+  }
+
+  // ─────────── Gestão pelo organizador ───────────
+
   async listForOrg(userId: string, organizerId: string) {
     await this.access.assertOrgMember(userId, organizerId);
+    await this.lifecycle.sweepIfStale();
     const rows = await this.prisma.event.findMany({
       where: { organizerId },
       orderBy: [{ startsAt: 'desc' }],
@@ -153,14 +271,18 @@ export class EventsService {
         id: true,
         title: true,
         status: true,
+        visibility: true,
         startsAt: true,
         applicationDeadline: true,
         slots: true,
         applications: { select: { status: true } },
+        bookings: { where: { origin: 'DIRECT', status: { in: ['NEGOTIATING', 'AGREED', 'CONFIRMED'] } }, select: { id: true } },
       },
     });
-    return rows.map(({ applications, ...e }) => ({
+    return rows.map(({ applications, bookings, ...e }) => ({
       ...e,
+      statusLabel: EVENT_STATUS_LABEL[e.status],
+      filledSlots: applications.filter((a) => a.status === 'ACCEPTED').length + bookings.length,
       applicationCounts: {
         total: applications.filter((a) => a.status !== 'WITHDRAWN').length,
         pending: applications.filter((a) => a.status === 'PENDING').length,
@@ -182,6 +304,7 @@ export class EventsService {
         closedAt: true,
         completedAt: true,
         cancelledAt: true,
+        filledAt: true,
         applications: {
           where: { status: { not: 'WITHDRAWN' } },
           orderBy: { createdAt: 'asc' },
@@ -196,70 +319,180 @@ export class EventsService {
             booking: { select: { id: true, status: true } },
           },
         },
+        bookings: {
+          where: { origin: 'DIRECT' },
+          orderBy: { createdAt: 'asc' },
+          select: { id: true, status: true, artist: { select: { name: true, slug: true } } },
+        },
       },
     });
-    const { applications, ...rest } = e;
+    const { applications, bookings, ...rest } = e;
+    const filled = applications.filter((a) => a.status === 'ACCEPTED').length + bookings.filter((b) => ['NEGOTIATING', 'AGREED', 'CONFIRMED'].includes(b.status)).length;
     return {
-      ...eventOut(rest),
+      ...eventOut(rest, filled),
+      organizerId: rest.organizerId,
+      venueId: rest.venueId,
+      locationFields: { locationName: rest.locationName, locationAddress: rest.locationAddress, locationCity: rest.locationCity },
+      createdAt: rest.createdAt,
+      closedAt: rest.closedAt,
+      completedAt: rest.completedAt,
+      cancelledAt: rest.cancelledAt,
+      filledAt: rest.filledAt,
       applications: applications.map((a) => ({ ...a, artist: toArtistCard(a.artist) })),
+      invitations: bookings,
     };
   }
 
   async update(userId: string, eventId: string, input: z.infer<typeof UpdateEventSchema>) {
-    const event = await this.loadForManage(userId, eventId);
-    if (!EDITABLE_EVENT_STATUSES.includes(event.status)) {
-      throw conflict('EVENT_LOCKED', 'Publicações concluídas ou canceladas não podem ser editadas.');
-    }
-    const startsAt = input.startsAt ?? event.startsAt;
-    const deadline = input.applicationDeadline ?? event.applicationDeadline;
-    if (deadline.getTime() > startsAt.getTime()) {
-      throw unprocessable('VALIDATION_ERROR', 'O prazo de candidatura deve ser anterior ou igual à data da apresentação.');
-    }
-    if (event.status === 'OPEN' && deadline.getTime() <= Date.now()) {
-      throw unprocessable('DEADLINE_PASSED', 'Com inscrições abertas, o prazo precisa estar no futuro. Encerre as inscrições antes.');
-    }
-    if (input.slots !== undefined) {
-      const accepted = await this.prisma.eventApplication.count({ where: { eventId, status: 'ACCEPTED' } });
-      if (input.slots < accepted) throw unprocessable('SLOTS_BELOW_ACCEPTED', `Já há ${accepted} candidatura(s) aceita(s).`);
-    }
-    if (input.venueId !== undefined) await this.assertVenue(input.venueId);
-    await this.prisma.event.update({ where: { id: eventId }, data: input });
+    await this.loadForManage(userId, eventId);
+    await this.prisma.$transaction(async (tx) => {
+      const event = await this.lifecycle.lock(tx, eventId);
+      if (!EDITABLE_EVENT_STATUSES.includes(event.status)) {
+        throw conflict('EVENT_LOCKED', 'Eventos realizados ou cancelados não podem ser editados.');
+      }
+      const startsAt = input.startsAt ?? event.startsAt;
+      const deadline = input.applicationDeadline ?? event.applicationDeadline;
+      if (deadline.getTime() > startsAt.getTime()) {
+        throw unprocessable('VALIDATION_ERROR', 'O prazo de candidatura deve ser anterior ou igual à data da apresentação.');
+      }
+      if (event.status === 'OPEN' && deadline.getTime() <= Date.now()) {
+        throw unprocessable('DEADLINE_PASSED', 'Com inscrições abertas, o prazo precisa estar no futuro. Encerre as inscrições antes.');
+      }
+      if (input.slots !== undefined) {
+        const filled = await this.lifecycle.filledSlots(tx, eventId);
+        if (input.slots < filled) throw unprocessable('SLOTS_BELOW_FILLED', `Já há ${filled} vaga(s) ocupada(s).`);
+      }
+      if (input.venueId !== undefined) await this.assertVenue(input.venueId);
+      const venueId = input.venueId === undefined ? event.venueId : input.venueId;
+      const locationCity = input.locationCity === undefined ? event.locationCity : input.locationCity;
+      if (!venueId && !locationCity) throw unprocessable('LOCATION_REQUIRED', 'Informe o local do evento.');
+      const updated = await tx.event.update({
+        where: { id: eventId },
+        data: { ...input, ...(venueId ? { locationName: null, locationAddress: null, locationCity: null, locationState: null } : { locationState: 'AL' }) },
+      });
+      await this.lifecycle.applySlotChange(tx, updated);
+      if (input.startsAt && input.startsAt.getTime() !== event.startsAt.getTime()) {
+        await this.notifyParticipants(tx, event, 'EVENT_RESCHEDULED', `Nova data: ${event.title}`, 'A data do evento foi alterada pelo organizador.');
+      }
+    });
+    await this.notifications.flush();
     return this.manageDetail(userId, eventId);
   }
 
-  async transition(userId: string, eventId: string, action: z.infer<typeof EventTransitionSchema>['action']) {
-    const event = await this.loadForManage(userId, eventId);
-    const to = ACTION_TARGET[action];
+  async transition(userId: string, eventId: string, input: z.infer<typeof EventTransitionSchema>) {
+    await this.loadForManage(userId, eventId);
+    const to = ACTION_TARGET[input.action];
+    await this.prisma.$transaction(async (tx) => {
+      const event = await this.lifecycle.lock(tx, eventId);
+      const now = new Date();
+      assertEventTransition(event.status, to, {
+        now,
+        startsAt: event.startsAt,
+        applicationDeadline: event.applicationDeadline,
+        filledSlots: await this.lifecycle.filledSlots(tx, eventId),
+        slots: event.slots,
+      });
+      const stamp: Prisma.EventUpdateInput =
+        to === 'OPEN'
+          ? { publishedAt: event.publishedAt ?? now, closedAt: null }
+          : to === 'CLOSED'
+            ? { closedAt: now }
+            : to === 'COMPLETED'
+              ? { completedAt: now }
+              : to === 'POSTPONED'
+                ? { postponedAt: now }
+                : { cancelledAt: now };
+      await tx.event.update({ where: { id: eventId }, data: { status: to, ...stamp } });
+      if (to === 'CANCELLED') await this.cascadeCancellation(tx, event, userId, input.reason);
+      if (to === 'POSTPONED') {
+        await this.notifyParticipants(tx, event, 'EVENT_POSTPONED', `Evento adiado: ${event.title}`, input.reason || 'O organizador adiou o evento. Uma nova data será informada.');
+      }
+    });
+    await this.notifications.flush();
+    return this.manageDetail(userId, eventId);
+  }
+
+  /** Define nova data para evento adiado (ou ativo) e devolve ao estado coerente com prazo e vagas. */
+  async reschedule(userId: string, eventId: string, input: z.infer<typeof RescheduleSchema>) {
+    await this.loadForManage(userId, eventId);
+    await this.prisma.$transaction(async (tx) => {
+      const event = await this.lifecycle.lock(tx, eventId);
+      if (!ACTIVE_EVENT_STATUSES.includes(event.status)) throw conflict('EVENT_LOCKED', 'Este evento não pode ser remarcado.');
+      const filled = await this.lifecycle.filledSlots(tx, eventId);
+      const deadlineOpen = input.applicationDeadline.getTime() > Date.now();
+      const next: EventStatus = filled >= event.slots ? 'FILLED' : deadlineOpen && event.status !== 'CLOSED' ? 'OPEN' : 'CLOSED';
+      await tx.event.update({
+        where: { id: eventId },
+        data: { startsAt: input.startsAt, applicationDeadline: input.applicationDeadline, status: next, ...(next === 'OPEN' ? { closedAt: null } : {}) },
+      });
+      await this.notifyParticipants(tx, event, 'EVENT_RESCHEDULED', `Nova data: ${event.title}`, input.reason || 'O organizador definiu uma nova data para o evento.');
+    });
+    await this.notifications.flush();
+    return this.manageDetail(userId, eventId);
+  }
+
+  /** Cancelar o evento encerra candidaturas e negociações vinculadas, com registro e aviso às partes. */
+  private async cascadeCancellation(tx: Tx, event: Event, userId: string, reason?: string) {
+    const recipients = await this.participantUserIds(tx, event.id);
     const now = new Date();
-    assertEventTransition(event.status, to, { now, startsAt: event.startsAt, applicationDeadline: event.applicationDeadline });
-    const stamp: Prisma.EventUpdateInput =
-      to === 'OPEN'
-        ? { publishedAt: event.publishedAt ?? now, closedAt: null }
-        : to === 'CLOSED'
-          ? { closedAt: now }
-          : to === 'COMPLETED'
-            ? { completedAt: now }
-            : { cancelledAt: now };
-    // Atualização condicional ao estado lido (evita corrida entre duas transições simultâneas).
-    const res = await this.prisma.event.updateMany({ where: { id: eventId, status: event.status }, data: { status: to, ...(stamp as object) } });
-    if (res.count !== 1) throw conflict('CONCURRENT_UPDATE', 'A publicação foi alterada por outra pessoa. Recarregue a página.');
-    return this.manageDetail(userId, eventId);
+    await tx.eventApplication.updateMany({
+      where: { eventId: event.id, status: 'PENDING' },
+      data: { status: 'REJECTED', decidedAt: now, decidedById: userId, decisionNote: 'Evento cancelado pelo organizador' },
+    });
+    await tx.eventApplication.updateMany({ where: { eventId: event.id, status: 'ACCEPTED' }, data: { status: 'CANCELLED' } });
+    const bookings = await tx.booking.findMany({ where: { eventId: event.id, status: { in: ['NEGOTIATING', 'AGREED', 'CONFIRMED'] } }, select: { id: true, status: true } });
+    for (const b of bookings) {
+      await tx.bookingOffer.updateMany({ where: { bookingId: b.id, status: 'PENDING' }, data: { status: 'WITHDRAWN', respondedAt: now, respondedById: userId } });
+      await tx.booking.update({ where: { id: b.id }, data: { status: 'CANCELLED' } });
+      await tx.bookingStatusChange.create({
+        data: { bookingId: b.id, fromStatus: b.status, toStatus: 'CANCELLED', actorId: userId, actorSide: 'VENUE', note: `Evento cancelado${reason ? `: ${reason}` : ''}` },
+      });
+    }
+    await this.notifications.notify(tx, recipients, {
+      category: 'EVENTS',
+      type: 'EVENT_CANCELLED',
+      title: `Evento cancelado: ${event.title}`,
+      body: reason || 'O organizador cancelou o evento. Candidaturas e negociações vinculadas foram encerradas.',
+      link: '/painel/candidaturas',
+      dedupeKey: `event-cancelled:${event.id}`,
+    });
   }
 
-  // ─────────── Consulta pública ───────────
+  private async notifyParticipants(tx: Tx, event: Event, type: string, title: string, body: string) {
+    await this.notifications.notify(tx, await this.participantUserIds(tx, event.id), {
+      category: 'EVENTS',
+      type,
+      title,
+      body,
+      link: `/oportunidades/${event.id}`,
+      dedupeKey: `${type}:${event.id}:${Date.now()}`,
+    });
+  }
 
-  async searchPublic(f: z.infer<typeof EventSearchSchema>) {
+  // ─────────── Consulta (pública e de artistas) ───────────
+
+  /** Visitantes e contratantes veem só eventos públicos; contas de artista também veem os privados. */
+  private visibilityFilter(viewer: Viewer | null, requested?: 'PUBLIC' | 'PRIVATE'): Prisma.EventWhereInput {
+    const canSeePrivate = viewer?.accountType === 'ARTIST';
+    if (!canSeePrivate || requested === 'PUBLIC') return { visibility: 'PUBLIC' };
+    return requested === 'PRIVATE' ? { visibility: 'PRIVATE' } : {};
+  }
+
+  async search(f: z.infer<typeof EventSearchSchema>, userId: string | null) {
+    await this.lifecycle.sweepIfStale();
+    const viewer = await this.viewer(userId);
     const now = new Date();
     const rows = await this.prisma.event.findMany({
       where: {
         status: 'OPEN',
         applicationDeadline: { gte: now },
+        ...this.visibilityFilter(viewer, f.visibility),
         ...(f.genre ? { genres: { has: f.genre } } : {}),
         ...(f.city
           ? {
               OR: [
                 { venue: { city: { equals: f.city, mode: 'insensitive' } } },
-                { venueId: null, organizer: { city: { equals: f.city, mode: 'insensitive' } } },
+                { venueId: null, locationCity: { equals: f.city, mode: 'insensitive' } },
               ],
             }
           : {}),
@@ -281,14 +514,27 @@ export class EventsService {
       take: 100,
       select: eventPublicSelect,
     });
-    return rows.map(eventOut);
+    return rows.map((e) => eventOut(e));
   }
 
-  /** Detalhe público: rascunhos não são exibidos. */
-  async publicDetail(eventId: string) {
-    const e = await this.prisma.event.findFirst({ where: { id: eventId, status: { not: 'DRAFT' } }, select: eventPublicSelect });
+  /**
+   * Detalhe: rascunhos nunca aparecem. Evento privado só para contas de artista, responsáveis do organizador
+   * ou identidades que já têm candidatura/negociação no evento. Caso contrário, 404 (não revela existência).
+   */
+  async detail(eventId: string, userId: string | null) {
+    await this.lifecycle.sweepIfStale();
+    const e = await this.prisma.event.findFirst({ where: { id: eventId, status: { not: 'DRAFT' } }, select: { ...eventPublicSelect, organizerId: true } });
     if (!e) throw notFound('Oportunidade não encontrada.');
-    return eventOut(e);
+    if (e.visibility === 'PRIVATE' && !(await this.canSeePrivate(e, userId))) throw notFound('Oportunidade não encontrada.');
+    const { organizerId: _o, ...rest } = e;
+    return eventOut(rest, await this.lifecycle.filledSlots(this.prisma, eventId));
+  }
+
+  private async canSeePrivate(e: { id: string; organizerId: string }, userId: string | null) {
+    const viewer = await this.viewer(userId);
+    if (!viewer) return false;
+    if (viewer.accountType === 'ARTIST') return true;
+    return !!(await this.access.orgRole(viewer.id, e.organizerId));
   }
 
   // ─────────── Candidaturas (artista/banda) ───────────
@@ -296,31 +542,47 @@ export class EventsService {
   async apply(userId: string, eventId: string, input: z.infer<typeof ApplySchema>) {
     await this.access.assertCanManageArtist(userId, input.artistId);
     const [event, artist] = await Promise.all([
-      this.prisma.event.findUnique({ where: { id: eventId }, select: { id: true, status: true, applicationDeadline: true } }),
-      this.prisma.artist.findUniqueOrThrow({ where: { id: input.artistId }, select: { visibility: true } }),
+      this.prisma.event.findUnique({ where: { id: eventId }, select: { id: true, title: true, status: true, visibility: true, applicationDeadline: true, organizerId: true } }),
+      this.prisma.artist.findUniqueOrThrow({ where: { id: input.artistId }, select: { visibility: true, name: true } }),
     ]);
     if (!event || event.status === 'DRAFT') throw notFound('Oportunidade não encontrada.');
+    if (event.visibility === 'PRIVATE' && !(await this.canSeePrivate(event, userId))) throw notFound('Oportunidade não encontrada.');
     if (!acceptsApplications(event, new Date())) throw conflict('APPLICATIONS_CLOSED', 'As inscrições desta oportunidade estão encerradas.');
     if (artist.visibility !== 'PUBLIC') {
-      throw unprocessable('PROFILE_NOT_PUBLIC', 'Publique o perfil artístico antes de se candidatar — a casa precisa conseguir vê-lo.');
+      throw unprocessable('PROFILE_NOT_PUBLIC', 'Publique o perfil artístico antes de se candidatar — o contratante precisa conseguir vê-lo.');
     }
-    const existing = await this.prisma.eventApplication.findUnique({ where: { eventId_artistId: { eventId, artistId: input.artistId } } });
-    if (existing) {
-      if (existing.status !== 'WITHDRAWN') throw conflict('DUPLICATE_APPLICATION', 'Esta identidade artística já se candidatou a esta oportunidade.');
-      assertApplicationTransition('WITHDRAWN', 'PENDING');
-      const res = await this.prisma.eventApplication.updateMany({
-        where: { id: existing.id, status: 'WITHDRAWN' },
-        data: { status: 'PENDING', message: input.message, submittedById: userId, withdrawnAt: null, decidedAt: null, decidedById: null, decisionNote: null },
+    const id = await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.eventApplication.findUnique({ where: { eventId_artistId: { eventId, artistId: input.artistId } } });
+      let applicationId: string;
+      if (existing) {
+        if (existing.status !== 'WITHDRAWN') throw conflict('DUPLICATE_APPLICATION', 'Esta identidade artística já se candidatou a esta oportunidade.');
+        assertApplicationTransition('WITHDRAWN', 'PENDING');
+        const res = await tx.eventApplication.updateMany({
+          where: { id: existing.id, status: 'WITHDRAWN' },
+          data: { status: 'PENDING', message: input.message, submittedById: userId, withdrawnAt: null, decidedAt: null, decidedById: null, decisionNote: null },
+        });
+        if (res.count !== 1) throw conflict('DUPLICATE_APPLICATION', 'Esta identidade artística já se candidatou a esta oportunidade.');
+        applicationId = existing.id;
+      } else {
+        // Unicidade (eventId, artistId) garantida pelo banco; P2002 vira 409.
+        const created = await tx.eventApplication.create({
+          data: { eventId, artistId: input.artistId, submittedById: userId, message: input.message },
+          select: { id: true },
+        });
+        applicationId = created.id;
+      }
+      await this.notifications.notify(tx, await this.access.organizationMemberUserIds(event.organizerId, tx), {
+        category: 'APPLICATIONS',
+        type: 'APPLICATION_RECEIVED',
+        title: `Nova candidatura: ${event.title}`,
+        body: `${artist.name} se candidatou ao evento.`,
+        link: `/painel/eventos/${event.id}`,
+        dedupeKey: `application-received:${applicationId}:${Date.now()}`,
       });
-      if (res.count !== 1) throw conflict('DUPLICATE_APPLICATION', 'Esta identidade artística já se candidatou a esta oportunidade.');
-      return this.applicationForArtist(userId, existing.id);
-    }
-    // Unicidade (eventId, artistId) garantida pelo banco; P2002 vira 409.
-    const created = await this.prisma.eventApplication.create({
-      data: { eventId, artistId: input.artistId, submittedById: userId, message: input.message },
-      select: { id: true },
+      return applicationId;
     });
-    return this.applicationForArtist(userId, created.id);
+    await this.notifications.flush();
+    return this.applicationForArtist(userId, id);
   }
 
   private async applicationForArtist(userId: string, applicationId: string) {
@@ -342,58 +604,84 @@ export class EventsService {
         decisionNote: true,
         withdrawnAt: true,
         artist: { select: { id: true, name: true, slug: true, kind: true } },
-        event: { select: { id: true, title: true, startsAt: true, applicationDeadline: true, status: true, organizer: { select: orgPublicSelect } } },
+        event: { select: { id: true, title: true, startsAt: true, applicationDeadline: true, status: true, visibility: true, organizer: { select: orgPublicSelect } } },
         booking: { select: { id: true, status: true } },
       },
     });
-    return rows.map((r) => ({ ...r, event: { ...r.event, organizer: orgOut(r.event.organizer) } }));
+    return rows.map((r) => ({ ...r, event: { ...r.event, statusLabel: EVENT_STATUS_LABEL[r.event.status], organizer: orgOut(r.event.organizer) } }));
   }
 
   async withdraw(userId: string, applicationId: string) {
     const app = await this.prisma.eventApplication.findUnique({
       where: { id: applicationId },
-      select: { id: true, artistId: true, status: true, booking: { select: { status: true } } },
+      select: { id: true, artistId: true, eventId: true, status: true, booking: { select: { status: true } }, artist: { select: { name: true } } },
     });
     if (!app) throw notFound('Candidatura não encontrada.');
     await this.access.assertCanManageArtist(userId, app.artistId);
-    assertApplicationTransition(app.status, 'WITHDRAWN');
     if (app.booking && !['DECLINED', 'CANCELLED'].includes(app.booking.status)) {
       throw conflict('BOOKING_IN_PROGRESS', 'Há uma negociação vinculada a esta candidatura. Encerre a negociação antes de retirar.');
     }
-    const res = await this.prisma.eventApplication.updateMany({
-      where: { id: applicationId, status: app.status },
-      data: { status: 'WITHDRAWN', withdrawnAt: new Date() },
+    await this.prisma.$transaction(async (tx) => {
+      const event = await this.lifecycle.lock(tx, app.eventId);
+      const fresh = await tx.eventApplication.findUniqueOrThrow({ where: { id: applicationId }, select: { status: true } });
+      assertApplicationTransition(fresh.status, 'WITHDRAWN');
+      await tx.eventApplication.update({ where: { id: applicationId }, data: { status: 'WITHDRAWN', withdrawnAt: new Date() } });
+      if (fresh.status === 'ACCEPTED') await this.lifecycle.applySlotChange(tx, event);
+      await this.notifications.notify(tx, await this.access.organizationMemberUserIds(event.organizerId, tx), {
+        category: 'APPLICATIONS',
+        type: 'APPLICATION_WITHDRAWN',
+        title: `Candidatura retirada: ${event.title}`,
+        body: `${app.artist.name} retirou a candidatura.`,
+        link: `/painel/eventos/${event.id}`,
+        dedupeKey: `application-withdrawn:${applicationId}:${Date.now()}`,
+      });
     });
-    if (res.count !== 1) throw conflict('CONCURRENT_UPDATE', 'A candidatura mudou de estado. Recarregue a página.');
+    await this.notifications.flush();
     return this.applicationForArtist(userId, applicationId);
   }
 
-  // ─────────── Análise pela casa ───────────
+  // ─────────── Análise pelo organizador ───────────
 
-  /** Aceitar ≠ contratar: nenhuma negociação é criada nem confirmada automaticamente. */
+  /**
+   * Aceitar ≠ contratar: nenhuma negociação é criada nem confirmada automaticamente.
+   * Aceitar ocupa uma vaga; o bloqueio do evento garante que aceites simultâneos não excedam o total.
+   */
   async decide(userId: string, applicationId: string, decision: 'ACCEPTED' | 'REJECTED', note?: string) {
-    const app = await this.prisma.eventApplication.findUnique({
-      where: { id: applicationId },
-      select: { id: true, status: true, eventId: true, event: { select: { organizerId: true, status: true, slots: true } }, booking: { select: { status: true } } },
-    });
+    const app = await this.prisma.eventApplication.findUnique({ where: { id: applicationId }, select: { eventId: true, event: { select: { organizerId: true } } } });
     if (!app) throw notFound('Candidatura não encontrada.');
     await this.access.assertOrgMember(userId, app.event.organizerId);
-    if (['CANCELLED', 'COMPLETED', 'DRAFT'].includes(app.event.status)) {
-      throw conflict('EVENT_NOT_ACTIVE', 'Esta publicação não está mais ativa.');
-    }
-    assertApplicationTransition(app.status, decision);
-    if (decision === 'ACCEPTED') {
-      const accepted = await this.prisma.eventApplication.count({ where: { eventId: app.eventId, status: 'ACCEPTED' } });
-      if (accepted >= app.event.slots) throw conflict('SLOTS_FULL', 'Todas as vagas já foram preenchidas por candidaturas aceitas.');
-    }
-    if (decision === 'REJECTED' && app.booking && !['DECLINED', 'CANCELLED'].includes(app.booking.status)) {
-      throw conflict('BOOKING_IN_PROGRESS', 'Há uma negociação em andamento com esta candidatura. Encerre-a antes.');
-    }
-    const res = await this.prisma.eventApplication.updateMany({
-      where: { id: applicationId, status: app.status },
-      data: { status: decision, decidedAt: new Date(), decidedById: userId, decisionNote: note ?? null },
+    await this.prisma.$transaction(async (tx) => {
+      const event = await this.lifecycle.lock(tx, app.eventId);
+      if (!ACTIVE_EVENT_STATUSES.includes(event.status)) throw conflict('EVENT_NOT_ACTIVE', 'Este evento não está mais ativo.');
+      const current = await tx.eventApplication.findUniqueOrThrow({
+        where: { id: applicationId },
+        select: { status: true, artistId: true, booking: { select: { status: true } } },
+      });
+      assertApplicationTransition(current.status, decision);
+      if (decision === 'ACCEPTED' && (await this.lifecycle.filledSlots(tx, event.id)) >= event.slots) {
+        throw conflict('SLOTS_FULL', 'Todas as vagas já foram preenchidas.');
+      }
+      if (decision === 'REJECTED' && current.booking && !['DECLINED', 'CANCELLED'].includes(current.booking.status)) {
+        throw conflict('BOOKING_IN_PROGRESS', 'Há uma negociação em andamento com esta candidatura. Encerre-a antes.');
+      }
+      await tx.eventApplication.update({
+        where: { id: applicationId },
+        data: { status: decision, decidedAt: new Date(), decidedById: userId, decisionNote: note ?? null },
+      });
+      if (decision === 'ACCEPTED' || current.status === 'ACCEPTED') await this.lifecycle.applySlotChange(tx, event);
+      await this.notifications.notify(tx, await this.access.artistManagerUserIds(current.artistId, tx), {
+        category: 'APPLICATIONS',
+        type: decision === 'ACCEPTED' ? 'APPLICATION_ACCEPTED' : 'APPLICATION_REJECTED',
+        title: decision === 'ACCEPTED' ? `Candidatura aceita: ${event.title}` : `Candidatura não selecionada: ${event.title}`,
+        body:
+          decision === 'ACCEPTED'
+            ? 'O organizador selecionou sua candidatura. A proposta com os termos chegará em uma negociação.'
+            : note || 'O organizador não selecionou sua candidatura desta vez.',
+        link: '/painel/candidaturas',
+        dedupeKey: `application-${decision}:${applicationId}`,
+      });
     });
-    if (res.count !== 1) throw conflict('CONCURRENT_UPDATE', 'A candidatura mudou de estado. Recarregue a página.');
+    await this.notifications.flush();
     return this.manageDetail(userId, app.eventId);
   }
 

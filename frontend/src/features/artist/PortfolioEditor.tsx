@@ -8,6 +8,7 @@ import { applyServerErrors, FormError, SelectField, TextField } from '../../comp
 import { Empty } from '../../components/States';
 import { useToast } from '../../components/Toast';
 import { api, errorMessage } from '../../lib/api';
+import { prepareImage, Thumb } from '../../components/Media';
 import { PORTFOLIO_KIND } from '../../lib/format';
 import type { ManagedArtist } from '../../lib/types';
 
@@ -58,7 +59,7 @@ export function PortfolioEditor({ artist, queryKey }: { artist: ManagedArtist; q
       const fd = new FormData();
       fd.append('kind', upload.kind);
       fd.append('title', upload.title.trim());
-      fd.append('file', upload.file);
+      fd.append('file', upload.kind === 'PHOTO' ? await prepareImage(upload.file) : upload.file);
       await api.upload('POST', `/artists/${artist.id}/portfolio/upload`, fd);
       setUpload({ kind: upload.kind, title: '', file: null });
       await qc.invalidateQueries({ queryKey });
@@ -85,18 +86,20 @@ export function PortfolioEditor({ artist, queryKey }: { artist: ManagedArtist; q
       <section className="box" aria-label="Itens do portfólio">
         <h2 className="lbl">Portfólio ({artist.portfolio.length})</h2>
         {artist.portfolio.length === 0 ? (
-          <Empty title="Portfólio vazio">Adicione links de áudio, vídeo, fotos ou press kit.</Empty>
+          <Empty title="Portfólio vazio">Adicione links de áudio, vídeo, fotos ou material de divulgação.</Empty>
         ) : (
           <ul className="mlist">
             {artist.portfolio.map((p) => (
               <li key={p.id}>
-                <span className="chip">{PORTFOLIO_KIND[p.kind]}</span>
+                <span className="pf-mini">
+                  <Thumb src={p.thumbnailUrl} alt="" fallback={<span className="chip">{PORTFOLIO_KIND[p.kind]}</span>} />
+                </span>
                 <div style={{ minWidth: 0 }}>
                   <a className="link" href={p.url ?? '#'} target="_blank" rel="noopener noreferrer">
                     {p.title}
                   </a>
-                  <small className="hint" style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {p.isUpload ? `Arquivo: ${p.file?.name}` : p.url}
+                  <small className="hint" style={{ display: 'block' }}>
+                    {PORTFOLIO_KIND[p.kind]} · {p.isUpload ? `Arquivo: ${p.file?.name}` : 'Link externo'}
                   </small>
                 </div>
                 <span />
@@ -139,8 +142,8 @@ export function PortfolioEditor({ artist, queryKey }: { artist: ManagedArtist; q
             <FormError message={uploadErr} />
             <div className="row3">
               <SelectField label="Tipo" value={upload.kind} onChange={(e) => setUpload({ ...upload, kind: e.target.value as 'PHOTO' | 'DOCUMENT' })}>
-                <option value="PHOTO">Foto (JPG, PNG, WEBP até 5 MB)</option>
-                <option value="DOCUMENT">Documento / press kit (PDF até 10 MB)</option>
+                <option value="PHOTO">Foto (JPG, PNG ou WEBP)</option>
+                <option value="DOCUMENT">Documento / material de divulgação (PDF até 4 MB)</option>
               </SelectField>
               <TextField label="Título do arquivo" value={upload.title} onChange={(e) => setUpload({ ...upload, title: e.target.value })} />
               <label className="field">

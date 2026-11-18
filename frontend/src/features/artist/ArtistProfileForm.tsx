@@ -1,3 +1,4 @@
+import { CityField } from '../../components/CityField';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -94,18 +95,10 @@ export function ProfileFields({ form, solo }: { form: ReturnType<typeof useForm<
         {...form.register('bio')}
         error={e.bio}
       />
-      <div className="row3">
-        <TextField label="Cidade" list="city-suggestions" {...form.register('city')} error={e.city} />
-        <SelectField label="UF" {...form.register('state')}>
-          {(meta?.states ?? ['AL']).map((s) => (
-            <option key={s}>{s}</option>
-          ))}
-        </SelectField>
+      <div className="row2">
+        <CityField {...form.register('city')} error={e.city} />
         <TextField label="Em atividade desde (ano)" inputMode="numeric" {...form.register('careerStartYear')} error={e.careerStartYear} />
       </div>
-      <datalist id="city-suggestions">
-        {meta?.cities.map((c) => <option key={c} value={c} />)}
-      </datalist>
       <Controller
         control={form.control}
         name="genres"

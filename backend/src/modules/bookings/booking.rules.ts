@@ -42,7 +42,7 @@ export function assertCanRespondToOffer(params: {
 }
 
 export function assertCanConfirm(status: BookingStatus, side: BookingSide) {
-  if (side !== 'VENUE') throw forbidden('A confirmação da contratação é feita pela casa contratante.');
+  if (side !== 'VENUE') throw forbidden('A confirmação da contratação é feita pelo contratante.');
   assertBookingTransition(status, 'CONFIRMED');
 }
 

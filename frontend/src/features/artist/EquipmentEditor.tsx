@@ -53,9 +53,12 @@ export function EquipmentEditor({
 
   const groups = useMemo(() => {
     const map = new Map<string, NonNullable<typeof catalog>>();
-    for (const c of catalog ?? []) map.set(c.category, [...(map.get(c.category) ?? []), c]);
+    for (const c of catalog ?? []) {
+      if (mode === 'rider' && !c.artistRequirement) continue;
+      map.set(c.category, [...(map.get(c.category) ?? []), c]);
+    }
     return [...map.entries()];
-  }, [catalog]);
+  }, [catalog, mode]);
 
   if (isLoading) return <Loading label="Carregando catálogo técnico…" />;
 

@@ -45,8 +45,10 @@ type Tone = 'ok' | 'parcial' | 'falta' | 'conferir' | 'pend' | 'pub' | 'draft' |
 export const EVENT_STATUS: Record<EventStatus, [string, Tone]> = {
   DRAFT: ['Rascunho', 'draft'],
   OPEN: ['Inscrições abertas', 'pub'],
+  FILLED: ['Vagas preenchidas', 'ok'],
   CLOSED: ['Inscrições encerradas', 'neutral'],
-  COMPLETED: ['Concluído', 'info'],
+  POSTPONED: ['Adiado', 'parcial'],
+  COMPLETED: ['Realizado', 'info'],
   CANCELLED: ['Cancelado', 'falta'],
 };
 export const APPLICATION_STATUS: Record<ApplicationStatus, [string, Tone]> = {
@@ -54,6 +56,7 @@ export const APPLICATION_STATUS: Record<ApplicationStatus, [string, Tone]> = {
   ACCEPTED: ['Selecionada', 'ok'],
   REJECTED: ['Não selecionada', 'falta'],
   WITHDRAWN: ['Retirada', 'neutral'],
+  CANCELLED: ['Vaga cancelada', 'falta'],
 };
 export const BOOKING_STATUS: Record<BookingStatus, [string, Tone]> = {
   NEGOTIATING: ['Em negociação', 'pend'],
@@ -76,5 +79,5 @@ export const COMPAT_STATUS: Record<CompatStatus, [string, Tone]> = {
   NEEDS_CHECK: ['Conferir com a casa', 'conferir'],
 };
 export const ROLE_LABEL: Record<string, string> = { OWNER: 'Proprietário', ADMIN: 'Administrador', MEMBER: 'Integrante' };
-export const SIDE_LABEL = { VENUE: 'Casa', ARTIST: 'Artista' } as const;
+export const SIDE_LABEL = { VENUE: 'Contratante', ARTIST: 'Artista' } as const;
 export const PORTFOLIO_KIND: Record<string, string> = { AUDIO: 'Áudio', VIDEO: 'Vídeo', PHOTO: 'Foto', DOCUMENT: 'Documento', LINK: 'Link' };

@@ -48,7 +48,10 @@ export function MyApplicationsPage() {
             </div>
             <div className="meta">
               <span>Como: {a.artist.name}</span>
-              <span>Casa: {a.event.organizer.name}</span>
+              <span>{a.event.organizer.type === 'VENUE' ? 'Casa' : 'Contratante'}: {a.event.organizer.name}</span>
+              {a.event.visibility === 'PRIVATE' && <span className="st draft">Evento privado</span>}
+              {a.event.status === 'POSTPONED' && <span className="st parcial">Evento adiado</span>}
+              {a.event.status === 'CANCELLED' && <span className="st falta">Evento cancelado</span>}
               <span>Apresentação: {dateTime(a.event.startsAt)}</span>
               <span>Enviada {dateTime(a.createdAt)}</span>
               {a.decidedAt && <span>Decisão {dateTime(a.decidedAt)}</span>}

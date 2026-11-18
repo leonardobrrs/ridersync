@@ -5,6 +5,8 @@ import { defineConfig, devices } from '@playwright/test';
  *  - API NestJS em :3100 (migrations aplicadas antes de subir)
  *  - SPA Vite em :5174 com proxy de /api para :3100
  * Pré-requisito: PostgreSQL do docker compose rodando (npm run db:up na raiz).
+ * Projetos: desktop (todos os fluxos), tablet e celular (responsividade e navegação móvel).
+ * E-mails: driver de desenvolvimento (não envia) grava em backend/test-storage/e2e-mail, lido pelos testes.
  */
 const DB = process.env.E2E_DATABASE_URL ?? 'postgresql://ridersync:ridersync_dev_only@localhost:5432/ridersync_e2e?schema=public';
 const apiEnv = {
@@ -16,6 +18,10 @@ const apiEnv = {
   STORAGE_DRIVER: 'local',
   STORAGE_LOCAL_DIR: './test-storage/e2e',
   THROTTLE_AUTH_LIMIT: '10000',
+  MAIL_DRIVER: 'log',
+  MAIL_DEV_OUTBOX_DIR: './test-storage/e2e-mail',
+  PUBLIC_APP_URL: 'http://127.0.0.1:5174',
+  LOGIN_MAX_ATTEMPTS: '50',
 };
 
 export default defineConfig({
@@ -28,7 +34,8 @@ export default defineConfig({
   use: { baseURL: 'http://127.0.0.1:5174', trace: 'retain-on-failure', screenshot: 'only-on-failure', locale: 'pt-BR', timezoneId: 'America/Maceio' },
   projects: [
     { name: 'desktop', use: { ...devices['Desktop Chrome'] }, testIgnore: /mobile\.spec\.ts/ },
-    { name: 'mobile', use: { ...devices['Pixel 7'] }, testMatch: /mobile\.spec\.ts/ },
+    { name: 'tablet', use: { ...devices['Desktop Chrome'], viewport: { width: 820, height: 1180 }, hasTouch: true, isMobile: false }, testMatch: /responsive\.spec\.ts/ },
+    { name: 'mobile', use: { ...devices['Pixel 7'] }, testMatch: /(mobile|responsive)\.spec\.ts/ },
   ],
   webServer: [
     {

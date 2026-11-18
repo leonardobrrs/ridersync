@@ -1,16 +1,22 @@
 import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
-import { Poster } from '../../components/Poster';
+import { ProfilePhoto } from '../../components/Media';
+import { Avatar, Poster } from '../../components/Poster';
 import { Empty, ErrorState, Loading } from '../../components/States';
 import { api, qs } from '../../lib/api';
-import { dateTime } from '../../lib/format';
+import { dateTime, dayMonth } from '../../lib/format';
 import { useMeta } from '../../lib/hooks';
 import type { PublicVenue, VenueCard } from '../../lib/types';
+import { RiderList } from './ArtistPublicPage';
+import { VenueAd } from './MarketplacePage';
 
+/** Visitantes descobrem e pesquisam casas de show (nome, @handle, bairro, tipo e cidade). */
 export function VenuesPage() {
   const [params, setParams] = useSearchParams();
   const { data: meta } = useMeta();
-  const f = { q: params.get('q') ?? '', city: params.get('city') ?? '' };
+  const f = { q: params.get('q') ?? '', city: params.get('city') ?? '', kind: params.get('kind') ?? '' };
+  const [term, setTerm] = useState(f.q);
   const q = useQuery({ queryKey: ['venues', f], queryFn: () => api.get<VenueCard[]>(`/public/venues${qs(f)}`) });
   const set = (k: string, v: string) => {
     const n = new URLSearchParams(params);
@@ -22,45 +28,46 @@ export function VenuesPage() {
     <div className="wrap page">
       <div className="pagehead">
         <div>
-          <h1>Casas de show</h1>
-          <p>Espaços que contratam música ao vivo, com estrutura técnica informada.</p>
-        </div>
-        <div className="cmp-f">
-          <label className="field">
-            <span className="sr-only">Buscar casa</span>
-            <input className="input" type="search" placeholder="Buscar casa…" defaultValue={f.q} onKeyDown={(e) => e.key === 'Enter' && set('q', (e.target as HTMLInputElement).value)} />
-          </label>
-          <label className="field">
-            <span className="sr-only">Cidade</span>
-            <select className="input" value={f.city} onChange={(e) => set('city', e.target.value)}>
-              <option value="">Todas as cidades</option>
-              {meta?.cities.map((c) => <option key={c}>{c}</option>)}
-            </select>
-          </label>
+          <h1 tabIndex={-1}>Casas de show</h1>
+          <p>Espaços que contratam música ao vivo em Alagoas, com estrutura técnica informada.</p>
         </div>
       </div>
+      <form
+        className="searchbar"
+        role="search"
+        onSubmit={(e) => {
+          e.preventDefault();
+          set('q', term.trim());
+        }}
+      >
+        <label className="field grow">
+          <span className="sr-only">Buscar casa de show</span>
+          <input className="input" type="search" placeholder="Buscar por nome, @perfil, bairro…" value={term} onChange={(e) => setTerm(e.target.value)} />
+        </label>
+        <label className="field">
+          <span className="sr-only">Cidade</span>
+          <select className="input" value={f.city} onChange={(e) => set('city', e.target.value)}>
+            <option value="">Todas as cidades</option>
+            {meta?.allCities.map((c) => <option key={c}>{c}</option>)}
+          </select>
+        </label>
+        <label className="field">
+          <span className="sr-only">Tipo de espaço</span>
+          <select className="input" value={f.kind} onChange={(e) => set('kind', e.target.value)}>
+            <option value="">Todos os tipos</option>
+            {meta?.venueKinds.map((k) => <option key={k}>{k}</option>)}
+          </select>
+        </label>
+        <button className="btn cue" type="submit">
+          Buscar
+        </button>
+      </form>
       {q.isLoading && <Loading />}
       {q.error && <ErrorState error={q.error} retry={q.refetch} />}
-      {q.data?.length === 0 && <Empty title="Nenhuma casa encontrada" />}
+      {q.data?.length === 0 && <Empty title="Nenhuma casa encontrada">Tente outro nome, bairro ou cidade.</Empty>}
       <div className="ads">
         {q.data?.map((v) => (
-          <article className="ad" key={v.id}>
-            <Link to={`/casas/${v.slug}`}>
-              {v.openEvents > 0 && <span className="tape">{v.openEvents} vaga(s) aberta(s)</span>}
-              <Poster name={v.name} photoUrl={v.photoUrl} top={[v.city, v.state]} bottom={[v.venueKind ?? '', v.capacity ? `${v.capacity} pessoas` : '']} />
-              <div className="ad-b">
-                <h3>{v.name}</h3>
-                <span className="sub">{v.venueKind ?? 'Espaço cultural'}</span>
-                <span className="loc">
-                  <span>
-                    {v.neighborhood ? `${v.neighborhood}, ` : ''}
-                    {v.city}
-                  </span>
-                  <span>{v.equipmentItems} itens técnicos</span>
-                </span>
-              </div>
-            </Link>
-          </article>
+          <VenueAd key={v.id} v={v} />
         ))}
       </div>
     </div>
@@ -71,26 +78,38 @@ export function VenuePublicPage() {
   const { slug } = useParams();
   const q = useQuery({ queryKey: ['venue', slug], queryFn: () => api.get<PublicVenue>(`/public/venues/${slug}`) });
   if (q.isLoading) return <Loading />;
-  if (q.error) return <div className="wrap page"><ErrorState error={q.error} retry={q.refetch} /></div>;
+  if (q.error)
+    return (
+      <div className="wrap page">
+        <ErrorState error={q.error} retry={q.refetch} />
+      </div>
+    );
   const v = q.data!;
   return (
     <div className="wrap page">
-      <ol className="bc">
+      <ol className="bc" aria-label="Navegação estrutural">
         <li>
-          <Link to="/casas">Casas</Link>
+          <Link to="/casas">Casas de show</Link>
         </li>
         <li aria-current="page">{v.name}</li>
       </ol>
       <div className="adp">
-        <div className="stack">
+        <div className="stack" style={{ minWidth: 0 }}>
           <div className="gal">
             <div className="gal-main">
-              <Poster name={v.name} photoUrl={v.photoUrl} top={[v.city, v.state]} bottom={[v.venueKind ?? '', v.capacity ? `${v.capacity} pessoas` : '']} ratio="16/10" />
+              {v.photoUrl ? (
+                <ProfilePhoto thumbUrl={v.photoThumbUrl} largeUrl={v.photoUrl} name={v.name} />
+              ) : (
+                <Poster name={v.name} top={[v.city, v.state]} bottom={[v.venueKind ?? '', v.capacity ? `${v.capacity} pessoas` : '']} ratio="16/10" />
+              )}
             </div>
           </div>
           <section className="box">
             <div className="adh">
-              <h1>{v.name}</h1>
+              <h1 tabIndex={-1}>{v.name}</h1>
+              <Link className="handle" to={`/casas/${v.slug}`}>
+                @{v.slug}
+              </Link>
               <p className="muted">{v.venueKind}</p>
             </div>
             <dl className="attrs">
@@ -112,25 +131,39 @@ export function VenuePublicPage() {
             {v.description && <p className="prose">{v.description}</p>}
           </section>
           <section className="box sec">
-            <h2>Estrutura técnica</h2>
-            {v.equipment.length === 0 ? (
-              <p className="muted">A casa ainda não informou sua estrutura técnica.</p>
+            <h2>Próximos shows</h2>
+            {v.upcomingShows.length === 0 ? (
+              <p className="muted">Nenhum show confirmado no momento.</p>
             ) : (
-              <ul className="ilist">
-                {v.equipment.map((i) => (
-                  <li key={i.id}>
-                    <span className="ch">{i.isCustom ? 'outro' : ''}</span>
-                    <span>
-                      {i.name}
-                      {i.notes && <small>{i.notes}</small>}
-                    </span>
-                    <span className="qty">
-                      {i.quantity} {i.unit}
-                    </span>
-                  </li>
-                ))}
+              <ul className="dates">
+                {v.upcomingShows.map((s) => {
+                  const d = dayMonth(s.startsAt);
+                  return (
+                    <li key={s.id}>
+                      <span className="dt">
+                        <b>{d.day}</b>
+                        <small>{d.month}</small>
+                      </span>
+                      <span className="row">
+                        <Avatar name={s.artist.name} photoUrl={s.artist.photoUrl} size={36} />
+                        <span>
+                          <strong>
+                            <Link to={`/artistas/${s.artist.slug}`}>{s.artist.name}</Link>
+                          </strong>
+                          <small>
+                            {s.title} · {new Date(s.startsAt).toLocaleTimeString('pt-BR', { timeZone: 'America/Maceio', hour: '2-digit', minute: '2-digit' })}
+                          </small>
+                        </span>
+                      </span>
+                    </li>
+                  );
+                })}
               </ul>
             )}
+          </section>
+          <section className="box sec">
+            <h2>Estrutura técnica</h2>
+            <RiderList rider={{ notes: '', items: v.equipment }} empty="A casa ainda não informou sua estrutura técnica." />
           </section>
         </div>
         <aside className="side">
@@ -159,7 +192,11 @@ export function VenuePublicPage() {
               {v.instagram && (
                 <div>
                   <dt>Instagram</dt>
-                  <dd>@{v.instagram}</dd>
+                  <dd>
+                    <a className="link" href={`https://instagram.com/${v.instagram}`} target="_blank" rel="noopener noreferrer">
+                      @{v.instagram}
+                    </a>
+                  </dd>
                 </div>
               )}
               {v.contactEmail && (
@@ -174,7 +211,17 @@ export function VenuePublicPage() {
                   <dd>{v.contactPhone}</dd>
                 </div>
               )}
-              {!v.instagram && !v.contactEmail && !v.contactPhone && <p className="hint">Nenhum contato público informado.</p>}
+              {v.website && (
+                <div>
+                  <dt>Site</dt>
+                  <dd>
+                    <a className="link" href={v.website} target="_blank" rel="noopener noreferrer">
+                      Abrir site
+                    </a>
+                  </dd>
+                </div>
+              )}
+              {!v.instagram && !v.contactEmail && !v.contactPhone && !v.website && <p className="hint">Nenhum contato público informado.</p>}
             </dl>
           </section>
         </aside>

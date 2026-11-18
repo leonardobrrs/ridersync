@@ -1,4 +1,4 @@
-import { originMatcher } from './env';
+import { loadEnv, originMatcher } from './env';
 
 describe('originMatcher (CORS/CSRF)', () => {
   const allowed = originMatcher(['https://ridersync-front.vercel.app', 'https://ridersync-front-*-projetao2.vercel.app', 'http://localhost:5173']);
@@ -31,5 +31,34 @@ describe('originMatcher (CORS/CSRF)', () => {
     const only = originMatcher(['http://localhost:5173']);
     expect(only('http://localhost:5173')).toBe(true);
     expect(only('http://localhost:5174')).toBe(false);
+  });
+});
+
+describe('configuração de e-mail e segredos por ambiente', () => {
+  const base = { DATABASE_URL: 'postgresql://x' };
+  it('desenvolvimento usa o driver de log por padrão; produção usa "disabled" (nunca simula envio)', () => {
+    expect(loadEnv({ ...base, NODE_ENV: 'development' }).MAIL_DRIVER).toBe('log');
+    expect(loadEnv({ ...base, NODE_ENV: 'production', APP_SECRET: 'x'.repeat(32) }).MAIL_DRIVER).toBe('disabled');
+  });
+  it('produção exige APP_SECRET e recusa o driver de log', () => {
+    expect(() => loadEnv({ ...base, NODE_ENV: 'production' })).toThrow(/APP_SECRET/);
+    expect(() => loadEnv({ ...base, NODE_ENV: 'production', APP_SECRET: 'x'.repeat(32), MAIL_DRIVER: 'log' })).toThrow(/MAIL_DRIVER/);
+  });
+  it('Resend exige chave; Google exige ID e segredo juntos', () => {
+    expect(() => loadEnv({ ...base, MAIL_DRIVER: 'resend' })).toThrow(/RESEND_API_KEY/);
+    expect(() => loadEnv({ ...base, GOOGLE_CLIENT_ID: 'abc' })).toThrow(/GOOGLE/);
+    expect(loadEnv({ ...base, MAIL_DRIVER: 'resend', RESEND_API_KEY: 're_x' }).MAIL_DRIVER).toBe('resend');
+  });
+  it('confirmação de e-mail obrigatória é opcional (padrão: não bloqueia o primeiro acesso)', () => {
+    expect(loadEnv(base).EMAIL_VERIFICATION_REQUIRED).toBe(false);
+    expect(loadEnv({ ...base, EMAIL_VERIFICATION_REQUIRED: 'true' }).EMAIL_VERIFICATION_REQUIRED).toBe(true);
+  });
+});
+
+describe('variáveis vazias', () => {
+  it('valor vazio (copiado do .env.example) equivale a variável não definida', () => {
+    const env = loadEnv({ DATABASE_URL: 'postgresql://x', APP_SECRET: '', CRON_SECRET: '', GOOGLE_CLIENT_ID: '', GOOGLE_CLIENT_SECRET: '' });
+    expect(env.APP_SECRET).toBeUndefined();
+    expect(env.CRON_SECRET).toBeUndefined();
   });
 });

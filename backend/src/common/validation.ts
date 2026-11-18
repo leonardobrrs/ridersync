@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { FORMATS, GENRES, INSTRUMENTS, UF } from './domain-lists';
+import { PASSWORD_RULES } from './password-policy';
+import { AL_CITIES, FORMATS, GENRES, INSTRUMENTS, UF } from './domain-lists';
 
 /** Texto obrigatório com trim. */
 export const text = (min: number, max: number, label = 'Campo') =>
@@ -77,16 +78,47 @@ export const instruments = z
   .array(z.enum(INSTRUMENTS, { error: 'Instrumento inválido.' }))
   .max(8)
   .transform((a) => [...new Set(a)]);
-export const uf = z.enum(UF, { error: 'UF inválida.' });
+export const uf = z.enum(UF, { error: 'No momento, o RiderSync atende apenas Alagoas (AL).' });
 
 export const uuid = z.uuid('Identificador inválido.');
 
 export const moneyCents = z.number().int('Valor inválido.').min(0, 'Valor não pode ser negativo.').max(100_000_000);
 
-export const password = z
-  .string({ error: 'Senha é obrigatória.' })
-  .min(8, 'A senha deve ter ao menos 8 caracteres.')
-  .max(128, 'A senha deve ter no máximo 128 caracteres.');
+export const password = PASSWORD_RULES.reduce(
+  (schema, rule) => schema.refine(rule.test, rule.message),
+  z.string({ error: 'Senha é obrigatória.' }).max(128, 'A senha deve ter no máximo 128 caracteres.'),
+);
+
+/** Senha + confirmação: o objeto que usa este par deve aplicar `passwordsMatch`. */
+export const passwordsMatch = <T extends { password: string; passwordConfirmation: string }>(v: T) => v.password === v.passwordConfirmation;
+export const passwordsMatchError = { path: ['passwordConfirmation'], message: 'As senhas não conferem.' };
+
+const normalizeCity = (s: string) =>
+  s
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[’`´]/g, "'")
+    .toLowerCase()
+    .trim();
+const CITY_BY_KEY = new Map(AL_CITIES.map((c) => [normalizeCity(c), c]));
+
+/** Município de Alagoas, normalizado para o nome oficial (aceita variações de acento/caixa). */
+export const alCity = z
+  .string({ error: 'Cidade é obrigatória.' })
+  .trim()
+  .max(80)
+  .transform((v, ctx) => {
+    const canonical = CITY_BY_KEY.get(normalizeCity(v));
+    if (!canonical) {
+      ctx.addIssue({ code: 'custom', message: 'Escolha um município de Alagoas da lista.' });
+      return z.NEVER;
+    }
+    return canonical;
+  });
+export const optionalAlCity = z
+  .union([z.literal(''), alCity])
+  .nullish()
+  .transform((v) => (v ? v : null));
 
 export const pagination = {
   page: z.coerce.number().int().min(1).default(1),

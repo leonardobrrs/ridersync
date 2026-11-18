@@ -9,6 +9,7 @@ import {
   HttpStatus,
   Logger,
   NotFoundException,
+  UnauthorizedException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
@@ -16,8 +17,10 @@ import type { Response } from 'express';
 
 /** Helpers de erro com código estável para o frontend. */
 export const notFound = (message = 'Recurso não encontrado.') => new NotFoundException({ code: 'NOT_FOUND', message });
-export const forbidden = (message = 'Você não tem permissão para esta ação.') =>
-  new ForbiddenException({ code: 'FORBIDDEN', message });
+export const forbidden = (message = 'Você não tem permissão para esta ação.', code = 'FORBIDDEN') =>
+  new ForbiddenException({ code, message });
+export const unauthorized = (code: string, message: string) => new UnauthorizedException({ code, message });
+export const tooManyRequests = (code: string, message: string) => new HttpException({ code, message }, HttpStatus.TOO_MANY_REQUESTS);
 export const conflict = (code: string, message: string) => new ConflictException({ code, message });
 export const unprocessable = (code: string, message: string) => new UnprocessableEntityException({ code, message });
 export const badRequest = (code: string, message: string) => new BadRequestException({ code, message });

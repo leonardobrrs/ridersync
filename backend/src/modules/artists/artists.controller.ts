@@ -12,12 +12,11 @@ import {
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { uploadInterceptor } from '../media/upload';
 import { ApiConsumes, ApiCookieAuth, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import { ApiZodBody, ZBody } from '../../common/zod';
 import { AuthUser, CurrentUser } from '../auth/auth.decorators';
-import { MAX_DOCUMENT_BYTES } from '../media/file-types';
 import type { UploadedFile as File } from '../media/media.service';
 import {
   CreateMusicianSchema,
@@ -29,7 +28,6 @@ import {
 } from './artist.schemas';
 import { ArtistsService } from './artists.service';
 
-export const uploadInterceptor = () => FileInterceptor('file', { limits: { fileSize: MAX_DOCUMENT_BYTES, files: 1 } });
 
 @ApiTags('musician-profile')
 @ApiCookieAuth()

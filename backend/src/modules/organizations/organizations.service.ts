@@ -6,6 +6,7 @@ import { conflict, notFound, unprocessable } from '../../common/errors';
 import { assertKeepsAnOwner } from '../../common/membership.rules';
 import { uniqueSlug } from '../../common/slug';
 import {
+  alCity,
   email,
   optionalEmail,
   optionalExternalUrl,
@@ -17,6 +18,8 @@ import {
 } from '../../common/validation';
 import { PrismaService, Tx } from '../../prisma/prisma.service';
 import { AccessService } from '../access/access.service';
+import { ReauthService } from '../auth/reauth.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { mediaUrl, MediaService, UploadedFile } from '../media/media.service';
 
 const OrgFields = {
@@ -25,7 +28,7 @@ const OrgFields = {
   description: z.string().trim().max(3000),
   addressLine: optionalText(160, 'Endereço'),
   neighborhood: optionalText(80, 'Bairro'),
-  city: text(2, 80, 'Cidade'),
+  city: alCity,
   state: uf,
   capacity: z.number().int().min(1, 'Capacidade inválida.').max(200_000).nullable(),
   contactEmail: optionalEmail,
@@ -40,7 +43,8 @@ export const CreateOrganizationSchema = z
   .strict();
 export const UpdateOrganizationSchema = z.object(OrgFields).partial().strict();
 export const InviteOrgMemberSchema = z.object({ email, role: z.enum(['ADMIN']).default('ADMIN') }).strict();
-export const ChangeOrgRoleSchema = z.object({ role: z.enum(['OWNER', 'ADMIN']) }).strict();
+/** OWNER só é concedido pela transferência de propriedade (fluxo dedicado com senha). */
+export const ChangeOrgRoleSchema = z.object({ role: z.enum(['ADMIN'], { error: 'Use "Transferir propriedade" para definir um novo proprietário.' }) }).strict();
 
 export const orgManageSelect = {
   id: true,
@@ -74,7 +78,13 @@ export class OrganizationsService {
     private readonly prisma: PrismaService,
     private readonly access: AccessService,
     private readonly media: MediaService,
+    private readonly reauth: ReauthService,
+    private readonly notifications: NotificationsService,
   ) {}
+
+  private async ownerAndAdminIds(tx: Tx, organizationId: string) {
+    return this.access.organizationMemberUserIds(organizationId, tx);
+  }
 
   private async lockOrg(tx: Tx, organizationId: string) {
     const rows = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM "Organization" WHERE id = ${organizationId}::uuid FOR UPDATE`;
@@ -85,8 +95,9 @@ export class OrganizationsService {
     return tx.organizationMember.count({ where: { organizationId, status: 'ACTIVE', role: 'OWNER' } });
   }
 
-  /** Cria a casa (Organization VENUE) e o vínculo OWNER do criador. */
+  /** Cria a casa (Organization VENUE) e o vínculo OWNER do criador. Exclusivo de contas de contratante. */
   async create(userId: string, input: z.infer<typeof CreateOrganizationSchema>) {
+    await this.access.assertAccountType(userId, 'CONTRACTOR');
     const orgId = await this.prisma.$transaction(async (tx) => {
       const slug = await uniqueSlug(input.name, async (s) => !!(await tx.organization.findUnique({ where: { slug: s }, select: { id: true } })));
       const org = await tx.organization.create({ data: { ...input, type: 'VENUE', slug, description: input.description ?? '' } });
@@ -173,12 +184,15 @@ export class OrganizationsService {
 
   /** OWNER/ADMIN convidam novos ADMIN (usuário já cadastrado). Vínculo só ativa após aceite. */
   async invite(userId: string, organizationId: string, input: z.infer<typeof InviteOrgMemberSchema>) {
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       await this.lockOrg(tx, organizationId);
       await this.access.assertOrgMember(userId, organizationId, ['OWNER', 'ADMIN'], tx);
-      const invitee = await tx.user.findUnique({ where: { email: input.email }, select: { id: true } });
-      if (!invitee) throw notFound('Nenhuma conta RiderSync usa este e-mail. Peça para a pessoa se cadastrar e tente novamente.');
+      const invitee = await tx.user.findUnique({ where: { email: input.email }, select: { id: true, accountType: true, anonymizedAt: true } });
+      if (!invitee || invitee.anonymizedAt) throw notFound('Nenhuma conta RiderSync usa este e-mail. Peça para a pessoa se cadastrar e tente novamente.');
       if (invitee.id === userId) throw unprocessable('SELF_INVITE', 'Você já é responsável por esta casa.');
+      if (invitee.accountType === 'ARTIST') {
+        throw unprocessable('WRONG_ACCOUNT_TYPE', 'Esta pessoa usa uma conta de artista. Responsáveis por casas precisam de conta de contratante.');
+      }
       const existing = await tx.organizationMember.findUnique({ where: { organizationId_userId: { organizationId, userId: invitee.id } } });
       if (existing?.status === 'ACTIVE') throw conflict('ALREADY_MEMBER', 'Esta pessoa já é responsável pela casa.');
       if (existing?.status === 'INVITED') throw conflict('ALREADY_INVITED', 'Já existe um convite pendente para esta pessoa.');
@@ -186,8 +200,19 @@ export class OrganizationsService {
       const row = existing
         ? await tx.organizationMember.update({ where: { id: existing.id }, data, select: { id: true } })
         : await tx.organizationMember.create({ data: { organizationId, userId: invitee.id, ...data }, select: { id: true } });
+      const org = await tx.organization.findUniqueOrThrow({ where: { id: organizationId }, select: { name: true } });
+      await this.notifications.notify(tx, [invitee.id], {
+        category: 'INVITATIONS',
+        type: 'ORG_INVITE',
+        title: `Convite para administrar ${org.name}`,
+        body: 'Você foi convidado(a) para ser responsável por uma casa de show. Aceite ou recuse em "Convites".',
+        link: '/painel/convites',
+        dedupeKey: `org-invite:${row.id}:${data.invitedAt.getTime()}`,
+      });
       return { id: row.id, status: 'INVITED' };
     });
+    await this.notifications.flush();
+    return result;
   }
 
   async cancelInvite(userId: string, organizationId: string, memberId: string) {
@@ -201,9 +226,10 @@ export class OrganizationsService {
   }
 
   async respondInvite(userId: string, memberId: string, accept: boolean) {
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const row = await tx.organizationMember.findUnique({ where: { id: memberId } });
       if (!row || row.userId !== userId) throw notFound('Convite não encontrado.');
+      if (accept) await this.access.assertAccountType(userId, 'CONTRACTOR', tx);
       await this.lockOrg(tx, row.organizationId);
       const fresh = await tx.organizationMember.findUniqueOrThrow({ where: { id: memberId } });
       if (fresh.status !== 'INVITED') throw conflict('INVITE_NOT_PENDING', 'Este convite não está mais pendente.');
@@ -212,8 +238,22 @@ export class OrganizationsService {
         where: { id: memberId },
         data: accept ? { status: 'ACTIVE', respondedAt: now, joinedAt: now } : { status: 'DECLINED', respondedAt: now },
       });
+      const [invitee, org] = await Promise.all([
+        tx.user.findUniqueOrThrow({ where: { id: userId }, select: { name: true } }),
+        tx.organization.findUniqueOrThrow({ where: { id: row.organizationId }, select: { name: true } }),
+      ]);
+      await this.notifications.notify(tx, (await this.ownerAndAdminIds(tx, row.organizationId)).filter((id) => id !== userId), {
+        category: 'INVITATIONS',
+        type: accept ? 'ORG_INVITE_ACCEPTED' : 'ORG_INVITE_DECLINED',
+        title: accept ? `${invitee.name} agora administra ${org.name}` : `${invitee.name} recusou o convite`,
+        body: `Casa: ${org.name}.`,
+        link: `/painel/casas/${row.organizationId}`,
+        dedupeKey: `org-invite-response:${memberId}:${now.getTime()}`,
+      });
       return { organizationId: row.organizationId, status: accept ? 'ACTIVE' : 'DECLINED' };
     });
+    await this.notifications.flush();
+    return result;
   }
 
   async changeRole(userId: string, organizationId: string, memberId: string, role: OrgRole) {
@@ -256,16 +296,37 @@ export class OrganizationsService {
     });
   }
 
-  async transferOwnership(userId: string, organizationId: string, memberId: string) {
+  /** Transferência atômica com confirmação de senha (mesmas garantias da banda). */
+  async transferOwnership(userId: string, organizationId: string, input: { memberId: string; password: string }) {
+    await this.reauth.assertPassword(userId, input.password);
     await this.prisma.$transaction(async (tx) => {
       await this.lockOrg(tx, organizationId);
       await this.access.assertOrgMember(userId, organizationId, ['OWNER'], tx);
-      const target = await tx.organizationMember.findFirst({ where: { id: memberId, organizationId, status: 'ACTIVE' } });
+      const target = await tx.organizationMember.findFirst({ where: { id: input.memberId, organizationId, status: 'ACTIVE' } });
       if (!target) throw notFound('Responsável ativo não encontrado.');
       if (target.userId === userId) throw unprocessable('SELF_TRANSFER', 'Escolha outro responsável.');
       await tx.organizationMember.update({ where: { id: target.id }, data: { role: 'OWNER' } });
       await tx.organizationMember.update({ where: { organizationId_userId: { organizationId, userId } }, data: { role: 'ADMIN' } });
+      const org = await tx.organization.findUniqueOrThrow({ where: { id: organizationId }, select: { name: true } });
+      const now = Date.now();
+      await this.notifications.notify(tx, [target.userId], {
+        category: 'ACCOUNT',
+        type: 'OWNERSHIP_RECEIVED',
+        title: `Você é o novo proprietário de ${org.name}`,
+        body: 'A propriedade da casa foi transferida para você.',
+        link: `/painel/casas/${organizationId}`,
+        dedupeKey: `org-owner:${organizationId}:${now}`,
+      });
+      await this.notifications.notify(tx, [userId], {
+        category: 'ACCOUNT',
+        type: 'OWNERSHIP_TRANSFERRED',
+        title: `Propriedade de ${org.name} transferida`,
+        body: 'Você agora é administrador(a) da casa. Se não reconhece esta ação, altere sua senha.',
+        link: `/painel/casas/${organizationId}`,
+        dedupeKey: `org-owner-out:${organizationId}:${now}`,
+      });
     });
+    await this.notifications.flush();
     return this.detail(userId, organizationId);
   }
 }

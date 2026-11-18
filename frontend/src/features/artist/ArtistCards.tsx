@@ -1,3 +1,4 @@
+import { prepareImage } from '../../components/Media';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { Link } from 'react-router';
@@ -38,13 +39,12 @@ export function VisibilityCard({ artist, queryKey }: { artist: ManagedArtist; qu
         </div>
       )}
       {isPublic && (
-        <p className="hint">
-          Página pública:{' '}
-          <Link className="link" to={`/artistas/${artist.slug}`}>
-            /artistas/{artist.slug}
+        <div className="row">
+          <Link className="btn sm" to={`/artistas/${artist.slug}`}>
+            Ver perfil público
           </Link>
-          . Perfis públicos podem se candidatar a oportunidades e receber propostas.
-        </p>
+          <span className="hint">Perfis públicos podem se candidatar a oportunidades e receber propostas.</span>
+        </div>
       )}
     </section>
   );
@@ -97,7 +97,7 @@ export function PhotoCard({ artist, queryKey }: { artist: ManagedArtist; queryKe
                 accept="image/jpeg,image/png,image/webp"
                 className="sr-only"
                 disabled={busy}
-                onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])}
+                onChange={async (e) => e.target.files?.[0] && upload(await prepareImage(e.target.files[0]))}
               />
             </label>
             {artist.photoUrl && (
@@ -105,7 +105,7 @@ export function PhotoCard({ artist, queryKey }: { artist: ManagedArtist; queryKe
                 Remover foto
               </button>
             )}
-            <span className="hint">JPG, PNG ou WEBP até 5 MB.</span>
+            <span className="hint">JPG, PNG ou WEBP (fotos grandes são reduzidas automaticamente).</span>
           </div>
         )}
       </div>

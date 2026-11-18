@@ -1,30 +1,30 @@
 import { expect, test } from '@playwright/test';
-import { PASSWORD, stamp } from './helpers';
+import { expectNoHorizontalOverflow, fillRegistration, stamp } from './helpers';
 
-test('celular: navegação inferior, filtros em diálogo e painel responsivo', async ({ page }) => {
-  page.on('dialog', (d) => d.accept());
+test('celular: navegação inferior, filtros em diálogo, cadastro e menu do painel', async ({ page }) => {
   await page.goto('/');
   const tabbar = page.getByRole('navigation', { name: 'Atalhos' });
   await expect(tabbar).toBeVisible();
-  await page.getByRole('button', { name: /^Filtros/ }).click();
+  await page.getByRole('button', { name: /Filtros/ }).click();
   await expect(page.getByRole('dialog', { name: 'Filtros' })).toBeVisible();
   await page.getByRole('button', { name: 'Ver resultados' }).click();
 
+  await tabbar.getByRole('link', { name: 'Casas' }).click();
+  await expect(page.getByRole('heading', { name: 'Casas de show' })).toBeVisible();
   await tabbar.getByRole('link', { name: 'Vagas' }).click();
   await expect(page.getByRole('heading', { name: 'Oportunidades de apresentação' })).toBeVisible();
 
-  await tabbar.getByRole('link', { name: 'Entrar' }).click();
-  await page.getByRole('link', { name: 'Criar conta' }).last().click();
-  await page.getByLabel('Nome', { exact: true }).fill('Mobi Le');
-  await page.getByLabel('E-mail', { exact: true }).fill(`mobile-${stamp()}@e2e.ridersync.dev`);
-  await page.getByLabel('Senha', { exact: true }).fill(PASSWORD);
+  await fillRegistration(page, { name: 'Mobi Le', email: `mobile-${stamp()}@e2e.ridersync.dev`, kind: 'ARTIST' });
+  await expectNoHorizontalOverflow(page);
   await page.getByRole('button', { name: 'Criar conta' }).click();
-  await expect(page).toHaveURL(/\/painel$/);
-  await tabbar.getByRole('link', { name: 'Menu' }).click();
-  await page.getByRole('navigation', { name: 'Painel' }).getByRole('link', { name: 'Meu perfil' }).click();
+  await expect(page).toHaveURL(/\/painel\/perfil$/);
   await expect(page.getByRole('heading', { name: 'Criar perfil individual' })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
 
-  // sem rolagem horizontal da página
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-  expect(overflow).toBeLessThanOrEqual(1);
+  await tabbar.getByRole('link', { name: 'Menu' }).click();
+  await page.getByRole('navigation', { name: 'Painel' }).getByRole('link', { name: 'Notificações' }).click();
+  await expect(page.getByRole('heading', { name: 'Notificações' })).toBeVisible();
+  await page.getByRole('button', { name: /Notificações/ }).click();
+  await expect(page.getByRole('dialog', { name: 'Notificações recentes' })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
 });

@@ -1,5 +1,7 @@
 import { INestApplication } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import path from 'node:path';
 import request from 'supertest';
 import { createApp } from '../src/app.factory';
 
@@ -35,16 +37,21 @@ export class Client {
   }
 }
 
-export const uniqueEmail = (prefix: string) => `${prefix}-${randomUUID().slice(0, 8)}@teste.ridersync.dev`;
+export const uniqueEmail = (prefix: string) =>
+  `${prefix.normalize('NFD').replace(/[^a-z0-9]/gi, '').toLowerCase() || 'u'}-${randomUUID().slice(0, 8)}@teste.ridersync.dev`;
 
-export async function registerUser(app: INestApplication, name = 'Pessoa Teste'): Promise<Client> {
+export const TEST_PASSWORD = 'Senha@Segura123';
+
+export async function registerUser(app: INestApplication, name = 'Pessoa Teste', accountType: 'ARTIST' | 'CONTRACTOR' = 'ARTIST'): Promise<Client> {
   const c = new Client(app);
   const email = uniqueEmail(name.split(' ')[0].toLowerCase());
-  const res = await c.post('/auth/register', { name, email, password: 'senha-segura-123' });
+  const res = await c.post('/auth/register', { accountType, name, email, password: TEST_PASSWORD, passwordConfirmation: TEST_PASSWORD, acceptTerms: true });
   if (res.status !== 201) throw new Error(`register falhou: ${res.status} ${JSON.stringify(res.body)}`);
-  c.user = { id: res.body.user.id, email, name };
+  c.user = { id: res.body.session.user.id, email, name };
   return c;
 }
+
+export const registerContractor = (app: INestApplication, name = 'Contratante Teste') => registerUser(app, name, 'CONTRACTOR');
 
 export const PUBLISHABLE_PROFILE = {
   city: 'Maceió',
@@ -67,3 +74,17 @@ export async function createVenue(c: Client, name = 'Casa Teste') {
 }
 
 export const inDays = (d: number) => new Date(Date.now() + d * 86400_000).toISOString();
+
+/** Último e-mail capturado pelo driver de desenvolvimento (MAIL_DRIVER=log + MAIL_DEV_OUTBOX_DIR) para o destinatário. */
+export function lastMailTo(to: string): { to: string; subject: string; html: string; text: string } | null {
+  const dir = path.resolve(__dirname, '..', process.env.MAIL_DEV_OUTBOX_DIR ?? './test-storage/mail');
+  if (!existsSync(dir)) return null;
+  const files = readdirSync(dir).sort();
+  for (let i = files.length - 1; i >= 0; i--) {
+    const msg = JSON.parse(readFileSync(path.join(dir, files[i]), 'utf8'));
+    if (msg.to === to) return msg;
+  }
+  return null;
+}
+
+export const tokenFrom = (mail: { text: string } | null) => mail?.text.match(/token=([A-Za-z0-9_-]+)/)?.[1] ?? null;

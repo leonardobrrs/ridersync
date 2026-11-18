@@ -82,3 +82,26 @@ Detalhes em `docs/VERCEL_SETUP.md`.
 - Testes reais: driver Vercel Blob (put/get/delete, store privado → 403 sem token); fluxo pelo proxy do front com
   as variáveis de Development (registro, login, `/auth/me`, CSRF sem cabeçalho e com Origin estranha → 403,
   upload/leitura/exclusão de foto, logout → 401). Usuário sintético removido do staging; store vazio.
+
+## Evolução completa (2026-11-18) — `requisitos_ridersync.md`
+
+Detalhes: `docs/RELATORIO_EVOLUCAO.md` (situação de cada requisito), `docs/CHECKLIST_IMPLEMENTACAO.md`,
+`docs/CHECKLIST_TESTES_MANUAIS.md`, `docs/ARQUITETURA.md`, `docs/LGPD.md`.
+
+- Contas por tipo (artista × contratante), senha forte (Argon2id), confirmação de e-mail, recuperação de senha, bloqueio por
+  tentativas, Google OAuth (aguarda credenciais), exportação/exclusão de conta (LGPD), política/termos versionados.
+- Notificações (sino, central, preferências, e-mail via outbox; Resend aguarda credenciais).
+- Eventos públicos/privados, eventos de contratante independente, vagas com lock e estados automáticos
+  (FILLED, vaga cancelada, adiado, cancelado, realizado), agenda pública de shows confirmados.
+- Perfis: abas, miniaturas de vídeo, foto sem perda de nitidez, @handles, imagem na criação, função do integrante,
+  transferência de propriedade com senha e 3 s, rider sem exigências do local, comparação só em contexto autorizado.
+- Página inicial no modelo de classificados; casas visíveis/pesquisáveis por visitantes; rodapé sem API; documentação.
+- Migration `20261118120000_*` aplicada só em bancos locais. Seed v2 idempotente.
+
+| Verificação | Resultado |
+|---|---|
+| `npm run lint` / `npm run typecheck` | sem erros |
+| Backend (Jest: 13 unitários + 8 integração) | **201 testes passando** |
+| Frontend (Vitest) | **13 testes passando** |
+| Playwright (desktop/tablet/celular) | **14 testes passando** |
+| `npm run build` | API e SPA ok |

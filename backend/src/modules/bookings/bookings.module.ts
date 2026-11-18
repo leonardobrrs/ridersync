@@ -3,6 +3,7 @@ import { ApiCookieAuth, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import { ApiZodBody, ZBody } from '../../common/zod';
 import { AuthUser, CurrentUser } from '../auth/auth.decorators';
+import { EventsModule } from '../events/events.module';
 import {
   BookingsService,
   CancelSchema,
@@ -94,5 +95,5 @@ export class BookingsController {
   }
 }
 
-@Module({ controllers: [BookingsController], providers: [BookingsService], exports: [BookingsService] })
+@Module({ imports: [EventsModule], controllers: [BookingsController], providers: [BookingsService], exports: [BookingsService] })
 export class BookingsModule {}

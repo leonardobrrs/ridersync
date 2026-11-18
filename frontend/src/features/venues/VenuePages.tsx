@@ -4,7 +4,10 @@ import { useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate, useParams } from 'react-router';
 import { z } from 'zod';
+import { CityField } from '../../components/CityField';
 import { ConfirmButton } from '../../components/Dialog';
+import { ImagePicker, prepareImage, uploadForm } from '../../components/Media';
+import { TransferOwnershipDialog } from '../../components/TransferOwnershipDialog';
 import { applyServerErrors, FormError, SelectField, TextArea, TextField } from '../../components/Fields';
 import { PageHead } from '../../components/Layout';
 import { Avatar, Poster } from '../../components/Poster';
@@ -78,14 +81,10 @@ function OrgFields({ form }: { form: ReturnType<typeof useForm<OrgValues>> }) {
         <TextField label="Endereço" {...form.register('addressLine')} error={e.addressLine} />
         <TextField label="Bairro" {...form.register('neighborhood')} error={e.neighborhood} />
       </div>
-      <div className="row3">
-        <TextField label="Cidade" list="city-suggestions-org" {...form.register('city')} error={e.city} />
-        <SelectField label="UF" {...form.register('state')}>
-          {(meta?.states ?? ['AL']).map((s) => <option key={s}>{s}</option>)}
-        </SelectField>
+      <div className="row2">
+        <CityField {...form.register('city')} error={e.city} />
         <TextField label="Capacidade (pessoas)" inputMode="numeric" {...form.register('capacity')} error={e.capacity} />
       </div>
-      <datalist id="city-suggestions-org">{meta?.cities.map((c) => <option key={c} value={c} />)}</datalist>
       <fieldset>
         <legend>Contatos públicos do estabelecimento</legend>
         <div className="row2">
@@ -106,14 +105,19 @@ export function MyVenuesPage() {
   const navigate = useNavigate();
   const toast = useToast();
   const [formError, setFormError] = useState<string | null>(null);
+  const [photo, setPhoto] = useState<File | null>(null);
   const form = useForm<OrgValues>({ resolver: zodResolver(OrgSchema), defaultValues: toOrgValues() });
+  const venues = q.data?.filter((o) => o.type === 'VENUE');
   const onSubmit = form.handleSubmit(async (v) => {
     setFormError(null);
     try {
       const org = await api.post<OrgDetail>('/organizations', toOrgPayload(v));
+      if (photo) {
+        await api.upload('PUT', `/organizations/${org.id}/photo`, uploadForm(photo)).catch(() => toast('A casa foi cadastrada, mas a imagem não pôde ser enviada.', 'error'));
+      }
       await qc.invalidateQueries({ queryKey: ['orgs'] });
       await qc.invalidateQueries({ queryKey: ['me'] });
-      toast('Casa cadastrada. Você é o proprietário (OWNER).');
+      toast('Casa cadastrada. Você é o proprietário.');
       navigate(`/painel/casas/${org.id}`);
     } catch (e) {
       setFormError(applyServerErrors(e, form.setError));
@@ -136,6 +140,7 @@ export function MyVenuesPage() {
         <form className="box form" onSubmit={onSubmit} noValidate aria-label="Cadastrar casa">
           <h2 className="lbl">Nova casa de show</h2>
           <FormError message={formError} />
+          <ImagePicker label="Imagem da casa" value={photo} onChange={setPhoto} />
           <OrgFields form={form} />
           <div className="actions">
             <button className="btn ghost" type="button" onClick={() => setCreating(false)}>
@@ -149,9 +154,17 @@ export function MyVenuesPage() {
       )}
       {q.isLoading && <Loading />}
       {q.error && <ErrorState error={q.error} retry={q.refetch} />}
-      {q.data?.length === 0 && !creating && <Empty title="Você não administra nenhuma casa">Cadastre seu estabelecimento para publicar oportunidades e buscar artistas.</Empty>}
+      {venues?.length === 0 && !creating && (
+        <Empty title="Você não administra nenhuma casa">
+          Cadastre seu estabelecimento para publicar oportunidades e buscar artistas. Vai contratar para um evento sem casa (ex.: aniversário)? Use{' '}
+          <Link className="link" to="/painel/eventos">
+            Eventos particulares
+          </Link>
+          .
+        </Empty>
+      )}
       <div className="stack-sm">
-        {q.data?.map((o) => (
+        {venues?.map((o) => (
           <article className="prow" key={o.id}>
             <Poster name={o.name} photoUrl={o.photoUrl} top={[o.city, o.state]} bottom={[o.venueKind ?? '', o.capacity ? `${o.capacity} pessoas` : '']} />
             <div>
@@ -219,7 +232,7 @@ function OrgProfileTab({ org }: { org: OrgDetail }) {
           <div className="stack-sm">
             <label className="btn sm">
               {busy ? 'Enviando…' : org.photoUrl ? 'Trocar foto' : 'Enviar foto'}
-              <input ref={input} type="file" className="sr-only" accept="image/jpeg,image/png,image/webp" disabled={busy} onChange={(e) => e.target.files?.[0] && photo(e.target.files[0])} />
+              <input ref={input} type="file" className="sr-only" accept="image/jpeg,image/png,image/webp" disabled={busy} onChange={async (e) => e.target.files?.[0] && photo(await prepareImage(e.target.files[0]))} />
             </label>
             {org.photoUrl && (
               <button className="btn sm ghost danger" type="button" onClick={() => photo()} disabled={busy}>
@@ -228,12 +241,9 @@ function OrgProfileTab({ org }: { org: OrgDetail }) {
             )}
           </div>
         </div>
-        <p className="hint">
-          Página pública:{' '}
-          <Link className="link" to={`/casas/${org.slug}`}>
-            /casas/{org.slug}
-          </Link>
-        </p>
+        <Link className="btn sm" to={`/casas/${org.slug}`}>
+          Ver página pública
+        </Link>
       </section>
       <form className="box form" onSubmit={onSubmit} noValidate aria-label="Dados da casa">
         <FormError message={formError} />
@@ -255,7 +265,9 @@ function OrgMembersTab({ org }: { org: OrgDetail }) {
   const key = ['org', org.id];
   const [email, setEmail] = useState('');
   const [err, setErr] = useState<string | null>(null);
+  const [transferOpen, setTransferOpen] = useState(false);
   const isOwner = org.myRole === 'OWNER';
+  const candidates = org.members.filter((m) => m.status === 'ACTIVE' && !m.isMe).map((m) => ({ id: m.id, name: m.name }));
   const run = async (fn: () => Promise<unknown>, ok: string) => {
     try {
       await fn();
@@ -284,7 +296,14 @@ function OrgMembersTab({ org }: { org: OrgDetail }) {
   };
   return (
     <section className="box" aria-label="Responsáveis">
-      <h2 className="lbl">Responsáveis</h2>
+      <div className="row space">
+        <h2 className="lbl">Responsáveis</h2>
+        {isOwner && (
+          <button className="btn sm dark" type="button" onClick={() => setTransferOpen(true)}>
+            Transferir propriedade
+          </button>
+        )}
+      </div>
       <ul className="mlist">
         {org.members.map((m) => (
           <li key={m.id}>
@@ -296,34 +315,31 @@ function OrgMembersTab({ org }: { org: OrgDetail }) {
               </strong>
               {m.status === 'INVITED' && <small className="hint" style={{ display: 'block' }}>{m.email} · convite pendente</small>}
             </div>
-            {m.status === 'INVITED' ? (
-              <span className="st pend">Pendente</span>
-            ) : isOwner && !m.isMe ? (
-              <select className="input" aria-label={`Papel de ${m.name}`} value={m.role} onChange={(e) => run(() => api.patch(`/organizations/${org.id}/members/${m.id}`, { role: e.target.value }), 'Papel atualizado.')}>
-                <option value="OWNER">Proprietário</option>
-                <option value="ADMIN">Administrador</option>
-              </select>
-            ) : (
-              <span className={`role ${m.role === 'OWNER' ? 'owner' : ''}`}>{ROLE_LABEL[m.role]}</span>
-            )}
+            {m.status === 'INVITED' ? <span className="st pend">Pendente</span> : <span className={`role ${m.role === 'OWNER' ? 'owner' : ''}`}>{ROLE_LABEL[m.role]}</span>}
             <span className="row" style={{ gap: 4 }}>
               {m.status === 'INVITED' ? (
-                <ConfirmButton className="btn sm ghost danger" confirm="Cancelar convite?" onConfirm={() => run(() => api.delete(`/organizations/${org.id}/invitations/${m.id}`), 'Convite cancelado.')}>
+                <ConfirmButton
+                  className="btn sm ghost danger"
+                  confirm="Cancelar este convite?"
+                  confirmLabel="Cancelar convite"
+                  danger
+                  onConfirm={() => run(() => api.delete(`/organizations/${org.id}/invitations/${m.id}`), 'Convite cancelado.')}
+                >
                   Cancelar
                 </ConfirmButton>
               ) : (
                 isOwner &&
-                !m.isMe && (
-                  <>
-                    {m.role !== 'OWNER' && (
-                      <ConfirmButton className="btn sm ghost" confirm={`Transferir a propriedade para ${m.name}?`} onConfirm={() => run(() => api.post(`/organizations/${org.id}/transfer-ownership`, { memberId: m.id }), 'Propriedade transferida.')}>
-                        Tornar dono
-                      </ConfirmButton>
-                    )}
-                    <ConfirmButton className="btn sm ghost danger" confirm={`Remover ${m.name}?`} onConfirm={() => run(() => api.delete(`/organizations/${org.id}/members/${m.id}`), 'Responsável removido.')}>
-                      Remover
-                    </ConfirmButton>
-                  </>
+                !m.isMe &&
+                m.role !== 'OWNER' && (
+                  <ConfirmButton
+                    className="btn sm ghost danger"
+                    confirm={`Remover ${m.name} dos responsáveis pela casa?`}
+                    confirmLabel="Remover"
+                    danger
+                    onConfirm={() => run(() => api.delete(`/organizations/${org.id}/members/${m.id}`), 'Responsável removido.')}
+                  >
+                    Remover
+                  </ConfirmButton>
                 )
               )}
             </span>
@@ -337,11 +353,26 @@ function OrgMembersTab({ org }: { org: OrgDetail }) {
         </button>
       </div>
       <div className="row between">
-        <p className="hint">A casa precisa sempre de um proprietário (OWNER). Somente o OWNER altera papéis e remove responsáveis.</p>
-        <ConfirmButton className="btn sm danger" confirm="Deixar de administrar esta casa?" onConfirm={() => leave.mutate(undefined)}>
+        <p className="hint">A casa precisa sempre de um proprietário. Somente o proprietário remove responsáveis e transfere a propriedade.</p>
+        <ConfirmButton className="btn sm danger" confirm="Deixar de administrar esta casa?" confirmLabel="Deixar de administrar" danger onConfirm={() => leave.mutate(undefined)}>
           Deixar de administrar
         </ConfirmButton>
       </div>
+      {isOwner && (
+        <TransferOwnershipDialog
+          open={transferOpen}
+          onClose={() => setTransferOpen(false)}
+          entityLabel="casa"
+          entityName={org.name}
+          candidates={candidates}
+          onTransfer={async (memberId, password) => {
+            await api.post(`/organizations/${org.id}/transfer-ownership`, { memberId, password });
+            await qc.invalidateQueries({ queryKey: key });
+            await qc.invalidateQueries({ queryKey: ['orgs'] });
+            toast('Propriedade transferida. Você agora é administrador(a).');
+          }}
+        />
+      )}
     </section>
   );
 }
@@ -367,23 +398,24 @@ function EventsTab({ orgId }: { orgId: string }) {
   return (
     <section className="box" aria-label="Publicações">
       <div className="row between">
-        <h2 className="lbl">Eventos e publicações</h2>
+        <h2 className="lbl">Eventos</h2>
         <Link className="btn cue sm" to={`/painel/casas/${orgId}/eventos/novo`}>
-          Nova publicação
+          Novo evento
         </Link>
       </div>
       {q.isLoading && <Loading />}
       {q.error && <ErrorState error={q.error} retry={q.refetch} />}
-      {q.data?.length === 0 && <Empty title="Nenhuma publicação">Publique uma oportunidade com vagas e prazo para receber candidaturas.</Empty>}
+      {q.data?.length === 0 && <Empty title="Nenhum evento">Crie um evento com vagas e prazo para receber candidaturas.</Empty>}
       {!!q.data?.length && (
         <div className="tscroll">
           <table>
             <thead>
               <tr>
-                <th>Publicação</th>
+                <th>Evento</th>
                 <th>Estado</th>
                 <th>Apresentação</th>
                 <th>Prazo</th>
+                <th>Vagas</th>
                 <th>Candidaturas</th>
               </tr>
             </thead>
@@ -393,7 +425,8 @@ function EventsTab({ orgId }: { orgId: string }) {
                   <td>
                     <Link className="link" to={`/painel/eventos/${e.id}`}>
                       {e.title}
-                    </Link>
+                    </Link>{' '}
+                    {e.visibility === 'PRIVATE' && <span className="st draft">Privado</span>}
                   </td>
                   <td>
                     <Status value={e.status} map={EVENT_STATUS} />
@@ -401,7 +434,10 @@ function EventsTab({ orgId }: { orgId: string }) {
                   <td>{dateTime(e.startsAt)}</td>
                   <td>{date(e.applicationDeadline)}</td>
                   <td className="n">
-                    {e.applicationCounts.total} ({e.applicationCounts.pending} em análise · {e.applicationCounts.accepted}/{e.slots} selecionadas)
+                    {e.filledSlots}/{e.slots}
+                  </td>
+                  <td className="n">
+                    {e.applicationCounts.total} ({e.applicationCounts.pending} em análise)
                   </td>
                 </tr>
               ))}

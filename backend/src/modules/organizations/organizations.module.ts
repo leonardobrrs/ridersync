@@ -15,12 +15,12 @@ import {
 import { ApiConsumes, ApiCookieAuth, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import { ApiZodBody, ZBody } from '../../common/zod';
-import { uploadInterceptor } from '../artists/artists.controller';
+import { uploadInterceptor } from '../media/upload';
 import { AuthUser, CurrentUser } from '../auth/auth.decorators';
 import { BandsModule } from '../bands/bands.module';
 import { BandsService, TransferSchema } from '../bands/bands.service';
+import { InvitationsService } from './invitations.service';
 import type { UploadedFile as File } from '../media/media.service';
-import { PrismaService } from '../../prisma/prisma.service';
 import {
   ChangeOrgRoleSchema,
   CreateOrganizationSchema,
@@ -127,7 +127,7 @@ export class OrganizationsController {
     @Param('orgId', ParseUUIDPipe) orgId: string,
     @ZBody(TransferSchema) body: z.infer<typeof TransferSchema>,
   ) {
-    return this.orgs.transferOwnership(user.id, orgId, body.memberId);
+    return this.orgs.transferOwnership(user.id, orgId, body);
   }
 }
 
@@ -137,59 +137,14 @@ export class OrganizationsController {
 @Controller('me/invitations')
 export class InvitationsController {
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly invitations: InvitationsService,
     private readonly bands: BandsService,
     private readonly orgs: OrganizationsService,
   ) {}
 
   @Get()
-  async list(@CurrentUser() user: AuthUser) {
-    const [bandInvites, orgInvites] = await Promise.all([
-      this.prisma.bandMember.findMany({
-        where: { userId: user.id, status: 'INVITED' },
-        orderBy: { invitedAt: 'desc' },
-        select: {
-          id: true,
-          role: true,
-          instrument: true,
-          invitedAt: true,
-          invitedBy: { select: { name: true } },
-          band: { select: { id: true, artist: { select: { name: true, slug: true, city: true } } } },
-        },
-      }),
-      this.prisma.organizationMember.findMany({
-        where: { userId: user.id, status: 'INVITED' },
-        orderBy: { invitedAt: 'desc' },
-        select: {
-          id: true,
-          role: true,
-          invitedAt: true,
-          invitedBy: { select: { name: true } },
-          organization: { select: { id: true, name: true, slug: true, city: true } },
-        },
-      }),
-    ]);
-    return {
-      bands: bandInvites.map((i) => ({
-        id: i.id,
-        role: i.role,
-        instrument: i.instrument,
-        invitedAt: i.invitedAt,
-        invitedBy: i.invitedBy?.name ?? null,
-        bandId: i.band.id,
-        bandName: i.band.artist?.name ?? 'Banda',
-        city: i.band.artist?.city ?? null,
-      })),
-      organizations: orgInvites.map((i) => ({
-        id: i.id,
-        role: i.role,
-        invitedAt: i.invitedAt,
-        invitedBy: i.invitedBy?.name ?? null,
-        organizationId: i.organization.id,
-        organizationName: i.organization.name,
-        city: i.organization.city,
-      })),
-    };
+  list(@CurrentUser() user: AuthUser) {
+    return this.invitations.listForUser(user.id);
   }
 
   @Post('band/:memberId/accept')
@@ -216,7 +171,7 @@ export class InvitationsController {
 @Module({
   imports: [BandsModule],
   controllers: [OrganizationsController, InvitationsController],
-  providers: [OrganizationsService],
+  providers: [OrganizationsService, InvitationsService],
   exports: [OrganizationsService],
 })
 export class OrganizationsModule {}

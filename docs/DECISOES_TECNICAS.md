@@ -181,3 +181,39 @@ bloqueado com `NODE_ENV=production`, só roda com `SEED_DEMO=true` ou `--force`.
 - Notificações em tempo real (a tela de negociação revalida a cada 20 s).
 - Limpeza periódica de sessões expiradas (hoje removidas sob demanda).
 - `npm audit` aponta `deepmerge-ts < 8` usado apenas pelo CLI do Prisma 6 (ferramenta de build/migration, não runtime da API).
+
+## Evolução de 2026-11-18 (requisitos em `requisitos_ridersync.md`)
+
+Decisões do responsável que **substituem** regras anteriores (ordem de autoridade: decisão explícita mais recente):
+
+1. **Tipo de conta** (`User.accountType` = `ARTIST` | `CONTRACTOR`), escolhido no cadastro e definitivo. Substitui a regra
+   "sem papel global no User". Artista cria perfil individual e bandas e só entra em bandas; contratante cria casas e
+   eventos e só administra casas. Contas legadas sem tipo escolhem no próximo acesso; vínculos existentes são preservados
+   (a migration deriva o tipo pela atuação atual).
+2. **Eventos sem casa de show**: contratante individual usa uma `Organization` do tipo `INDIVIDUAL` (criada no primeiro
+   evento). Isso reaproveita autorização, negociação, confirmação e agenda sem duplicar fluxos; `INDIVIDUAL` não tem
+   página pública nem inventário (FK composta + CHECK). Local livre em `Event.location*` (CHECK `Event_has_location`).
+3. **Eventos privados**: visíveis só para contas de artista (lista/detalhe/candidatura) e para o organizador; nunca em
+   listagens públicas, página inicial ou agenda pública do artista (lá aparecem só como "Evento privado").
+4. **Vagas**: ocupadas por candidatura aceita **ou** convite direto ativo vinculado ao evento; `FILLED` automático;
+   liberação por recusa/cancelamento (`ApplicationStatus.CANCELLED` = "vaga cancelada"); `POSTPONED` com remarcação.
+   Locks: evento → negociação, sempre nessa ordem.
+5. **Confirmação de e-mail**: implementada com token de uso único; por decisão do responsável **não bloqueia o primeiro
+   acesso** (`EMAIL_VERIFICATION_REQUIRED=false`). Com `true`, o login exige e-mail confirmado.
+6. **Senha**: Argon2id (`@node-rs/argon2`, parâmetros OWASP); scrypt legado verificado e regravado no login.
+7. **Notificações**: tabela própria + outbox transacional (sem fila externa, compatível com serverless); deduplicação por
+   `(userId, dedupeKey)`; despacho com `FOR UPDATE SKIP LOCKED`; e-mails de segurança sempre enviados.
+8. **E-mail**: Resend via HTTP (sem SDK). Sem credencial, nada é enviado nem simulado (registro `SKIPPED`).
+9. **Imagens**: `sharp` reprocessa uploads (orientação, remoção de metadados, WebP até 1600 px + miniatura 480 px).
+   A foto "estourada" era o recorte/ampliação em `object-fit: cover` num quadro 16:10; o perfil agora mostra a imagem
+   inteira sobre fundo desfocado e abre a versão grande sem ampliar além da resolução real.
+10. **Rider**: itens "Palco e energia" (`artistRequirement=false`) só no inventário da casa; itens antigos ficam ocultos
+    e saem no próximo salvamento (sem apagar dados na migration). Comparação de rider somente na negociação/análise de
+    candidaturas e no painel do próprio artista; removida do perfil público.
+11. **Localidade restrita a Alagoas**: UF única `AL` e cidade validada contra os 102 municípios (normalização de acentos),
+    pois só há preenchimento automático para Alagoas.
+12. **Função na banda**: `BandMember.instrument` passa a usar lista fechada (`BAND_POSITIONS`); papel de permissão
+    (OWNER/ADMIN/MEMBER) continua separado; `OWNER` só por transferência (senha + confirmação com 3 s na interface).
+13. **LGPD**: exclusão de conta por anonimização onde há histórico com terceiros, sem `deletedAt` genérico.
+14. **Documentação**: o link "Documentação" aponta para `/ajuda` (página interna); o botão "API" (Swagger, desativado em
+    produção) foi removido do rodapé.

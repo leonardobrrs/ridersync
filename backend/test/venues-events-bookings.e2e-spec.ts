@@ -15,8 +15,8 @@ describe('Casas, inventário, comparação, eventos, candidaturas e bookings (in
 
   beforeAll(async () => {
     app = await bootApp();
-    venueOwner = await registerUser(app, 'Vera Venue');
-    venueAdmin = await registerUser(app, 'Vitor Admin');
+    venueOwner = await registerUser(app, 'Vera Venue', 'CONTRACTOR');
+    venueAdmin = await registerUser(app, 'Vitor Admin', 'CONTRACTOR');
     artistUser = await registerUser(app, 'Ana Artista');
     bandAdmin = await registerUser(app, 'Beto Banda');
     stranger = await registerUser(app, 'Sara Estranha');
@@ -89,9 +89,9 @@ describe('Casas, inventário, comparação, eventos, candidaturas e bookings (in
       expect(res.status).toBe(200);
       const byName = Object.fromEntries(res.body.items.map((i: { name: string; status: string }) => [i.name, i]));
       expect(byName['Microfone dinâmico']).toMatchObject({ status: 'COMPATIBLE', required: 2, available: 6, unit: 'un' });
-      expect(byName['Direct box (DI)']).toMatchObject({ status: 'PARTIALLY_AVAILABLE', available: 1, missing: 1 });
+      expect(byName['Caixa direta (DI)']).toMatchObject({ status: 'PARTIALLY_AVAILABLE', available: 1, missing: 1 });
       expect(byName['Bateria completa']).toMatchObject({ status: 'UNAVAILABLE', available: 0 });
-      expect(byName['Sistema in-ear']).toMatchObject({ status: 'UNAVAILABLE' });
+      expect(byName['Retorno auricular (in-ear)']).toMatchObject({ status: 'UNAVAILABLE' });
       // item personalizado NÃO casa com item personalizado de mesmo nome
       expect(byName['Pedal de efeitos']).toMatchObject({ status: 'NEEDS_CHECK', available: null });
       expect(res.body.summary).toMatchObject({ COMPATIBLE: 1, PARTIALLY_AVAILABLE: 1, UNAVAILABLE: 2, NEEDS_CHECK: 1 });
@@ -105,13 +105,14 @@ describe('Casas, inventário, comparação, eventos, candidaturas e bookings (in
       expect(after.body.items).toEqual(before.body.items);
     });
 
-    it('terceiros sem vínculo não comparam rider privado', async () => {
+    it('comparação só em contexto autorizado: terceiros e casa sem vínculo não comparam', async () => {
       const priv = await bandAdmin.post('/me/musician-profile', { name: 'Beto Privado' });
       await stranger.get(`/artists/${priv.body.id}/compatibility/${venue.id}`).expect(403);
-      // responsável da casa não compara perfil privado sem relação
       await venueOwner.get(`/artists/${priv.body.id}/compatibility/${venue.id}`).expect(403);
-      // mas compara artista público
-      await venueOwner.get(`/artists/${artist.id}/compatibility/${venue.id}`).expect(200);
+      // perfil público não basta: a casa só compara na negociação/análise de candidatura
+      const res = await venueOwner.get(`/artists/${artist.id}/compatibility/${venue.id}`);
+      expect(res.status).toBe(403);
+      expect(res.body.message).toMatch(/negociação/);
     });
   });
 
@@ -178,14 +179,15 @@ describe('Casas, inventário, comparação, eventos, candidaturas e bookings (in
       expect(await prisma.booking.count({ where: { applicationId } })).toBe(0);
     });
 
-    it('vagas esgotadas impedem novo aceite', async () => {
+    it('vagas esgotadas: evento muda para FILLED automaticamente e fecha inscrições', async () => {
+      const manage = await venueOwner.get(`/events/${eventId}/manage`);
+      expect(manage.body.status).toBe('FILLED');
+      expect(manage.body.filledSlots).toBe(1);
       const other = await registerUser(app, 'Caio Extra');
       const otherArtist = await createPublicMusician(other, 'Caio Extra Som');
       const a2 = await other.post(`/events/${eventId}/applications`, { artistId: otherArtist.id });
-      const res = await venueOwner.post(`/applications/${a2.body.id}/accept`);
-      expect(res.status).toBe(409);
-      expect(res.body.code).toBe('SLOTS_FULL');
-      await venueOwner.post(`/applications/${a2.body.id}/reject`, { note: 'Vaga preenchida' }).expect(201);
+      expect(a2.status).toBe(409);
+      expect(a2.body.code).toBe('APPLICATIONS_CLOSED');
     });
 
     it('inicia booking a partir da candidatura aceita (estado inicial NEGOTIATING)', async () => {
@@ -289,8 +291,12 @@ describe('Casas, inventário, comparação, eventos, candidaturas e bookings (in
       await venueOwner.post(`/bookings/${id}/confirm`).expect(409);
     });
 
-    it('não permite proposta para perfil privado nem negociar consigo mesmo', async () => {
-      const priv = await venueOwner.post('/me/musician-profile', { name: 'Vera Canta' });
+    it('não permite proposta para perfil privado; contratante não cria perfil artístico', async () => {
+      const blocked = await venueOwner.post('/me/musician-profile', { name: 'Vera Canta' });
+      expect(blocked.status).toBe(403);
+      expect(blocked.body.code).toBe('WRONG_ACCOUNT_TYPE');
+      const privUser = await registerUser(app, 'Paula Privada');
+      const priv = await privUser.post('/me/musician-profile', { name: 'Paula Canta' });
       await venueOwner
         .post('/bookings', { organizationId: venue.id, artistId: priv.body.id, offer: { performanceAt: inDays(30), durationMinutes: 60, feeCents: 1 } })
         .expect(404);

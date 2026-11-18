@@ -1,8 +1,10 @@
 # RiderSync
 
-Plataforma de profissionalização artística para músicos, bandas e casas de show de Alagoas: perfis profissionais,
-portfólio, riders técnicos, inventário das casas com comparação de compatibilidade, oportunidades de apresentação,
-candidaturas e negociações (propostas, contrapropostas, mensagens e confirmação de contratação).
+Plataforma de profissionalização artística para músicos, bandas e contratantes (casas de show e pessoas físicas) de
+Alagoas: perfis profissionais, portfólio com miniaturas de vídeo, riders técnicos, inventário das casas com comparação de
+compatibilidade, eventos públicos e privados (com ou sem casa de show) com controle automático de vagas, candidaturas,
+negociações (propostas, contrapropostas, mensagens e confirmação), agenda de shows confirmados, central de notificações
+com e-mail e ferramentas de privacidade (LGPD). Contas são separadas por tipo: **artista/banda** ou **contratante/casa de show**.
 
 > MVP v1.1. **Editais/oportunidades culturais estão adiados.** A plataforma **não processa pagamentos**.
 
@@ -185,17 +187,18 @@ Em sistemas com SELinux (Fedora etc.) o bind mount do script de init já usa o r
 
 ## Contas de demonstração (somente desenvolvimento)
 
-Criadas por `npm run db:seed`. Dados **fictícios**; senha de desenvolvimento para todas: `demo-ridersync-2026`.
+Criadas por `npm run db:seed` (idempotente). Dados **fictícios**; senha para todas: `Demo@RiderSync2026`.
+Lista completa em [`docs/SEEDERS.md`](docs/SEEDERS.md).
 
-| E-mail | Papel na demo |
-|---|---|
-| `ana@demo.ridersync.local` | Musicista (perfil público), OWNER da banda Maré Alta, recebeu proposta direta |
-| `davi@demo.ridersync.local` | ADMIN da banda Maré Alta |
-| `lia@demo.ridersync.local` | MEMBER da banda Maré Alta (só visualiza) |
-| `joao@demo.ridersync.local` | Musicista; tem convite pendente para a Maré Alta |
-| `bia@demo.ridersync.local` | Musicista em Penedo |
-| `rafael@demo.ridersync.local` | OWNER da casa Galpão Jaraguá (inventário, evento aberto, candidatura e proposta) |
-| `marina@demo.ridersync.local` | OWNER da casa Casa Sururu |
+| E-mail | Tipo | Papel na demo |
+|---|---|---|
+| `ana@demo.ridersync.local` | artista | Perfil público, proprietária da banda Maré Alta, shows confirmados (público e privado) |
+| `davi@` / `lia@demo.ridersync.local` | artista | Administrador / integrante da Maré Alta |
+| `joao@demo.ridersync.local` | artista | Dono do Trio Agreste; convite pendente para a Maré Alta |
+| `bia@` / `tiago@` / `ravi@demo.ridersync.local` | artista | Músicos em Penedo e Arapiraca |
+| `rafael@demo.ridersync.local` | contratante | Galpão Jaraguá (eventos aberto, lotado, realizado; negociações) |
+| `marina@` / `helena@demo.ridersync.local` | contratante | Casa Sururu (evento cancelado) / Teatro Ribeirinho (evento adiado) |
+| `carla@` / `eduardo@demo.ridersync.local` | contratante | Contratantes independentes (aniversário privado; arraiá público) |
 
 Roteiro de demonstração: [`docs/DEMO.md`](docs/DEMO.md).
 
@@ -215,18 +218,26 @@ Os testes de integração recusam-se a rodar se `DATABASE_URL` não apontar para
 
 ## Segurança (resumo)
 
-Sessão server-side em cookie `HttpOnly`/`SameSite=Lax` (`Secure` em produção), senha com scrypt, proteção CSRF por
-cabeçalho + verificação de origem, CORS por allowlist, autorização por vínculo no backend em todas as operações,
-validação Zod de toda entrada, uploads validados por assinatura binária. Detalhes em
-[`docs/DECISOES_TECNICAS.md`](docs/DECISOES_TECNICAS.md).
+Sessão server-side em cookie `HttpOnly`/`SameSite=Lax` (`Secure` em produção), senha com Argon2id (contas antigas em
+scrypt migram no próximo login), bloqueio por tentativas, proteção CSRF por cabeçalho + verificação de origem, CORS por
+allowlist, autorização por vínculo no backend em todas as operações, validação Zod de toda entrada, uploads validados por
+assinatura binária e reencodados sem metadados. Detalhes em [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md) e
+[`docs/LGPD.md`](docs/LGPD.md).
 
 ## Variáveis de ambiente (backend)
 
-Veja `backend/.env.example`. Principais: `DATABASE_URL`, `CORS_ORIGINS`, `COOKIE_SECURE` (use `true` sob HTTPS),
-`SESSION_TTL_HOURS`, `STORAGE_DRIVER` (`local`|`s3`) e `S3_*`, `SEED_DEMO`. A API valida as variáveis ao iniciar.
+Tabela completa em [`docs/VARIAVEIS_DE_AMBIENTE.md`](docs/VARIAVEIS_DE_AMBIENTE.md); modelo comentado em `backend/.env.example`.
+A API valida as variáveis ao iniciar.
 
 ## Documentação
 
+- [`docs/RELATORIO_EVOLUCAO.md`](docs/RELATORIO_EVOLUCAO.md) — alterações da evolução, situação de cada requisito, limitações
+- [`docs/CHECKLIST_IMPLEMENTACAO.md`](docs/CHECKLIST_IMPLEMENTACAO.md) e [`docs/CHECKLIST_TESTES_MANUAIS.md`](docs/CHECKLIST_TESTES_MANUAIS.md)
+- [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md) — módulos, camadas, máquinas de estado, visibilidade, notificações
+- [`docs/MODELO_DE_DADOS.md`](docs/MODELO_DE_DADOS.md) — entidades, migrations e índices
+- [`docs/VARIAVEIS_DE_AMBIENTE.md`](docs/VARIAVEIS_DE_AMBIENTE.md) · [`docs/PROVEDORES_EXTERNOS.md`](docs/PROVEDORES_EXTERNOS.md) (Resend, Google, Cron)
+- [`docs/TESTES.md`](docs/TESTES.md) · [`docs/SEEDERS.md`](docs/SEEDERS.md) · [`docs/VERCEL_SETUP.md`](docs/VERCEL_SETUP.md) (deploy)
+- [`docs/LGPD.md`](docs/LGPD.md) — inventário de dados, bases legais, direitos do titular, retenção, exclusão de conta
 - [`docs/DECISOES_TECNICAS.md`](docs/DECISOES_TECNICAS.md) — modelo de dados, permissões, estados, segurança, armazenamento
 - [`docs/IMPLEMENTATION_PROGRESS.md`](docs/IMPLEMENTATION_PROGRESS.md) — progresso por fatia e resultados de testes
 - [`docs/DEMO.md`](docs/DEMO.md) — roteiro de demonstração

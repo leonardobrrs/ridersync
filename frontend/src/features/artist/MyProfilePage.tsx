@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { applyServerErrors, FormError } from '../../components/Fields';
+import { ImagePicker, uploadForm } from '../../components/Media';
 import { PageHead } from '../../components/Layout';
 import { ErrorState, Loading } from '../../components/States';
 import { useToast } from '../../components/Toast';
@@ -17,15 +18,19 @@ function CreateProfile() {
   const qc = useQueryClient();
   const toast = useToast();
   const [formError, setFormError] = useState<string | null>(null);
+  const [photo, setPhoto] = useState<File | null>(null);
   const form = useForm<ProfileFormValues>({ resolver: zodResolver(ProfileFormSchema), defaultValues: toFormValues() });
   const onSubmit = form.handleSubmit(async (v) => {
     setFormError(null);
     try {
-      await api.post('/me/musician-profile', {
+      const created = await api.post<ManagedArtist>('/me/musician-profile', {
         ...toArtistPayload(v),
         mainInstrument: v.mainInstrument || null,
         instruments: v.instruments,
       });
+      if (photo) {
+        await api.upload('PUT', `/artists/${created.id}/photo`, uploadForm(photo)).catch(() => toast('O perfil foi criado, mas a foto não pôde ser enviada.', 'error'));
+      }
       await qc.invalidateQueries({ queryKey: KEY });
       await qc.invalidateQueries({ queryKey: ['me'] });
       toast('Perfil criado! Ele começa privado — publique quando estiver pronto.');
@@ -36,9 +41,10 @@ function CreateProfile() {
   return (
     <form className="box form" onSubmit={onSubmit} noValidate aria-label="Criar perfil individual">
       <div className="notice">
-        Seu perfil profissional é separado da sua conta: o e-mail de login nunca aparece publicamente. Ele começa privado.
+        Seu perfil profissional é separado da sua conta: o e-mail de acesso nunca aparece publicamente. Ele começa privado.
       </div>
       <FormError message={formError} />
+      <ImagePicker label="Foto do perfil" value={photo} onChange={setPhoto} />
       <ProfileFields form={form} solo />
       <div className="actions">
         <button className="btn cue" type="submit" disabled={form.formState.isSubmitting}>

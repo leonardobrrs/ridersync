@@ -13,8 +13,11 @@ import { BandsModule } from './modules/bands/bands.module';
 import { BookingsModule } from './modules/bookings/bookings.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { EventsModule } from './modules/events/events.module';
+import { MailModule } from './modules/mail/mail.module';
+import { MaintenanceModule } from './modules/maintenance/maintenance.module';
 import { MarketplaceModule } from './modules/marketplace/marketplace.module';
 import { MediaModule } from './modules/media/media.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import { OrganizationsModule } from './modules/organizations/organizations.module';
 import { RidersModule } from './modules/riders/riders.module';
 import { PrismaModule, PrismaService } from './prisma/prisma.service';
@@ -38,6 +41,8 @@ class HealthController {
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 600 }]),
     PrismaModule,
     AccessModule,
+    MailModule,
+    NotificationsModule,
     MediaModule,
     AuthModule,
     AccountModule,
@@ -49,6 +54,7 @@ class HealthController {
     EventsModule,
     BookingsModule,
     DashboardModule,
+    MaintenanceModule,
   ],
   controllers: [HealthController],
   providers: [

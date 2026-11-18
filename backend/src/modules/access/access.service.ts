@@ -1,5 +1,5 @@
 import { Global, Injectable, Module } from '@nestjs/common';
-import { BandRole, OrgRole } from '@prisma/client';
+import { AccountType, BandRole, OrgRole } from '@prisma/client';
 import { forbidden, notFound } from '../../common/errors';
 import { PrismaService, Tx } from '../../prisma/prisma.service';
 
@@ -103,6 +103,41 @@ export class AccessService {
   async managedOrganizationIds(userId: string): Promise<string[]> {
     const rows = await this.prisma.organizationMember.findMany({ where: { userId, status: 'ACTIVE' }, select: { organizationId: true } });
     return rows.map((r) => r.organizationId);
+  }
+
+  /** Pessoas que respondem por uma identidade artística (dono do perfil individual ou OWNER/ADMIN da banda). */
+  async artistManagerUserIds(artistId: string, db: Tx | PrismaService = this.prisma): Promise<string[]> {
+    const a = await db.artist.findUnique({
+      where: { id: artistId },
+      select: {
+        musicianProfile: { select: { userId: true } },
+        band: { select: { members: { where: { status: 'ACTIVE', role: { in: MANAGER_ROLES } }, select: { userId: true } } } },
+      },
+    });
+    if (!a) return [];
+    return a.musicianProfile ? [a.musicianProfile.userId] : (a.band?.members.map((m) => m.userId) ?? []);
+  }
+
+  async organizationMemberUserIds(organizationId: string, db: Tx | PrismaService = this.prisma): Promise<string[]> {
+    const rows = await db.organizationMember.findMany({ where: { organizationId, status: 'ACTIVE' }, select: { userId: true } });
+    return rows.map((r) => r.userId);
+  }
+
+  /**
+   * Contas são separadas por tipo: artista/banda × contratante/casa de show. Contas legadas sem tipo
+   * precisam escolher antes de criar perfis. Verificação sempre no servidor.
+   */
+  async assertAccountType(userId: string, expected: AccountType, db: Tx | PrismaService = this.prisma) {
+    const u = await db.user.findUnique({ where: { id: userId }, select: { accountType: true } });
+    if (!u?.accountType) throw forbidden('Escolha o tipo da sua conta (artista ou contratante) antes de continuar.', 'ACCOUNT_TYPE_REQUIRED');
+    if (u.accountType !== expected) {
+      throw forbidden(
+        expected === 'ARTIST'
+          ? 'Esta ação é exclusiva de contas de artista/banda. Contas de contratante não criam perfis artísticos.'
+          : 'Esta ação é exclusiva de contas de contratante/casa de show.',
+        'WRONG_ACCOUNT_TYPE',
+      );
+    }
   }
 }
 

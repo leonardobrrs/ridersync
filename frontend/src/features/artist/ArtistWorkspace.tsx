@@ -65,7 +65,7 @@ export function ArtistWorkspace({ artist, queryKey, extraTabs = [] }: { artist: 
       <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} className="stack">
         {tab === 'perfil' && (
           <>
-            {!artist.access.canManage && <div className="notice">Você é integrante (MEMBER): pode visualizar, mas apenas OWNER/ADMIN editam a banda.</div>}
+            {!artist.access.canManage && <div className="notice">Você é integrante: pode visualizar, mas apenas o proprietário e os administradores editam a banda.</div>}
             <VisibilityCard artist={artist} queryKey={queryKey} />
             <PhotoCard artist={artist} queryKey={queryKey} />
             <ArtistProfileForm artist={artist} queryKey={queryKey} />

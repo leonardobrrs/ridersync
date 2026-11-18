@@ -1,5 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
+import { processImage } from './image-processing';
 import { badRequest } from '../../common/errors';
 import { PrismaService, Tx } from '../../prisma/prisma.service';
 import { detectFileType, MAX_DOCUMENT_BYTES, MAX_IMAGE_BYTES } from './file-types';
@@ -12,6 +14,8 @@ export interface UploadedFile {
 }
 
 export const mediaUrl = (id: string | null | undefined) => (id ? `/api/media/${id}` : null);
+/** Miniatura (listas e cards). A versão principal (mediaUrl) é usada na visualização ampliada. */
+export const mediaThumbUrl = (id: string | null | undefined) => (id ? `/api/media/${id}?v=thumb` : null);
 
 @Injectable()
 export class MediaService {
@@ -36,25 +40,52 @@ export class MediaService {
     if (file.size > max) throw badRequest('FILE_TOO_LARGE', `Arquivo acima do limite de ${max / 1024 / 1024} MB.`);
 
     const now = new Date();
-    const key = `${now.getUTCFullYear()}/${String(now.getUTCMonth() + 1).padStart(2, '0')}/${randomUUID()}.${type.ext}`;
-    await this.storage.put(key, file.buffer, type.mime);
+    const base = `${now.getUTCFullYear()}/${String(now.getUTCMonth() + 1).padStart(2, '0')}/${randomUUID()}`;
     const originalName = (file.originalname || `arquivo.${type.ext}`).replace(/[^\w.\- ()À-ú]/g, '_').slice(0, 120);
-    try {
-      return await (tx ?? this.prisma).mediaAsset.create({
-        data: { storageKey: key, kind: type.kind, mimeType: type.mime, sizeBytes: file.size, originalName, uploadedById },
+
+    if (type.kind === 'IMAGE') {
+      const img = await processImage(file.buffer).catch(() => {
+        throw badRequest('FILE_INVALID', 'Não foi possível ler a imagem. Envie um JPG, PNG ou WEBP válido.');
       });
+      const key = `${base}.webp`;
+      const thumbKey = `${base}-thumb.webp`;
+      await this.storage.put(key, img.main, 'image/webp');
+      await this.storage.put(thumbKey, img.thumb, 'image/webp');
+      return this.persist(tx, [key, thumbKey], {
+        storageKey: key,
+        thumbKey,
+        kind: 'IMAGE',
+        mimeType: 'image/webp',
+        sizeBytes: img.main.length,
+        width: img.width,
+        height: img.height,
+        originalName: originalName.replace(/\.[^.]+$/, '') + '.webp',
+        uploadedById,
+      });
+    }
+
+    const key = `${base}.${type.ext}`;
+    await this.storage.put(key, file.buffer, type.mime);
+    return this.persist(tx, [key], { storageKey: key, kind: type.kind, mimeType: type.mime, sizeBytes: file.size, originalName, uploadedById });
+  }
+
+  private async persist(tx: Tx | undefined, keys: string[], data: Prisma.MediaAssetUncheckedCreateInput) {
+    try {
+      return await (tx ?? this.prisma).mediaAsset.create({ data });
     } catch (e) {
-      await this.storage.delete(key).catch(() => undefined);
+      await Promise.all(keys.map((k) => this.storage.delete(k).catch(() => undefined)));
       throw e;
     }
   }
 
-  /** Remove metadados e o objeto armazenado. */
+  /** Remove metadados e os objetos armazenados (principal e miniatura). */
   async remove(mediaId: string) {
     const asset = await this.prisma.mediaAsset.findUnique({ where: { id: mediaId } });
     if (!asset) return;
     await this.prisma.mediaAsset.delete({ where: { id: mediaId } });
-    await this.storage.delete(asset.storageKey).catch((e) => this.logger.warn(`Falha ao remover objeto ${asset.storageKey}: ${e}`));
+    for (const key of [asset.storageKey, asset.thumbKey]) {
+      if (key) await this.removeObject(key);
+    }
   }
 
   /** Remove o objeto do storage depois que o registro já foi apagado (ex.: cascade). */

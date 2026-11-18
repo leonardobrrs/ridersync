@@ -14,33 +14,53 @@ datasource db {
 
 // ───────────────────────── Identidade e acesso ─────────────────────────
 
-/// Conta de uma pessoa. Não possui papel global (ARTIST/VENUE).
-model User {
-  id           String   @id @default(uuid()) @db.Uuid
-  email        String   @unique /// normalizado em minúsculas
-  name         String
-  passwordHash String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+/// Tipo de conta escolhido no cadastro (decisão do responsável em 2026-11-17): artista/banda e
+/// contratante/casa de show são contas separadas. Nulo apenas em contas legadas sem atuação definida.
+enum AccountType {
+  ARTIST
+  CONTRACTOR
+}
 
-  sessions            Session[]
-  musicianProfile     MusicianProfile?
-  bandMemberships     BandMember[]         @relation("BandMemberUser")
-  bandInvitesSent     BandMember[]         @relation("BandMemberInviter")
-  orgMemberships      OrganizationMember[] @relation("OrgMemberUser")
-  orgInvitesSent      OrganizationMember[] @relation("OrgMemberInviter")
-  bandsCreated        Band[]
-  uploadedMedia       MediaAsset[]
-  eventsCreated       Event[]
-  applicationsSent    EventApplication[]   @relation("ApplicationSubmitter")
-  applicationsDecided EventApplication[]   @relation("ApplicationDecider")
-  bookingsCreated     Booking[]            @relation("BookingCreator")
-  bookingsConfirmed   Booking[]            @relation("BookingConfirmer")
-  offersAuthored      BookingOffer[]       @relation("OfferAuthor")
-  offersResponded     BookingOffer[]       @relation("OfferResponder")
-  messages            BookingMessage[]
-  bookingChanges      BookingStatusChange[]
-  performances        Performance[]
+/// Conta de uma pessoa.
+model User {
+  id               String       @id @default(uuid()) @db.Uuid
+  email            String       @unique /// normalizado em minúsculas
+  name             String
+  passwordHash     String? /// nulo em contas criadas somente com Google
+  accountType      AccountType?
+  emailVerifiedAt  DateTime?
+  googleSub        String?      @unique
+  avatarId         String?      @unique @db.Uuid
+  avatar           MediaAsset?  @relation("UserAvatar", fields: [avatarId], references: [id], onDelete: SetNull)
+  termsAcceptedAt  DateTime?
+  termsVersion     String?
+  failedLoginCount Int          @default(0)
+  lockedUntil      DateTime?
+  anonymizedAt     DateTime? /// conta excluída a pedido do titular (LGPD): dados pessoais removidos
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  tokens                 UserToken[]
+  notifications          Notification[]
+  notificationPreference NotificationPreference?
+  sessions               Session[]
+  musicianProfile        MusicianProfile?
+  bandMemberships        BandMember[]            @relation("BandMemberUser")
+  bandInvitesSent        BandMember[]            @relation("BandMemberInviter")
+  orgMemberships         OrganizationMember[]    @relation("OrgMemberUser")
+  orgInvitesSent         OrganizationMember[]    @relation("OrgMemberInviter")
+  bandsCreated           Band[]
+  uploadedMedia          MediaAsset[]
+  eventsCreated          Event[]
+  applicationsSent       EventApplication[]      @relation("ApplicationSubmitter")
+  applicationsDecided    EventApplication[]      @relation("ApplicationDecider")
+  bookingsCreated        Booking[]               @relation("BookingCreator")
+  bookingsConfirmed      Booking[]               @relation("BookingConfirmer")
+  offersAuthored         BookingOffer[]          @relation("OfferAuthor")
+  offersResponded        BookingOffer[]          @relation("OfferResponder")
+  messages               BookingMessage[]
+  bookingChanges         BookingStatusChange[]
+  performances           Performance[]
 }
 
 /// Sessão server-side. O cookie HttpOnly carrega um token aleatório; aqui fica apenas o hash SHA-256.
@@ -55,6 +75,97 @@ model Session {
   userAgent  String?
 
   @@index([userId])
+}
+
+enum TokenPurpose {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+}
+
+/// Token de uso único enviado por e-mail. Somente o hash SHA-256 é persistido.
+model UserToken {
+  id        String       @id @default(uuid()) @db.Uuid
+  userId    String       @db.Uuid
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  purpose   TokenPurpose
+  tokenHash String       @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime     @default(now())
+
+  @@index([userId, purpose])
+  @@index([expiresAt])
+}
+
+// ───────────────────────── Notificações ─────────────────────────
+
+enum NotificationCategory {
+  ACCOUNT /// segurança e funcionamento da conta — e-mail sempre enviado
+  INVITATIONS
+  APPLICATIONS
+  BOOKINGS
+  EVENTS
+}
+
+/// Notificação interna. dedupeKey impede duplicidade da mesma ocorrência para o mesmo destinatário.
+model Notification {
+  id        String               @id @default(uuid()) @db.Uuid
+  userId    String               @db.Uuid
+  user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category  NotificationCategory
+  type      String
+  title     String
+  body      String               @default("")
+  link      String? /// caminho interno da SPA (nunca URL externa)
+  dedupeKey String
+  readAt    DateTime?
+  createdAt DateTime             @default(now())
+
+  emails EmailOutbox[]
+
+  @@unique([userId, dedupeKey])
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
+  @@index([createdAt])
+}
+
+model NotificationPreference {
+  userId            String   @id @db.Uuid
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emailEnabled      Boolean  @default(true)
+  emailInvitations  Boolean  @default(true)
+  emailApplications Boolean  @default(true)
+  emailBookings     Boolean  @default(true)
+  emailEvents       Boolean  @default(true)
+  updatedAt         DateTime @updatedAt
+}
+
+enum OutboxStatus {
+  PENDING
+  SENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+/// Padrão Outbox: o e-mail é gravado na mesma transação da notificação e despachado depois do commit.
+/// Não guarda segredos (links de verificação/redefinição são enviados diretamente, sem outbox).
+model EmailOutbox {
+  id             String        @id @default(uuid()) @db.Uuid
+  notificationId String?       @unique @db.Uuid
+  notification   Notification? @relation(fields: [notificationId], references: [id], onDelete: SetNull)
+  toEmail        String
+  subject        String
+  html           String
+  text           String
+  status         OutboxStatus  @default(PENDING)
+  attempts       Int           @default(0)
+  lastError      String?
+  sentAt         DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([status, createdAt])
 }
 
 // ───────────────────────── Identidades artísticas ─────────────────────────
@@ -176,8 +287,11 @@ model BandMember {
 
 // ───────────────────────── Organizações (casas de show) ─────────────────────────
 
+/// VENUE: casa de show/espaço. INDIVIDUAL: perfil de contratação de pessoa física (eventos sem casa,
+/// ex.: aniversário) — reutiliza o mesmo fluxo de eventos/negociação sem possuir inventário.
 enum OrganizationType {
   VENUE
+  INDIVIDUAL
 }
 
 enum OrgRole {
@@ -215,6 +329,7 @@ model Organization {
 
   @@unique([id, type])
   @@index([city])
+  @@index([type, name])
 }
 
 model OrganizationMember {
@@ -245,18 +360,23 @@ enum MediaKind {
   DOCUMENT
 }
 
-/// Metadados de arquivo. O conteúdo fica no storage (local ou S3), nunca no PostgreSQL.
+/// Metadados de arquivo. O conteúdo fica no storage (local, S3 ou Vercel Blob), nunca no PostgreSQL.
+/// Imagens são reprocessadas no upload: versão principal (até 1600 px) e miniatura (thumbKey).
 model MediaAsset {
   id           String    @id @default(uuid()) @db.Uuid
   storageKey   String    @unique
+  thumbKey     String?   @unique
   kind         MediaKind
   mimeType     String
   sizeBytes    Int
+  width        Int?
+  height       Int?
   originalName String
   uploadedById String    @db.Uuid
   uploadedBy   User      @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
   createdAt    DateTime  @default(now())
 
+  userAvatar    User?          @relation("UserAvatar")
   artistPhoto   Artist?        @relation("ArtistPhoto")
   orgPhoto      Organization?  @relation("OrgPhoto")
   portfolioItem PortfolioItem?
@@ -272,18 +392,19 @@ enum PortfolioKind {
 
 /// Item de portfólio: link externo validado (url) OU arquivo enviado (mediaId) — CHECK exatamente um.
 model PortfolioItem {
-  id          String        @id @default(uuid()) @db.Uuid
-  artistId    String        @db.Uuid
-  artist      Artist        @relation(fields: [artistId], references: [id], onDelete: Cascade)
-  kind        PortfolioKind
-  title       String
-  description String        @default("")
-  url         String?
-  mediaId     String?       @unique @db.Uuid
-  media       MediaAsset?   @relation(fields: [mediaId], references: [id], onDelete: Cascade)
-  position    Int           @default(0)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id           String        @id @default(uuid()) @db.Uuid
+  artistId     String        @db.Uuid
+  artist       Artist        @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  kind         PortfolioKind
+  title        String
+  description  String        @default("")
+  url          String?
+  thumbnailUrl String? /// miniatura de vídeo externo (YouTube/Vimeo), calculada no servidor
+  mediaId      String?       @unique @db.Uuid
+  media        MediaAsset?   @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  position     Int           @default(0)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
 
   @@index([artistId, position])
 }
@@ -292,12 +413,15 @@ model PortfolioItem {
 
 /// Catálogo com IDs estáveis (slugs). Comparação de rider só por ID explícito.
 model EquipmentCatalogItem {
-  id        String  @id /// ex.: "mic-din"
-  name      String
-  unit      String
-  category  String
-  sortOrder Int     @default(0)
-  active    Boolean @default(true)
+  id                String  @id /// ex.: "mic-din"
+  name              String
+  unit              String
+  category          String
+  sortOrder         Int     @default(0)
+  active            Boolean @default(true)
+  /// false = exigência do local (palco, energia, luz, camarim): só existe no inventário da casa,
+  /// nunca no rider do artista.
+  artistRequirement Boolean @default(true)
 
   riderItems     RiderItem[]
   equipmentItems VenueEquipmentItem[]
@@ -353,23 +477,41 @@ model VenueEquipmentItem {
 
 // ───────────────────────── Eventos e candidaturas ─────────────────────────
 
+/// Máquina de estados (event.rules.ts). FILLED e o retorno FILLED → OPEN são automáticos
+/// (vagas ocupadas/liberadas); OPEN → CLOSED e → COMPLETED também ocorrem por prazo/data.
 enum EventStatus {
   DRAFT
   OPEN
+  FILLED
   CLOSED
+  POSTPONED
   COMPLETED
   CANCELLED
 }
 
+/// PRIVATE: visível apenas para contas de artista autenticadas; nunca em listagens públicas/agendas públicas.
+enum EventVisibility {
+  PUBLIC
+  PRIVATE
+}
+
 /// Oportunidade de apresentação. organizerId (responsável) ≠ venueId (local físico, opcional).
+/// Sem venueId, o local é descrito pelos campos location* (ex.: evento particular de contratante independente).
 model Event {
-  id                  String        @id @default(uuid()) @db.Uuid
-  organizerId         String        @db.Uuid
-  organizer           Organization  @relation("EventOrganizer", fields: [organizerId], references: [id], onDelete: Cascade)
-  venueId             String?       @db.Uuid
-  venue               Organization? @relation("EventVenue", fields: [venueId], references: [id], onDelete: SetNull)
+  id                  String          @id @default(uuid()) @db.Uuid
+  organizerId         String          @db.Uuid
+  organizer           Organization    @relation("EventOrganizer", fields: [organizerId], references: [id], onDelete: Cascade)
+  venueId             String?         @db.Uuid
+  venue               Organization?   @relation("EventVenue", fields: [venueId], references: [id], onDelete: SetNull)
+  visibility          EventVisibility @default(PUBLIC)
+  locationName        String?
+  locationAddress     String?
+  locationCity        String?
+  locationState       String?         @db.Char(2)
+  filledAt            DateTime?
+  postponedAt         DateTime?
   title               String
-  description         String        @default("")
+  description         String          @default("")
   startsAt            DateTime
   durationMinutes     Int?
   applicationDeadline DateTime
@@ -377,30 +519,35 @@ model Event {
   genres              String[]
   paymentType         String? /// Cachê fixo, Bilheteria, Couvert artístico, A combinar
   feeCents            Int?
-  conditions          String        @default("")
-  requirements        String        @default("")
-  status              EventStatus   @default(DRAFT)
+  conditions          String          @default("")
+  requirements        String          @default("")
+  status              EventStatus     @default(DRAFT)
   publishedAt         DateTime?
   closedAt            DateTime?
   completedAt         DateTime?
   cancelledAt         DateTime?
-  createdById         String?       @db.Uuid
-  createdBy           User?         @relation(fields: [createdById], references: [id], onDelete: SetNull)
-  createdAt           DateTime      @default(now())
-  updatedAt           DateTime      @updatedAt
+  createdById         String?         @db.Uuid
+  createdBy           User?           @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
 
   applications EventApplication[]
   bookings     Booking[]
 
   @@index([status, applicationDeadline])
+  @@index([visibility, status, startsAt])
   @@index([organizerId])
+  @@index([venueId])
 }
 
+/// ACCEPTED ocupa uma vaga do evento. CANCELLED = vaga cancelada (negociação encerrada sem acordo ou
+/// contratação cancelada), liberando a vaga.
 enum ApplicationStatus {
   PENDING
   ACCEPTED
   REJECTED
   WITHDRAWN
+  CANCELLED
 }
 
 /// Candidatura — NÃO é contratação. Única por (evento, identidade artística).
@@ -478,6 +625,7 @@ model Booking {
 
   @@index([organizationId, status])
   @@index([artistId, status])
+  @@index([eventId])
 }
 
 enum OfferStatus {

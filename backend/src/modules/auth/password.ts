@@ -1,21 +1,32 @@
-import { randomBytes, scrypt as scryptCb, timingSafeEqual } from 'node:crypto';
+import { Algorithm, hash as argon2Hash, verify as argon2Verify } from '@node-rs/argon2';
+import { scrypt as scryptCb, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 
 const scrypt = promisify(scryptCb) as (pw: string, salt: Buffer, keylen: number, opts: object) => Promise<Buffer>;
 
-const N = 16384;
-const R = 8;
-const P = 1;
-const KEYLEN = 64;
+// Parâmetros mínimos recomendados pela OWASP para Argon2id (19 MiB, 2 iterações, paralelismo 1).
+const ARGON2_OPTIONS = { algorithm: Algorithm.Argon2id, memoryCost: 19_456, timeCost: 2, parallelism: 1 } as const;
 
-/** Hash de senha com scrypt (nativo do Node). Formato: scrypt$N$r$p$salt$hash (base64url). */
 export async function hashPassword(password: string): Promise<string> {
-  const salt = randomBytes(16);
-  const hash = await scrypt(password, salt, KEYLEN, { N, r: R, p: P, maxmem: 64 * 1024 * 1024 });
-  return ['scrypt', N, R, P, salt.toString('base64url'), hash.toString('base64url')].join('$');
+  return argon2Hash(password, ARGON2_OPTIONS);
 }
 
-export async function verifyPassword(password: string, stored: string): Promise<boolean> {
+/**
+ * Verifica Argon2id e o formato legado scrypt$N$r$p$salt$hash (contas anteriores à migração).
+ * `needsRehash` sinaliza que o login deve regravar o hash em Argon2id — migração transparente,
+ * sem invalidar sessões nem exigir troca de senha.
+ */
+export async function verifyPassword(password: string, stored: string | null | undefined): Promise<{ ok: boolean; needsRehash: boolean }> {
+  if (!stored) return { ok: false, needsRehash: false };
+  if (stored.startsWith('$argon2')) {
+    const ok = await argon2Verify(stored, password).catch(() => false);
+    return { ok, needsRehash: false };
+  }
+  const ok = await verifyLegacyScrypt(password, stored);
+  return { ok, needsRehash: ok };
+}
+
+async function verifyLegacyScrypt(password: string, stored: string): Promise<boolean> {
   const parts = stored.split('$');
   if (parts.length !== 6 || parts[0] !== 'scrypt') return false;
   const [, n, r, p, saltB64, hashB64] = parts;
@@ -29,5 +40,10 @@ export async function verifyPassword(password: string, stored: string): Promise<
   return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
-/** Hash fixo usado para equalizar o tempo de resposta quando o e-mail não existe. */
-export const DUMMY_HASH = 'scrypt$16384$8$1$AAAAAAAAAAAAAAAAAAAAAA$' + 'A'.repeat(86);
+let dummyHash: Promise<string> | undefined;
+
+/** Executa uma verificação real descartável para equalizar o tempo de resposta quando a conta não existe ou não tem senha. */
+export async function burnPasswordCheck(password: string): Promise<void> {
+  dummyHash ??= hashPassword('ridersync-timing-equalizer');
+  await argon2Verify(await dummyHash, password).catch(() => false);
+}

@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { ApiZodBody, ZBody } from '../../common/zod';
 import { ArtistsModule } from '../artists/artists.module';
 import { AuthUser, CurrentUser } from '../auth/auth.decorators';
-import { BandsService, ChangeBandRoleSchema, CreateBandSchema, InviteBandMemberSchema, TransferSchema } from './bands.service';
+import { BandsService, ChangeBandRoleSchema, CreateBandSchema, InviteBandMemberSchema, MemberPositionSchema, TransferSchema } from './bands.service';
 
 @ApiTags('bands')
 @ApiCookieAuth()
@@ -59,6 +59,17 @@ export class BandsController {
     return this.bands.changeRole(user.id, bandId, memberId, body.role);
   }
 
+  @Patch(':bandId/members/:memberId/position')
+  @ApiZodBody(MemberPositionSchema)
+  setPosition(
+    @CurrentUser() user: AuthUser,
+    @Param('bandId', ParseUUIDPipe) bandId: string,
+    @Param('memberId', ParseUUIDPipe) memberId: string,
+    @ZBody(MemberPositionSchema) body: z.infer<typeof MemberPositionSchema>,
+  ) {
+    return this.bands.setPosition(user.id, bandId, memberId, body);
+  }
+
   @Delete(':bandId/members/:memberId')
   @HttpCode(204)
   async remove(
@@ -82,7 +93,7 @@ export class BandsController {
     @Param('bandId', ParseUUIDPipe) bandId: string,
     @ZBody(TransferSchema) body: z.infer<typeof TransferSchema>,
   ) {
-    return this.bands.transferOwnership(user.id, bandId, body.memberId);
+    return this.bands.transferOwnership(user.id, bandId, body);
   }
 }
 

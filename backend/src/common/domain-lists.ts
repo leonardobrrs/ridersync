@@ -38,7 +38,9 @@ export const VENUE_KINDS = ['Casa de show', 'Bar com música', 'Teatro', 'Espaç
 
 export const PAYMENT_TYPES = ['Cachê fixo', 'Bilheteria', 'Couvert artístico', 'A combinar'] as const;
 
-/** Sugestões de cidades (escopo inicial: Alagoas). Campo continua livre. */
+export { AL_CITIES } from './al-cities';
+
+/** Cidades em destaque nos filtros (as demais continuam disponíveis no preenchimento automático). */
 export const CITY_SUGGESTIONS = [
   'Maceió',
   'Arapiraca',
@@ -52,7 +54,26 @@ export const CITY_SUGGESTIONS = [
   'Delmiro Gouveia',
 ] as const;
 
-export const UF = [
-  'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN',
-  'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO',
+/** Localidade restrita a Alagoas (requisito: só há preenchimento automático de cidades para AL). */
+export const UF = ['AL'] as const;
+
+/** Função/cargo do integrante na banda (informativo; o papel de permissão é OWNER/ADMIN/MEMBER). */
+export const BAND_POSITIONS = [
+  'Vocal',
+  'Vocal de apoio',
+  'Guitarra',
+  'Violão',
+  'Baixo',
+  'Bateria',
+  'Percussão',
+  'Teclado',
+  'Sanfona',
+  'Sopros',
+  'Cordas',
+  'DJ',
+  'Produção musical',
+  'Direção musical',
+  'Técnico de som',
+  'Empresário(a)',
+  'Outra função',
 ] as const;

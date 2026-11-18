@@ -9,7 +9,7 @@ import {
   optionalExternalUrl,
   optionalInstagram,
   optionalPhone,
-  optionalText,
+  optionalAlCity,
   text,
   uf,
 } from '../../common/validation';
@@ -22,7 +22,7 @@ export const ArtistProfileFields = {
   name: text(2, 80, 'Nome artístico'),
   headline: z.string().trim().max(80, 'Resumo deve ter no máximo 80 caracteres.'),
   bio: z.string().trim().max(3000, 'Descrição deve ter no máximo 3000 caracteres.'),
-  city: optionalText(80, 'Cidade'),
+  city: optionalAlCity,
   state: uf,
   genres,
   formats,

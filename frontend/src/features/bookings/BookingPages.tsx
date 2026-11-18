@@ -1,13 +1,14 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router';
-import { ConfirmButton, Dialog } from '../../components/Dialog';
+import { ConfirmButton, Dialog, TextPromptDialog } from '../../components/Dialog';
 import { PageHead } from '../../components/Layout';
 import { Empty, ErrorState, Loading, Status } from '../../components/States';
 import { useToast } from '../../components/Toast';
 import { api, errorMessage } from '../../lib/api';
 import { BOOKING_STATUS, dateTime, duration, money, OFFER_STATUS, SIDE_LABEL } from '../../lib/format';
 import type { BookingDetail, BookingRow } from '../../lib/types';
+import { CompatibilityView } from '../artist/Compatibility';
 import { OfferForm } from './OfferForm';
 
 export function BookingsPage() {
@@ -69,6 +70,8 @@ export function BookingPage() {
   const toast = useToast();
   const q = useQuery({ queryKey: key, queryFn: () => api.get<BookingDetail>(`/bookings/${bookingId}`), refetchInterval: 20_000 });
   const [counter, setCounter] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [compareOpen, setCompareOpen] = useState(false);
   const [msg, setMsg] = useState('');
   const [sending, setSending] = useState(false);
   const [perfNotes, setPerfNotes] = useState('');
@@ -116,13 +119,25 @@ export function BookingPage() {
           <section className="box" aria-label="Partes">
             <dl className="attrs">
               <div>
-                <dt>Casa</dt>
+                <dt>{b.organization.type === 'VENUE' ? 'Casa de show' : 'Contratante'}</dt>
                 <dd>
-                  <Link className="link" to={`/casas/${b.organization.slug}`}>
-                    {b.organization.name}
-                  </Link>
+                  {b.organization.slug ? (
+                    <Link className="link" to={`/casas/${b.organization.slug}`}>
+                      {b.organization.name}
+                    </Link>
+                  ) : (
+                    b.organization.name
+                  )}
                 </dd>
               </div>
+              {b.event && (
+                <div>
+                  <dt>Evento</dt>
+                  <dd>
+                    {b.event.title} {b.event.visibility === 'PRIVATE' && <span className="st draft">Privado</span>}
+                  </dd>
+                </div>
+              )}
               <div>
                 <dt>{b.artist.kind === 'BAND' ? 'Banda' : 'Artista'}</dt>
                 <dd>
@@ -181,7 +196,14 @@ export function BookingPage() {
             </ol>
             {b.allowed.respond && p && (
               <div className="row" style={{ justifyContent: 'flex-end' }}>
-                <ConfirmButton className="btn danger" confirm="Recusar esta proposta? A negociação será encerrada." onConfirm={() => apply(() => api.post(`/bookings/${b.id}/offers/${p.id}/decline`), 'Proposta recusada.')}>
+                <ConfirmButton
+                  className="btn danger"
+                  title="Recusar proposta"
+                  confirm="Recusar esta proposta? A negociação será encerrada."
+                  confirmLabel="Recusar proposta"
+                  danger
+                  onConfirm={() => apply(() => api.post(`/bookings/${b.id}/offers/${p.id}/decline`), 'Proposta recusada.')}
+                >
                   Recusar
                 </ConfirmButton>
                 <button className="btn" type="button" onClick={() => setCounter(true)}>
@@ -189,8 +211,24 @@ export function BookingPage() {
                 </button>
                 <ConfirmButton
                   className="btn cue"
-                  confirm={`Aceitar ${money(p.feeCents)} em ${dateTime(p.performanceAt)}?`}
-                  onConfirm={() => apply(() => api.post(`/bookings/${b.id}/offers/${p.id}/accept`), 'Proposta aceita. Aguardando confirmação da casa.')}
+                  title="Aceitar proposta"
+                  confirmLabel="Aceitar proposta"
+                  confirm={
+                    <>
+                      <p>Você está aceitando os termos abaixo:</p>
+                      <dl className="dl">
+                        <dt>Data e horário</dt>
+                        <dd>{dateTime(p.performanceAt)}</dd>
+                        <dt>Duração</dt>
+                        <dd>{duration(p.durationMinutes)}</dd>
+                        <dt>Cachê</dt>
+                        <dd>{money(p.feeCents)}</dd>
+                      </dl>
+                      {p.terms && <p className="note">{p.terms}</p>}
+                      <p className="hint">Depois do aceite, a contratação ainda precisa ser confirmada pelo contratante. O pagamento é combinado fora da plataforma.</p>
+                    </>
+                  }
+                  onConfirm={() => apply(() => api.post(`/bookings/${b.id}/offers/${p.id}/accept`), 'Proposta aceita. Aguardando confirmação do contratante.')}
                 >
                   Aceitar proposta
                 </ConfirmButton>
@@ -202,12 +240,18 @@ export function BookingPage() {
             {b.allowed.confirm && (
               <div className="notice" style={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
                 <span>Os termos foram aceitos. Confirme a contratação para registrá-la formalmente. Isso não registra pagamento.</span>
-                <ConfirmButton className="btn cue" confirm="Confirmar a contratação com os termos aceitos?" onConfirm={() => apply(() => api.post(`/bookings/${b.id}/confirm`), 'Contratação confirmada.')}>
+                <ConfirmButton
+                  className="btn cue"
+                  title="Confirmar contratação"
+                  confirm="Confirmar a contratação com os termos aceitos? O show passa a aparecer na agenda."
+                  confirmLabel="Confirmar contratação"
+                  onConfirm={() => apply(() => api.post(`/bookings/${b.id}/confirm`), 'Contratação confirmada.')}
+                >
                   Confirmar contratação
                 </ConfirmButton>
               </div>
             )}
-            {b.status === 'AGREED' && b.mySide === 'ARTIST' && <p className="hint">Termos aceitos. Aguardando a confirmação da casa.</p>}
+            {b.status === 'AGREED' && b.mySide === 'ARTIST' && <p className="hint">Termos aceitos. Aguardando a confirmação do contratante.</p>}
           </section>
 
           {b.status === 'CONFIRMED' && (
@@ -256,18 +300,38 @@ export function BookingPage() {
             </ul>
             {b.allowed.cancel && (
               <div className="row" style={{ justifyContent: 'flex-end' }}>
-                <ConfirmButton
-                  className="btn sm danger"
-                  confirm="Encerrar esta negociação? Propostas pendentes serão retiradas."
-                  onConfirm={() => {
-                    const reason = window.prompt('Motivo (opcional):') ?? '';
-                    apply(() => api.post(`/bookings/${b.id}/cancel`, { reason: reason.slice(0, 500) || undefined }), 'Negociação encerrada.');
-                  }}
-                >
-                  Encerrar negociação
-                </ConfirmButton>
+                <button type="button" className="btn sm danger" onClick={() => setCancelOpen(true)}>
+                  {b.status === 'CONFIRMED' ? 'Cancelar contratação' : 'Encerrar negociação'}
+                </button>
               </div>
             )}
+            <TextPromptDialog
+              open={cancelOpen}
+              title={b.status === 'CONFIRMED' ? 'Cancelar contratação' : 'Encerrar negociação'}
+              message={
+                b.event
+                  ? 'Propostas pendentes serão retiradas e a vaga no evento será liberada. A outra parte será avisada.'
+                  : 'Propostas pendentes serão retiradas. A outra parte será avisada.'
+              }
+              label="Motivo (opcional)"
+              confirmLabel={b.status === 'CONFIRMED' ? 'Cancelar contratação' : 'Encerrar negociação'}
+              danger
+              onClose={() => setCancelOpen(false)}
+              onConfirm={async (reason) => {
+                await apply(() => api.post(`/bookings/${b.id}/cancel`, { reason: reason || undefined }), 'Negociação encerrada.');
+                setCancelOpen(false);
+              }}
+            />
+            {b.canCompareRider && b.mySide && (
+              <div className="row" style={{ justifyContent: 'flex-start' }}>
+                <button type="button" className="btn sm ghost" onClick={() => setCompareOpen(true)}>
+                  Comparar rider com o inventário da casa
+                </button>
+              </div>
+            )}
+            <Dialog open={compareOpen} onClose={() => setCompareOpen(false)} title="Compatibilidade técnica" wide>
+              {compareOpen && <CompatibilityView artistId={b.artistId} organizationId={b.organizationId} />}
+            </Dialog>
           </section>
         </div>
 

@@ -1,12 +1,16 @@
 import { Injectable } from '@nestjs/common';
-import { BookingSide, BookingStatus, Prisma } from '@prisma/client';
+import { Booking, BookingSide, BookingStatus } from '@prisma/client';
 import { z } from 'zod';
 import { conflict, notFound, unprocessable } from '../../common/errors';
 import { moneyCents, text } from '../../common/validation';
 import { PrismaService, Tx } from '../../prisma/prisma.service';
 import { AccessService } from '../access/access.service';
 import { publicArtistCardSelect, toArtistCard } from '../artists/artist.presenter';
-import { mediaUrl } from '../media/media.service';
+import { EventLifecycleService } from '../events/event-lifecycle.service';
+import { ACTIVE_EVENT_STATUSES } from '../events/event.rules';
+import { mediaThumbUrl } from '../media/media.service';
+import { NotificationInput } from '../notifications/notification.types';
+import { NotificationsService } from '../notifications/notifications.service';
 import { assertBookingTransition, assertCanConfirm, assertCanRespondToOffer, MESSAGE_ALLOWED, resolveSide } from './booking.rules';
 
 const futureDate = z.iso
@@ -27,6 +31,8 @@ export const DirectProposalSchema = z
   .object({
     organizationId: z.uuid(),
     artistId: z.uuid(),
+    /** Convite vinculado a um evento do contratante: ocupa uma vaga enquanto estiver ativo. */
+    eventId: z.uuid().optional(),
     title: text(3, 120, 'Título').optional(),
     offer: OfferSchema,
     message: z.string().trim().max(2000).optional(),
@@ -48,6 +54,8 @@ export class BookingsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly access: AccessService,
+    private readonly lifecycle: EventLifecycleService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   private async sidesFor(userId: string, booking: { organizationId: string; artistId: string }, db?: Tx) {
@@ -71,6 +79,28 @@ export class BookingsService {
     await tx.bookingStatusChange.create({ data: { bookingId, fromStatus: from, toStatus: to, actorId, actorSide: side, note: note ?? null } });
   }
 
+  private async sideUserIds(tx: Tx, booking: Pick<Booking, 'organizationId' | 'artistId'>, side: BookingSide) {
+    return side === 'VENUE' ? this.access.organizationMemberUserIds(booking.organizationId, tx) : this.access.artistManagerUserIds(booking.artistId, tx);
+  }
+
+  private async notifySide(tx: Tx, booking: Pick<Booking, 'id' | 'organizationId' | 'artistId'>, side: BookingSide, actorId: string, n: Omit<NotificationInput, 'category' | 'link'>) {
+    const users = (await this.sideUserIds(tx, booking, side)).filter((id) => id !== actorId);
+    await this.notifications.notify(tx, users, { ...n, category: 'BOOKINGS', link: `/painel/negociacoes/${booking.id}` });
+  }
+
+  /**
+   * Encerramento sem acordo (recusa/cancelamento): libera a vaga do evento.
+   * Candidatura aceita vinculada passa a CANCELLED ("vaga cancelada"). O evento já está bloqueado pelo chamador.
+   */
+  private async releaseSlot(tx: Tx, booking: Booking) {
+    if (!booking.eventId) return;
+    if (booking.applicationId) {
+      await tx.eventApplication.updateMany({ where: { id: booking.applicationId, status: 'ACCEPTED' }, data: { status: 'CANCELLED' } });
+    }
+    const event = await tx.event.findUniqueOrThrow({ where: { id: booking.eventId } });
+    await this.lifecycle.applySlotChange(tx, event);
+  }
+
   // ─────────── Criação (dois caminhos → mesmo fluxo) ───────────
 
   private async createBooking(
@@ -84,10 +114,16 @@ export class BookingsService {
     await this.logStatus(tx, booking.id, null, 'NEGOTIATING', userId, 'VENUE', data.origin === 'DIRECT' ? 'Proposta direta' : 'Iniciada a partir de candidatura');
     await tx.bookingOffer.create({ data: { bookingId: booking.id, authorId: userId, authorSide: 'VENUE', ...offer } });
     if (message) await tx.bookingMessage.create({ data: { bookingId: booking.id, authorId: userId, authorSide: 'VENUE', body: message } });
+    await this.notifySide(tx, booking, 'ARTIST', userId, {
+      type: 'PROPOSAL_RECEIVED',
+      title: 'Nova proposta de contratação',
+      body: `Você recebeu a proposta "${data.title}". Responda, aceite ou envie uma contraproposta.`,
+      dedupeKey: `proposal:${booking.id}`,
+    });
     return booking.id;
   }
 
-  /** Proposta direta pelo marketplace: casa → artista/banda público. Independente de candidatura. */
+  /** Proposta direta (marketplace ou convite para um evento do contratante). */
   async createDirect(userId: string, input: z.infer<typeof DirectProposalSchema>) {
     await this.access.assertOrgMember(userId, input.organizationId);
     const artist = await this.prisma.artist.findUnique({ where: { id: input.artistId }, select: { visibility: true, name: true } });
@@ -95,22 +131,35 @@ export class BookingsService {
     const sides = await this.sidesFor(userId, input);
     if (sides.has('ARTIST')) throw conflict('BOTH_SIDES', 'Você administra este perfil artístico; não é possível enviar proposta para si mesmo.');
     const org = await this.prisma.organization.findUniqueOrThrow({ where: { id: input.organizationId }, select: { name: true } });
-    const id = await this.prisma.$transaction((tx) =>
-      this.createBooking(
+    const id = await this.prisma.$transaction(async (tx) => {
+      let eventTitle: string | null = null;
+      if (input.eventId) {
+        const event = await this.lifecycle.lock(tx, input.eventId);
+        if (event.organizerId !== input.organizationId) throw notFound('Evento não encontrado.');
+        if (!ACTIVE_EVENT_STATUSES.includes(event.status) && event.status !== 'DRAFT') throw conflict('EVENT_NOT_ACTIVE', 'Este evento não está mais ativo.');
+        if ((await this.lifecycle.filledSlots(tx, event.id)) >= event.slots) throw conflict('SLOTS_FULL', 'Todas as vagas deste evento já estão ocupadas.');
+        const duplicate = await tx.booking.count({ where: { eventId: event.id, artistId: input.artistId, status: { in: ['NEGOTIATING', 'AGREED', 'CONFIRMED'] } } });
+        if (duplicate) throw conflict('BOOKING_EXISTS', 'Já existe uma negociação ativa com este artista para este evento.');
+        eventTitle = event.title;
+      }
+      const bookingId = await this.createBooking(
         tx,
         userId,
         {
           origin: 'DIRECT',
           organizationId: input.organizationId,
           artistId: input.artistId,
-          eventId: null,
+          eventId: input.eventId ?? null,
           applicationId: null,
-          title: input.title ?? `${org.name} × ${artist.name}`,
+          title: input.title ?? (eventTitle ? `${eventTitle} — ${artist.name}` : `${org.name} × ${artist.name}`),
         },
         input.offer,
         input.message,
-      ),
-    );
+      );
+      if (input.eventId) await this.lifecycle.applySlotChange(tx, await tx.event.findUniqueOrThrow({ where: { id: input.eventId } }));
+      return bookingId;
+    });
+    await this.notifications.flush();
     return this.detail(userId, id);
   }
 
@@ -132,7 +181,7 @@ export class BookingsService {
     if (app.status !== 'ACCEPTED') throw conflict('APPLICATION_NOT_ACCEPTED', 'Aceite a candidatura antes de iniciar a negociação.');
     if (app.booking) throw conflict('BOOKING_EXISTS', 'Já existe uma negociação para esta candidatura.');
     const sides = await this.sidesFor(userId, { organizationId: app.event.organizerId, artistId: app.artistId });
-    if (sides.has('ARTIST')) throw conflict('BOTH_SIDES', 'Você administra este perfil artístico; outra pessoa da casa deve conduzir a negociação.');
+    if (sides.has('ARTIST')) throw conflict('BOTH_SIDES', 'Você administra este perfil artístico; outra pessoa deve conduzir a negociação.');
     const id = await this.prisma.$transaction((tx) =>
       this.createBooking(
         tx,
@@ -149,6 +198,7 @@ export class BookingsService {
         input.message,
       ),
     );
+    await this.notifications.flush();
     return this.detail(userId, id);
   }
 
@@ -168,9 +218,9 @@ export class BookingsService {
         updatedAt: true,
         organizationId: true,
         artistId: true,
-        organization: { select: { id: true, name: true, slug: true, city: true } },
+        organization: { select: { id: true, name: true, slug: true, city: true, type: true } },
         artist: { select: { id: true, name: true, slug: true, kind: true } },
-        event: { select: { id: true, title: true } },
+        event: { select: { id: true, title: true, visibility: true } },
         offers: { orderBy: { createdAt: 'desc' }, take: 1, select: { id: true, status: true, authorSide: true, performanceAt: true, feeCents: true } },
         performance: { select: { id: true, performedAt: true } },
       },
@@ -202,9 +252,9 @@ export class BookingsService {
         artistId: true,
         applicationId: true,
         confirmedBy: { select: { name: true } },
-        organization: { select: { id: true, name: true, slug: true, city: true, addressLine: true, photoId: true } },
+        organization: { select: { id: true, name: true, slug: true, type: true, city: true, addressLine: true, photoId: true } },
         artist: { select: publicArtistCardSelect },
-        event: { select: { id: true, title: true, startsAt: true } },
+        event: { select: { id: true, title: true, startsAt: true, visibility: true, status: true } },
         offers: {
           orderBy: { createdAt: 'asc' },
           select: {
@@ -240,15 +290,18 @@ export class BookingsService {
     const pending = b.offers.find((o) => o.status === 'PENDING') ?? null;
     const agreed = b.offers.find((o) => o.status === 'ACCEPTED') ?? null;
     const now = Date.now();
+    const { photoId, slug, ...org } = b.organization;
     return {
       ...b,
-      organization: { ...b.organization, photoId: undefined, photoUrl: mediaUrl(b.organization.photoId) },
+      organization: { ...org, slug: org.type === 'VENUE' ? slug : null, photoUrl: mediaThumbUrl(photoId) },
       artist: toArtistCard(b.artist),
       messages: b.messages.map((m) => ({ ...m, author: m.author ? { name: m.author.name, isMe: m.author.id === userId } : null })),
       mySide: side,
       bothSides: sides.size > 1,
       pendingOffer: pending,
       agreedOffer: agreed,
+      /** Comparação de rider disponível na negociação (contexto autorizado), quando a contratante é uma casa com inventário. */
+      canCompareRider: b.organization.type === 'VENUE',
       allowed: {
         respond: !!side && b.status === 'NEGOTIATING' && !!pending && pending.authorSide !== side,
         confirm: side === 'VENUE' && b.status === 'AGREED',
@@ -261,12 +314,17 @@ export class BookingsService {
 
   // ─────────── Ações ───────────
 
-  private async act<T>(userId: string, bookingId: string, fn: (tx: Tx, booking: Prisma.BookingGetPayload<object>, side: BookingSide) => Promise<T>) {
+  /** Bloqueia evento (se houver) e depois a negociação — mesma ordem do cancelamento de evento, evitando deadlock. */
+  private async act(userId: string, bookingId: string, fn: (tx: Tx, booking: Booking, side: BookingSide) => Promise<void>) {
+    const ref = await this.prisma.booking.findUnique({ where: { id: bookingId }, select: { eventId: true } });
+    if (!ref) throw notFound('Negociação não encontrada.');
     await this.prisma.$transaction(async (tx) => {
+      if (ref.eventId) await this.lifecycle.lock(tx, ref.eventId);
       const booking = await this.lock(tx, bookingId);
       const side = resolveSide(await this.sidesFor(userId, booking, tx));
       await fn(tx, booking, side);
     });
+    await this.notifications.flush();
     return this.detail(userId, bookingId);
   }
 
@@ -276,33 +334,63 @@ export class BookingsService {
       if (!offer) throw notFound('Proposta não encontrada.');
       assertCanRespondToOffer({ bookingStatus: booking.status, offerStatus: offer.status, offerAuthorSide: offer.authorSide, actingSide: side });
       const now = new Date();
+      const other: BookingSide = side === 'VENUE' ? 'ARTIST' : 'VENUE';
       if (response === 'accept') {
         await tx.bookingOffer.update({ where: { id: offer.id }, data: { status: 'ACCEPTED', respondedAt: now, respondedById: userId } });
         assertBookingTransition(booking.status, 'AGREED');
         await tx.booking.update({ where: { id: booking.id }, data: { status: 'AGREED' } });
-        await this.logStatus(tx, booking.id, booking.status, 'AGREED', userId, side, 'Proposta aceita — aguardando confirmação da casa');
+        await this.logStatus(tx, booking.id, booking.status, 'AGREED', userId, side, 'Proposta aceita — aguardando confirmação do contratante');
+        await this.notifySide(tx, booking, other, userId, {
+          type: 'OFFER_ACCEPTED',
+          title: 'Proposta aceita',
+          body: side === 'ARTIST' ? `A proposta "${booking.title}" foi aceita. Confirme a contratação.` : `Sua contraproposta em "${booking.title}" foi aceita.`,
+          dedupeKey: `offer-accepted:${offer.id}`,
+        });
       } else if (response === 'decline') {
         await tx.bookingOffer.update({ where: { id: offer.id }, data: { status: 'DECLINED', respondedAt: now, respondedById: userId } });
         assertBookingTransition(booking.status, 'DECLINED');
         await tx.booking.update({ where: { id: booking.id }, data: { status: 'DECLINED' } });
         await this.logStatus(tx, booking.id, booking.status, 'DECLINED', userId, side, 'Proposta recusada');
+        await this.releaseSlot(tx, booking);
+        await this.notifySide(tx, booking, other, userId, {
+          type: 'OFFER_DECLINED',
+          title: 'Proposta recusada',
+          body: `A proposta de "${booking.title}" foi recusada e a negociação foi encerrada.`,
+          dedupeKey: `offer-declined:${offer.id}`,
+        });
       } else {
         if (!counter) throw unprocessable('VALIDATION_ERROR', 'Informe os termos da contraproposta.');
         // A oferta anterior é preservada (apenas marcada como SUPERSEDED); a contraproposta é uma nova linha.
         await tx.bookingOffer.update({ where: { id: offer.id }, data: { status: 'SUPERSEDED', respondedAt: now, respondedById: userId } });
-        await tx.bookingOffer.create({ data: { bookingId: booking.id, authorId: userId, authorSide: side, previousOfferId: offer.id, ...counter } });
+        const created = await tx.bookingOffer.create({ data: { bookingId: booking.id, authorId: userId, authorSide: side, previousOfferId: offer.id, ...counter } });
         await tx.booking.update({ where: { id: booking.id }, data: { updatedAt: now } });
+        await this.notifySide(tx, booking, other, userId, {
+          type: 'COUNTER_OFFER',
+          title: 'Nova contraproposta',
+          body: `Há uma contraproposta em "${booking.title}" aguardando sua resposta.`,
+          dedupeKey: `counter-offer:${created.id}`,
+        });
       }
     });
   }
 
-  /** Confirmação explícita e auditável, feita pela casa após termos acordados. */
+  /** Confirmação explícita e auditável, feita pelo contratante após termos acordados. */
   async confirm(userId: string, bookingId: string) {
     return this.act(userId, bookingId, async (tx, booking, side) => {
       assertCanConfirm(booking.status, side);
+      if (booking.eventId) {
+        const event = await tx.event.findUniqueOrThrow({ where: { id: booking.eventId }, select: { status: true } });
+        if (event.status === 'CANCELLED') throw conflict('EVENT_CANCELLED', 'O evento desta negociação foi cancelado.');
+      }
       const now = new Date();
       await tx.booking.update({ where: { id: booking.id }, data: { status: 'CONFIRMED', confirmedAt: now, confirmedById: userId } });
       await this.logStatus(tx, booking.id, booking.status, 'CONFIRMED', userId, side, 'Contratação confirmada (pagamento é externo à plataforma)');
+      await this.notifySide(tx, booking, 'ARTIST', userId, {
+        type: 'BOOKING_CONFIRMED',
+        title: 'Contratação confirmada',
+        body: `"${booking.title}" foi confirmada pelo contratante. O show já aparece na sua agenda.`,
+        dedupeKey: `booking-confirmed:${booking.id}`,
+      });
     });
   }
 
@@ -314,6 +402,13 @@ export class BookingsService {
       await tx.bookingOffer.updateMany({ where: { bookingId: booking.id, status: 'PENDING' }, data: { status: 'WITHDRAWN', respondedAt: new Date(), respondedById: userId } });
       await tx.booking.update({ where: { id: booking.id }, data: { status: 'CANCELLED' } });
       await this.logStatus(tx, booking.id, booking.status, 'CANCELLED', userId, side, reason || 'Negociação encerrada');
+      await this.releaseSlot(tx, booking);
+      await this.notifySide(tx, booking, side === 'VENUE' ? 'ARTIST' : 'VENUE', userId, {
+        type: 'BOOKING_CANCELLED',
+        title: booking.status === 'CONFIRMED' ? 'Contratação cancelada' : 'Negociação encerrada',
+        body: `"${booking.title}" foi ${booking.status === 'CONFIRMED' ? 'cancelada' : 'encerrada'} pela outra parte.${reason ? ` Motivo: ${reason}` : ''}`,
+        dedupeKey: `booking-cancelled:${booking.id}`,
+      });
     });
   }
 
@@ -322,6 +417,14 @@ export class BookingsService {
       if (!MESSAGE_ALLOWED.includes(booking.status)) throw conflict('BOOKING_CLOSED', 'Esta negociação está encerrada.');
       await tx.bookingMessage.create({ data: { bookingId: booking.id, authorId: userId, authorSide: side, body } });
       await tx.booking.update({ where: { id: booking.id }, data: { updatedAt: new Date() } });
+      // Uma notificação por negociação a cada 30 min evita enxurrada de e-mails em conversas ativas.
+      const bucket = Math.floor(Date.now() / (30 * 60 * 1000));
+      await this.notifySide(tx, booking, side === 'VENUE' ? 'ARTIST' : 'VENUE', userId, {
+        type: 'NEW_MESSAGE',
+        title: 'Nova mensagem na negociação',
+        body: `Você recebeu uma mensagem em "${booking.title}".`,
+        dedupeKey: `message:${booking.id}:${bucket}`,
+      });
     });
   }
 

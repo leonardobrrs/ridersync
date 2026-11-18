@@ -3,29 +3,49 @@ import { BandRole } from '@prisma/client';
 import { z } from 'zod';
 import { assertBandCanInvite, assertBandCanRemove, assertKeepsAnOwner } from '../../common/membership.rules';
 import { conflict, forbidden, notFound, unprocessable } from '../../common/errors';
-import { email, optionalText } from '../../common/validation';
+import { BAND_POSITIONS } from '../../common/domain-lists';
+import { email } from '../../common/validation';
 import { PrismaService, Tx } from '../../prisma/prisma.service';
+import { AccessService } from '../access/access.service';
+import { PasswordConfirmationSchema, ReauthService } from '../auth/reauth.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CreateArtistSchema } from '../artists/artist.schemas';
 import { ArtistsService } from '../artists/artists.service';
 import { mediaUrl } from '../media/media.service';
 
 export const CreateBandSchema = CreateArtistSchema;
+const position = z.enum(BAND_POSITIONS, { error: 'Escolha uma função da lista.' }).nullable();
 export const InviteBandMemberSchema = z
   .object({
     email,
     role: z.enum(['ADMIN', 'MEMBER']).default('MEMBER'),
-    instrument: optionalText(60, 'Função/instrumento'),
+    instrument: position.optional(),
   })
   .strict();
-export const ChangeBandRoleSchema = z.object({ role: z.enum(['OWNER', 'ADMIN', 'MEMBER']) }).strict();
-export const TransferSchema = z.object({ memberId: z.uuid() }).strict();
+/** OWNER só é concedido pela transferência de propriedade (fluxo dedicado com senha). */
+export const ChangeBandRoleSchema = z.object({ role: z.enum(['ADMIN', 'MEMBER'], { error: 'Use "Transferir propriedade" para definir um novo proprietário.' }) }).strict();
+export const MemberPositionSchema = z.object({ instrument: position }).strict();
+export const TransferSchema = z.object({ memberId: z.uuid(), password: PasswordConfirmationSchema }).strict();
 
 @Injectable()
 export class BandsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly artists: ArtistsService,
+    private readonly access: AccessService,
+    private readonly reauth: ReauthService,
+    private readonly notifications: NotificationsService,
   ) {}
+
+  private async bandName(tx: Tx | PrismaService, bandId: string) {
+    const a = await tx.artist.findUnique({ where: { bandId }, select: { name: true } });
+    return a?.name ?? 'banda';
+  }
+
+  private async managerIds(tx: Tx, bandId: string) {
+    const rows = await tx.bandMember.findMany({ where: { bandId, status: 'ACTIVE', role: { in: ['OWNER', 'ADMIN'] } }, select: { userId: true } });
+    return rows.map((r) => r.userId);
+  }
 
   private async lockBand(tx: Tx, bandId: string) {
     const rows = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM "Band" WHERE id = ${bandId}::uuid FOR UPDATE`;
@@ -52,6 +72,7 @@ export class BandsService {
 
   /** Cria a banda (identidade própria) e o vínculo OWNER ativo do criador. Não copia dados do perfil individual. */
   async create(userId: string, input: z.infer<typeof CreateBandSchema>) {
+    await this.access.assertAccountType(userId, 'ARTIST');
     const bandId = await this.prisma.$transaction(async (tx) => {
       const band = await tx.band.create({ data: { createdById: userId } });
       await tx.artist.create({ data: { kind: 'BAND', bandId: band.id, ...(await this.artists.artistCreateData(tx, input)) } });
@@ -147,22 +168,25 @@ export class BandsService {
 
   /** Convite para usuário já cadastrado (identificado pelo e-mail da conta). Só fica ativo após aceite. */
   async invite(userId: string, bandId: string, input: z.infer<typeof InviteBandMemberSchema>) {
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       await this.lockBand(tx, bandId);
       const actor = await this.requireRole(tx, bandId, userId, ['OWNER', 'ADMIN']);
       assertBandCanInvite(actor, input.role);
-      const invitee = await tx.user.findUnique({ where: { email: input.email }, select: { id: true } });
-      if (!invitee) {
+      const invitee = await tx.user.findUnique({ where: { email: input.email }, select: { id: true, accountType: true, anonymizedAt: true } });
+      if (!invitee || invitee.anonymizedAt) {
         throw notFound('Nenhuma conta RiderSync usa este e-mail. Peça para a pessoa se cadastrar e tente novamente.');
       }
       if (invitee.id === userId) throw unprocessable('SELF_INVITE', 'Você já faz parte desta banda.');
+      if (invitee.accountType === 'CONTRACTOR') {
+        throw unprocessable('WRONG_ACCOUNT_TYPE', 'Esta pessoa usa uma conta de contratante. Integrantes de banda precisam de conta de artista.');
+      }
       const existing = await tx.bandMember.findUnique({ where: { bandId_userId: { bandId, userId: invitee.id } } });
       if (existing?.status === 'ACTIVE') throw conflict('ALREADY_MEMBER', 'Esta pessoa já é integrante ativa da banda.');
       if (existing?.status === 'INVITED') throw conflict('ALREADY_INVITED', 'Já existe um convite pendente para esta pessoa.');
       const data = {
         role: input.role,
         status: 'INVITED' as const,
-        instrument: input.instrument,
+        instrument: input.instrument ?? null,
         invitedById: userId,
         invitedAt: new Date(),
         respondedAt: null,
@@ -172,8 +196,31 @@ export class BandsService {
       const row = existing
         ? await tx.bandMember.update({ where: { id: existing.id }, data, select: { id: true } })
         : await tx.bandMember.create({ data: { bandId, userId: invitee.id, ...data }, select: { id: true } });
+      await this.notifications.notify(tx, [invitee.id], {
+        category: 'INVITATIONS',
+        type: 'BAND_INVITE',
+        title: `Convite para a banda ${await this.bandName(tx, bandId)}`,
+        body: 'Você foi convidado(a) para integrar uma banda no RiderSync. Aceite ou recuse em "Convites".',
+        link: '/painel/convites',
+        dedupeKey: `band-invite:${row.id}:${data.invitedAt.getTime()}`,
+      });
       return { id: row.id, status: 'INVITED' };
     });
+    await this.notifications.flush();
+    return result;
+  }
+
+  /** Função/cargo do integrante: OWNER/ADMIN definem de qualquer um; cada integrante pode definir a própria. */
+  async setPosition(userId: string, bandId: string, memberId: string, input: z.infer<typeof MemberPositionSchema>) {
+    await this.prisma.$transaction(async (tx) => {
+      await this.lockBand(tx, bandId);
+      const role = await this.requireRole(tx, bandId, userId, ['OWNER', 'ADMIN', 'MEMBER']);
+      const target = await tx.bandMember.findFirst({ where: { id: memberId, bandId, status: { in: ['ACTIVE', 'INVITED'] } } });
+      if (!target) throw notFound('Integrante não encontrado.');
+      if (role === 'MEMBER' && target.userId !== userId) throw forbidden('Você só pode alterar a sua própria função.');
+      await tx.bandMember.update({ where: { id: target.id }, data: { instrument: input.instrument } });
+    });
+    return this.detail(userId, bandId);
   }
 
   async cancelInvite(userId: string, bandId: string, memberId: string) {
@@ -188,9 +235,10 @@ export class BandsService {
 
   /** Resposta do convidado. Apenas o próprio convidado responde. */
   async respondInvite(userId: string, memberId: string, accept: boolean) {
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const row = await tx.bandMember.findUnique({ where: { id: memberId } });
       if (!row || row.userId !== userId) throw notFound('Convite não encontrado.');
+      if (accept) await this.access.assertAccountType(userId, 'ARTIST', tx);
       await this.lockBand(tx, row.bandId);
       const fresh = await tx.bandMember.findUniqueOrThrow({ where: { id: memberId } });
       if (fresh.status !== 'INVITED') throw conflict('INVITE_NOT_PENDING', 'Este convite não está mais pendente.');
@@ -199,8 +247,19 @@ export class BandsService {
         where: { id: memberId },
         data: accept ? { status: 'ACTIVE', respondedAt: now, joinedAt: now } : { status: 'DECLINED', respondedAt: now },
       });
+      const invitee = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { name: true } });
+      await this.notifications.notify(tx, (await this.managerIds(tx, row.bandId)).filter((id) => id !== userId), {
+        category: 'INVITATIONS',
+        type: accept ? 'BAND_INVITE_ACCEPTED' : 'BAND_INVITE_DECLINED',
+        title: accept ? `${invitee.name} entrou na banda` : `${invitee.name} recusou o convite`,
+        body: `Banda: ${await this.bandName(tx, row.bandId)}.`,
+        link: `/painel/bandas/${row.bandId}`,
+        dedupeKey: `band-invite-response:${memberId}:${now.getTime()}`,
+      });
       return { bandId: row.bandId, status: accept ? 'ACTIVE' : 'DECLINED' };
     });
+    await this.notifications.flush();
+    return result;
   }
 
   /** Alteração de papel: somente OWNER; protege o último OWNER. */
@@ -245,17 +304,40 @@ export class BandsService {
     });
   }
 
-  /** Transferência atômica: alvo vira OWNER e o OWNER atual passa a ADMIN na mesma transação. */
-  async transferOwnership(userId: string, bandId: string, memberId: string) {
+  /**
+   * Transferência atômica com confirmação de senha: o alvo vira OWNER e o OWNER atual passa a ADMIN
+   * na mesma transação (nunca há estado sem proprietário ou com o papel duplicado por engano).
+   */
+  async transferOwnership(userId: string, bandId: string, input: z.infer<typeof TransferSchema>) {
+    await this.reauth.assertPassword(userId, input.password);
     await this.prisma.$transaction(async (tx) => {
       await this.lockBand(tx, bandId);
       await this.requireRole(tx, bandId, userId, ['OWNER']);
-      const target = await tx.bandMember.findFirst({ where: { id: memberId, bandId, status: 'ACTIVE' } });
+      const target = await tx.bandMember.findFirst({ where: { id: input.memberId, bandId, status: 'ACTIVE' }, select: { id: true, userId: true } });
       if (!target) throw notFound('Integrante ativo não encontrado.');
       if (target.userId === userId) throw unprocessable('SELF_TRANSFER', 'Escolha outro integrante.');
       await tx.bandMember.update({ where: { id: target.id }, data: { role: 'OWNER' } });
       await tx.bandMember.update({ where: { bandId_userId: { bandId, userId } }, data: { role: 'ADMIN' } });
+      const name = await this.bandName(tx, bandId);
+      const now = Date.now();
+      await this.notifications.notify(tx, [target.userId], {
+        category: 'ACCOUNT',
+        type: 'OWNERSHIP_RECEIVED',
+        title: `Você é o novo proprietário de ${name}`,
+        body: 'A propriedade da banda foi transferida para você.',
+        link: `/painel/bandas/${bandId}`,
+        dedupeKey: `band-owner:${bandId}:${now}`,
+      });
+      await this.notifications.notify(tx, [userId], {
+        category: 'ACCOUNT',
+        type: 'OWNERSHIP_TRANSFERRED',
+        title: `Propriedade de ${name} transferida`,
+        body: 'Você agora é administrador(a) da banda. Se não reconhece esta ação, altere sua senha.',
+        link: `/painel/bandas/${bandId}`,
+        dedupeKey: `band-owner-out:${bandId}:${now}`,
+      });
     });
+    await this.notifications.flush();
     return this.detail(userId, bandId);
   }
 }

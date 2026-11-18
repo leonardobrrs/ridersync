@@ -9,6 +9,9 @@ Guia para agentes trabalhando neste repositório. Leia também a skill `.claude/
   rotas, telas, seeds ou testes relacionados sem reativação explícita do responsável.
 - Fora do MVP: pagamentos, IA/recomendações, substituição de equipamentos, agenda avançada, avaliações/reviews,
   produtoras/agências/festivais.
+- Evolução de 2026-11-18 (`requisitos_ridersync.md`, decisões em `docs/DECISOES_TECNICAS.md`) **substitui** regras da skill:
+  contas separadas por `User.accountType` (ARTIST × CONTRACTOR), eventos sem casa via `Organization` `INDIVIDUAL`,
+  eventos públicos/privados, estados `FILLED`/`POSTPONED`, candidatura `CANCELLED`. Localidade restrita a Alagoas.
 - Ordem de autoridade: decisões explícitas recentes do usuário → `docs/INSTRUCOES_IMPLEMENTACAO_RIDERSYNC_v1.1.txt` →
   skill `ridersync-domain` → `docs/references/Arquitetura_*.md` → protótipos HTML (só referência visual).
 

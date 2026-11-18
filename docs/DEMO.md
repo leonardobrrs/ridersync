@@ -2,7 +2,7 @@
 
 Pré-requisito: `npm run db:up && npm run db:migrate && npm run db:seed`, depois `npm run dev:api` e `npm run dev:web`
 (ou `API_NODE_ENV=development SEED_DEMO=true docker compose up --build` e acesse http://localhost:8080).
-Senha de todas as contas demo: `demo-ridersync-2026`.
+Senha de todas as contas demo: `Demo@RiderSync2026`.
 
 1. **Visitante** — abra `/`: marketplace público com filtros (tipo, estilo, cidade, formação). Abra *Maré Alta*:
    portfólio, rider e integrantes públicos (sem e-mails da conta). Veja `/oportunidades` e `/casas`.

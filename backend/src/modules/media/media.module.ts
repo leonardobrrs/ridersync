@@ -1,4 +1,4 @@
-import { Controller, Get, Global, Injectable, Module, Param, ParseUUIDPipe, Res } from '@nestjs/common';
+import { Controller, Get, Global, Injectable, Module, Param, ParseUUIDPipe, Query, Res } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { loadEnv } from '../../config/env';
@@ -13,7 +13,7 @@ import { createStorageDriver, STORAGE_DRIVER } from './storage';
  * Regras de visualização de arquivos:
  *  - quem enviou sempre vê;
  *  - foto/portfólio de artista: público se o perfil é PUBLIC; senão apenas quem participa;
- *  - foto de casa de show: pública (perfil do estabelecimento é público).
+ *  - foto de casa de show (VENUE): pública; foto de contratante individual e avatar de conta: apenas usuários autenticados.
  */
 @Injectable()
 export class MediaAccessPolicy {
@@ -26,14 +26,16 @@ export class MediaAccessPolicy {
     const asset = await this.prisma.mediaAsset.findUnique({
       where: { id: mediaId },
       include: {
+        userAvatar: { select: { id: true } },
         artistPhoto: { select: { id: true, visibility: true } },
-        orgPhoto: { select: { id: true } },
+        orgPhoto: { select: { id: true, type: true } },
         portfolioItem: { select: { artist: { select: { id: true, visibility: true } } } },
       },
     });
     if (!asset) return null;
     if (userId && asset.uploadedById === userId) return asset;
-    if (asset.orgPhoto) return asset;
+    if (asset.userAvatar) return userId ? asset : null;
+    if (asset.orgPhoto) return asset.orgPhoto.type === 'VENUE' || userId ? asset : null;
     const artist = asset.artistPhoto ?? asset.portfolioItem?.artist;
     if (!artist) return null;
     if (artist.visibility === 'PUBLIC') return asset;
@@ -55,14 +57,20 @@ export class MediaController {
 
   @Public()
   @Get(':id')
-  async get(@Param('id', ParseUUIDPipe) id: string, @OptionalUser() user: AuthUser | null, @Res() res: Response) {
+  async get(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('v') variant: string | undefined,
+    @OptionalUser() user: AuthUser | null,
+    @Res() res: Response,
+  ) {
     const asset = await this.policy.findViewable(id, user?.id ?? null);
     if (!asset) throw notFound('Arquivo não encontrado.');
-    const stream = await this.media.openStream(asset.storageKey).catch(() => {
+    const useThumb = variant === 'thumb' && !!asset.thumbKey;
+    const stream = await this.media.openStream(useThumb ? asset.thumbKey! : asset.storageKey).catch(() => {
       throw notFound('Arquivo não encontrado.');
     });
     res.setHeader('Content-Type', asset.mimeType);
-    res.setHeader('Content-Length', String(asset.sizeBytes));
+    if (!useThumb) res.setHeader('Content-Length', String(asset.sizeBytes));
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Cache-Control', 'private, max-age=300');
     res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");

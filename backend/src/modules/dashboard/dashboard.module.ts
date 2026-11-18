@@ -29,7 +29,7 @@ export class DashboardService {
       ]).then(([a, b]) => a + b),
       this.prisma.eventApplication.count({ where: { artistId: { in: artistIds }, status: 'PENDING' } }),
       this.prisma.eventApplication.findMany({
-        where: { status: 'PENDING', event: { organizerId: { in: orgIds }, status: { in: ['OPEN', 'CLOSED'] } } },
+        where: { status: 'PENDING', event: { organizerId: { in: orgIds }, status: { in: ['OPEN', 'FILLED', 'CLOSED', 'POSTPONED'] } } },
         orderBy: { createdAt: 'asc' },
         take: 10,
         select: { id: true, createdAt: true, artist: { select: { name: true } }, event: { select: { id: true, title: true } } },
@@ -90,7 +90,8 @@ export class DashboardService {
         title: true,
         confirmedAt: true,
         artist: { select: { name: true, slug: true } },
-        organization: { select: { name: true, slug: true, city: true } },
+        organization: { select: { name: true, slug: true, city: true, type: true } },
+        event: { select: { id: true, title: true, visibility: true, locationName: true, locationCity: true } },
         offers: { where: { status: 'ACCEPTED' }, select: { performanceAt: true, durationMinutes: true, feeCents: true } },
       },
     });

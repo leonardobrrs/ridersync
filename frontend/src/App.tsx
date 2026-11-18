@@ -1,14 +1,17 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { createBrowserRouter, Link, RouterProvider, useLocation } from 'react-router';
-import { PanelLayout, SiteLayout } from './components/Layout';
+import type { ReactNode } from 'react';
+import { PanelLayout, RequireAccountType, SiteLayout } from './components/Layout';
 import { ToastProvider } from './components/Toast';
 import { ApiError } from './lib/api';
 import { AccountPage } from './features/account/AccountPage';
 import { MyApplicationsPage } from './features/applications/MyApplicationsPage';
 import { ComparePage } from './features/artist/Compatibility';
 import { MyProfilePage } from './features/artist/MyProfilePage';
-import { LoginPage, RegisterPage } from './features/auth/AuthPages';
+import { ForgotPasswordPage, LoginPage, RegisterPage, ResetPasswordPage, UnsubscribePage, VerifyEmailPage } from './features/auth/AuthPages';
+import { HelpPage, PrivacyPage, TermsPage } from './features/legal/LegalPages';
+import { NotificationPreferencesPage, NotificationsPage } from './features/notifications/NotificationPages';
 import { BandPage, BandsPage } from './features/bands/BandPages';
 import { BookingPage, BookingsPage } from './features/bookings/BookingPages';
 import { DashboardPage, InvitationsPage, PanelMenuPage, SchedulePage } from './features/dashboard/DashboardPages';
@@ -16,8 +19,11 @@ import { ArtistPublicPage } from './features/marketplace/ArtistPublicPage';
 import { MarketplacePage } from './features/marketplace/MarketplacePage';
 import { VenuePublicPage, VenuesPage } from './features/marketplace/VenuePages';
 import { OpportunitiesPage, OpportunityPage } from './features/opportunities/OpportunityPages';
-import { EventManagePage, NewEventPage } from './features/venues/EventPages';
+import { EventManagePage, IndependentEventsPage, NewEventPage, NewIndependentEventPage } from './features/venues/EventPages';
 import { MyVenuesPage, VenueManagePage } from './features/venues/VenuePages';
+
+const artistOnly = (el: ReactNode) => <RequireAccountType type="ARTIST">{el}</RequireAccountType>;
+const contractorOnly = (el: ReactNode) => <RequireAccountType type="CONTRACTOR">{el}</RequireAccountType>;
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -74,24 +80,35 @@ const router = createBrowserRouter([
       { path: '/casas/:slug', element: <VenuePublicPage /> },
       { path: '/entrar', element: <LoginPage /> },
       { path: '/cadastro', element: <RegisterPage /> },
+      { path: '/esqueci-senha', element: <ForgotPasswordPage /> },
+      { path: '/redefinir-senha', element: <ResetPasswordPage /> },
+      { path: '/verificar-email', element: <VerifyEmailPage /> },
+      { path: '/notificacoes/descadastrar', element: <UnsubscribePage /> },
+      { path: '/privacidade', element: <PrivacyPage /> },
+      { path: '/termos', element: <TermsPage /> },
+      { path: '/ajuda', element: <HelpPage /> },
       {
         path: '/painel',
         element: <PanelLayout />,
         children: [
           { index: true, element: <DashboardPage /> },
           { path: 'convites', element: <InvitationsPage /> },
-          { path: 'perfil', element: <MyProfilePage /> },
-          { path: 'bandas', element: <BandsPage /> },
-          { path: 'bandas/:bandId', element: <BandPage /> },
-          { path: 'casas', element: <MyVenuesPage /> },
-          { path: 'casas/:orgId', element: <VenueManagePage /> },
-          { path: 'casas/:orgId/eventos/novo', element: <NewEventPage /> },
+          { path: 'notificacoes', element: <NotificationsPage /> },
+          { path: 'notificacoes/preferencias', element: <NotificationPreferencesPage /> },
+          { path: 'perfil', element: artistOnly(<MyProfilePage />) },
+          { path: 'bandas', element: artistOnly(<BandsPage />) },
+          { path: 'bandas/:bandId', element: artistOnly(<BandPage />) },
+          { path: 'casas', element: contractorOnly(<MyVenuesPage />) },
+          { path: 'casas/:orgId', element: contractorOnly(<VenueManagePage />) },
+          { path: 'casas/:orgId/eventos/novo', element: contractorOnly(<NewEventPage />) },
+          { path: 'eventos', element: contractorOnly(<IndependentEventsPage />) },
+          { path: 'eventos/novo', element: contractorOnly(<NewIndependentEventPage />) },
           { path: 'eventos/:eventId', element: <EventManagePage /> },
-          { path: 'candidaturas', element: <MyApplicationsPage /> },
+          { path: 'candidaturas', element: artistOnly(<MyApplicationsPage />) },
           { path: 'negociacoes', element: <BookingsPage /> },
           { path: 'negociacoes/:bookingId', element: <BookingPage /> },
           { path: 'agenda', element: <SchedulePage /> },
-          { path: 'comparar', element: <ComparePage /> },
+          { path: 'comparar', element: artistOnly(<ComparePage />) },
           { path: 'conta', element: <AccountPage /> },
           { path: 'menu', element: <PanelMenuPage /> },
         ],

@@ -74,22 +74,35 @@ export class RidersService {
     return this.prisma.equipmentCatalogItem.findMany({
       where: { active: true },
       orderBy: [{ sortOrder: 'asc' }],
-      select: { id: true, name: true, unit: true, category: true },
+      select: { id: true, name: true, unit: true, category: true, artistRequirement: true },
     });
   }
 
-  private async validateCatalogIds(items: ItemInput[]) {
+  private async validateCatalogIds(items: ItemInput[], forArtistRider: boolean) {
     const ids = items.map((i) => i.catalogItemId).filter((x): x is string => !!x);
     if (new Set(ids).size !== ids.length) throw unprocessable('DUPLICATE_ITEM', 'Cada item do catálogo deve aparecer uma única vez.');
     if (!ids.length) return;
-    const found = await this.prisma.equipmentCatalogItem.count({ where: { id: { in: ids }, active: true } });
-    if (found !== ids.length) throw unprocessable('UNKNOWN_CATALOG_ITEM', 'Item de catálogo desconhecido.');
+    const found = await this.prisma.equipmentCatalogItem.findMany({ where: { id: { in: ids }, active: true }, select: { id: true, artistRequirement: true } });
+    if (found.length !== ids.length) throw unprocessable('UNKNOWN_CATALOG_ITEM', 'Item de catálogo desconhecido.');
+    if (forArtistRider && found.some((f) => !f.artistRequirement)) {
+      throw unprocessable('VENUE_ONLY_ITEM', 'Palco, energia, iluminação e camarim são exigências do local e não fazem parte do rider do artista.');
+    }
   }
 
+  /** Itens de exigência do local gravados antes da regra atual ficam ocultos (e saem no próximo salvamento). */
   async getRider(artistId: string) {
     const rider = await this.prisma.technicalRider.findUnique({
       where: { artistId },
-      select: { id: true, notes: true, updatedAt: true, items: { select: itemSelect, orderBy: { createdAt: 'asc' } } },
+      select: {
+        id: true,
+        notes: true,
+        updatedAt: true,
+        items: {
+          where: { OR: [{ catalogItemId: null }, { catalogItem: { artistRequirement: true } }] },
+          select: itemSelect,
+          orderBy: { createdAt: 'asc' },
+        },
+      },
     });
     if (!rider) throw notFound('Rider não encontrado.');
     return { notes: rider.notes, updatedAt: rider.updatedAt, items: sortItems(rider.items.map(toItem)) };
@@ -103,7 +116,7 @@ export class RidersService {
   /** Substitui atomicamente os itens do rider de UMA identidade artística (não afeta outros riders). */
   async putRider(userId: string, artistId: string, input: z.infer<typeof PutRiderSchema>) {
     await this.access.assertCanManageArtist(userId, artistId);
-    await this.validateCatalogIds(input.items);
+    await this.validateCatalogIds(input.items, true);
     await this.prisma.$transaction(async (tx) => {
       const rider = await tx.technicalRider.upsert({ where: { artistId }, create: { artistId, notes: input.notes }, update: { notes: input.notes } });
       await tx.riderItem.deleteMany({ where: { riderId: rider.id } });
@@ -140,7 +153,9 @@ export class RidersService {
   /** Substitui atomicamente o inventário da casa (não altera riders). */
   async putEquipment(userId: string, organizationId: string, input: z.infer<typeof PutEquipmentSchema>) {
     await this.access.assertOrgMember(userId, organizationId);
-    await this.validateCatalogIds(input.items);
+    const org = await this.prisma.organization.findUniqueOrThrow({ where: { id: organizationId }, select: { type: true } });
+    if (org.type !== 'VENUE') throw unprocessable('NOT_A_VENUE', 'Somente casas de show possuem inventário de equipamentos.');
+    await this.validateCatalogIds(input.items, false);
     await this.prisma.$transaction(async (tx) => {
       await tx.venueEquipmentItem.deleteMany({ where: { organizationId } });
       if (input.items.length) {
@@ -161,23 +176,24 @@ export class RidersService {
   }
 
   /**
-   * Comparação sob demanda. Autorizado para: quem participa da identidade artística; ou
-   * responsável da casa quando o artista é público ou já se relacionou com a casa (candidatura/negociação).
+   * Comparação sob demanda, somente em contextos autorizados:
+   *  - quem participa da identidade artística (perfil pessoal), contra qualquer casa de show;
+   *  - responsável da casa apenas no contexto de negociação/candidatura com aquele artista.
+   * O perfil público não oferece comparação.
    */
   async compare(userId: string, artistId: string, organizationId: string) {
     const [artistAccess, org] = await Promise.all([
       this.access.artistAccess(userId, artistId),
-      this.prisma.organization.findUnique({ where: { id: organizationId }, select: { id: true, name: true, slug: true } }),
+      this.prisma.organization.findFirst({ where: { id: organizationId, type: 'VENUE' }, select: { id: true, name: true, slug: true } }),
     ]);
     if (!artistAccess) throw notFound('Perfil artístico não encontrado.');
     if (!org) throw notFound('Casa de show não encontrada.');
     if (!artistAccess.canView) {
       const role = await this.access.orgRole(userId, organizationId);
       if (!role) throw forbidden('Você não pode comparar este rider.');
-      const artist = await this.prisma.artist.findUniqueOrThrow({
+      const related = await this.prisma.artist.findUniqueOrThrow({
         where: { id: artistId },
         select: {
-          visibility: true,
           _count: {
             select: {
               applications: { where: { event: { organizerId: organizationId } } },
@@ -186,8 +202,8 @@ export class RidersService {
           },
         },
       });
-      if (artist.visibility !== 'PUBLIC' && artist._count.applications === 0 && artist._count.bookings === 0) {
-        throw forbidden('Este perfil artístico não é público.');
+      if (related._count.applications === 0 && related._count.bookings === 0) {
+        throw forbidden('A comparação de rider fica disponível na negociação ou na análise de candidaturas.');
       }
     }
     const rider = await this.getRider(artistId);
@@ -219,7 +235,7 @@ export class RidersService {
   }
 }
 
-const CATEGORY_ORDER = ['Áudio', 'Backline', 'Palco e energia'];
+const CATEGORY_ORDER = ['Áudio', 'Instrumentos e amplificação', 'Palco e energia'];
 function sortItems<T extends { category: string | null; name: string; isCustom: boolean }>(items: T[]): T[] {
   return [...items].sort((a, b) => {
     const ca = a.isCustom ? 99 : CATEGORY_ORDER.indexOf(a.category ?? '');

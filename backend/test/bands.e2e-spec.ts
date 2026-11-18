@@ -1,5 +1,5 @@
 import { INestApplication } from '@nestjs/common';
-import { bootApp, Client, createPublicMusician, PUBLISHABLE_PROFILE, registerUser } from './helpers';
+import { bootApp, Client, createPublicMusician, PUBLISHABLE_PROFILE, registerUser, TEST_PASSWORD } from './helpers';
 
 describe('Bandas, convites, papéis e último OWNER (integração)', () => {
   let app: INestApplication;
@@ -86,7 +86,14 @@ describe('Bandas, convites, papéis e último OWNER (integração)', () => {
     expect(res.body.code).toBe('LAST_OWNER');
 
     const adminRow = detail.body.members.find((m: { name: string }) => m.name === 'Ada Admin');
-    const t = await owner.post(`/bands/${bandId}/transfer-ownership`, { memberId: adminRow.id });
+    // OWNER não é concedido pelo dropdown de papéis: só pela transferência com senha
+    await owner.patch(`/bands/${bandId}/members/${adminRow.id}`, { role: 'OWNER' }).expect(400);
+    await owner.post(`/bands/${bandId}/transfer-ownership`, { memberId: adminRow.id }).expect(400);
+    const wrong = await owner.post(`/bands/${bandId}/transfer-ownership`, { memberId: adminRow.id, password: 'Errada@123' });
+    expect(wrong.status).toBe(401);
+    expect(wrong.body.code).toBe('INVALID_PASSWORD');
+    await admin.post(`/bands/${bandId}/transfer-ownership`, { memberId: adminRow.id, password: TEST_PASSWORD }).expect(403);
+    const t = await owner.post(`/bands/${bandId}/transfer-ownership`, { memberId: adminRow.id, password: TEST_PASSWORD });
     expect(t.status).toBe(201);
     expect(t.body.myRole).toBe('ADMIN');
     const after = await admin.get(`/bands/${bandId}`);

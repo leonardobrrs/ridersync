@@ -14,6 +14,7 @@ import type { ApplicationStatus, EventPublic } from '../../lib/types';
 export function OpportunitiesPage() {
   const [params, setParams] = useSearchParams();
   const { data: meta } = useMeta();
+  const { data: me } = useMe();
   const f = { q: params.get('q') ?? '', genre: params.get('genre') ?? '', city: params.get('city') ?? '' };
   const q = useQuery({ queryKey: ['events', f], queryFn: () => api.get<EventPublic[]>(`/public/events${qs(f)}`) });
   const set = (k: string, v: string) => {
@@ -26,8 +27,8 @@ export function OpportunitiesPage() {
     <div className="wrap page">
       <div className="pagehead">
         <div>
-          <h1>Oportunidades de apresentação</h1>
-          <p>Vagas abertas por casas de show. Candidate-se com seu perfil individual ou com sua banda.</p>
+          <h1 tabIndex={-1}>Oportunidades de apresentação</h1>
+          <p>Vagas abertas por casas de show e contratantes. Candidate-se com seu perfil individual ou com sua banda.</p>
         </div>
       </div>
       <div className="box cmp-f" style={{ marginBottom: 16 }}>
@@ -46,10 +47,15 @@ export function OpportunitiesPage() {
           <span>Cidade</span>
           <select className="input" value={f.city} onChange={(e) => set('city', e.target.value)}>
             <option value="">Todas</option>
-            {meta?.cities.map((c) => <option key={c}>{c}</option>)}
+            {meta?.allCities.map((c) => <option key={c}>{c}</option>)}
           </select>
         </label>
       </div>
+      {me?.user.accountType === 'ARTIST' && (
+        <p className="hint" style={{ marginBottom: 12 }}>
+          Eventos marcados como <span className="st draft">Privado</span> aparecem só para contas de artista e não são divulgados na página inicial.
+        </p>
+      )}
       {q.isLoading && <Loading />}
       {q.error && <ErrorState error={q.error} retry={q.refetch} />}
       {q.data?.length === 0 && <Empty title="Nenhuma oportunidade aberta">Volte em breve ou ajuste os filtros.</Empty>}
@@ -66,10 +72,11 @@ export function OpportunitiesPage() {
                 <h2 style={{ fontSize: 17, fontWeight: 700 }}>
                   <Link className="link" to={`/oportunidades/${e.id}`} style={{ color: 'var(--ink)' }}>
                     {e.title}
-                  </Link>
+                  </Link>{' '}
+                  {e.visibility === 'PRIVATE' && <span className="st draft">Privado</span>}
                 </h2>
                 <p className="muted">
-                  {e.organizer.name} · {(e.venue ?? e.organizer).city} · {e.slots} vaga(s) · inscrições até {dateTime(e.applicationDeadline)}
+                  {e.location.name ?? e.organizer.name} · {e.location.city} · {e.slots} vaga(s) · inscrições até {dateTime(e.applicationDeadline)}
                 </p>
                 <div className="chips" style={{ marginTop: 6 }}>
                   {e.genres.map((g) => (
@@ -153,7 +160,7 @@ export function OpportunityPage() {
       toast(errorMessage(x), 'error');
     }
   };
-  const place = e.venue ?? e.organizer;
+  const place = e.location;
 
   return (
     <div className="wrap page">
@@ -167,15 +174,23 @@ export function OpportunityPage() {
         <div className="stack">
           <section className="box">
             <div className="adh">
-              <Status value={e.status} map={EVENT_STATUS} />
-              <h1>{e.title}</h1>
+              <div className="row">
+                <Status value={e.status} map={EVENT_STATUS} />
+                {e.visibility === 'PRIVATE' && <span className="st draft">Evento privado</span>}
+              </div>
+              <h1 tabIndex={-1}>{e.title}</h1>
               <p className="muted">
                 por{' '}
-                <Link className="link" to={`/casas/${e.organizer.slug}`}>
-                  {e.organizer.name}
-                </Link>
+                {e.organizer.slug ? (
+                  <Link className="link" to={`/casas/${e.organizer.slug}`}>
+                    {e.organizer.name}
+                  </Link>
+                ) : (
+                  <>{e.organizer.name} (contratante individual)</>
+                )}
                 {e.venue && e.venue.id !== e.organizer.id && <> · local: {e.venue.name}</>}
               </p>
+              {e.status === 'POSTPONED' && <div className="inline-msg warn">Evento adiado: o organizador vai informar a nova data.</div>}
             </div>
             <dl className="attrs">
               <div>
@@ -192,12 +207,16 @@ export function OpportunityPage() {
               </div>
               <div>
                 <dt>Vagas</dt>
-                <dd>{e.slots}</dd>
+                <dd>
+                  {e.filledSlots !== undefined ? `${e.filledSlots} de ${e.slots} ocupada(s)` : e.slots}
+                </dd>
               </div>
               <div>
                 <dt>Local</dt>
                 <dd>
-                  {place.neighborhood ? `${place.neighborhood}, ` : ''}
+                  {place.venueSlug ? <Link to={`/casas/${place.venueSlug}`}>{place.name}</Link> : place.name}
+                  {place.name ? ' — ' : ''}
+                  {place.address ? `${place.address}, ` : ''}
                   {place.city}/{place.state}
                 </dd>
               </div>
@@ -234,8 +253,10 @@ export function OpportunityPage() {
         </div>
         <aside className="side">
           <section className="box" aria-label="Candidatura">
-            <Poster name={e.organizer.name} photoUrl={e.organizer.photoUrl} top={[place.city, place.state]} bottom={[e.organizer.venueKind ?? '', '']} />
-            {!e.acceptingApplications && <div className="inline-msg info">Inscrições encerradas para esta oportunidade.</div>}
+            <Poster name={e.organizer.name} photoUrl={e.organizer.photoUrl} top={[place.city ?? '', place.state ?? '']} bottom={[e.organizer.venueKind ?? '', '']} />
+            {!e.acceptingApplications && (
+              <div className="inline-msg info">{e.status === 'FILLED' ? 'Todas as vagas foram preenchidas.' : 'Inscrições encerradas para esta oportunidade.'}</div>
+            )}
             {!me && e.acceptingApplications && (
               <Link className="btn cue block" to={`/entrar?next=/oportunidades/${e.id}`}>
                 Entrar para se candidatar

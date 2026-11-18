@@ -5,6 +5,8 @@ import { useForm } from 'react-hook-form';
 import { Link, useNavigate, useParams } from 'react-router';
 import { z } from 'zod';
 import { ConfirmButton } from '../../components/Dialog';
+import { ImagePicker, uploadForm } from '../../components/Media';
+import { TransferOwnershipDialog } from '../../components/TransferOwnershipDialog';
 import { applyServerErrors, FormError, SelectField, TextField } from '../../components/Fields';
 import { PageHead } from '../../components/Layout';
 import { Avatar, Poster } from '../../components/Poster';
@@ -12,7 +14,7 @@ import { Empty, ErrorState, Loading } from '../../components/States';
 import { useToast } from '../../components/Toast';
 import { api, errorMessage } from '../../lib/api';
 import { ROLE_LABEL } from '../../lib/format';
-import { useAction } from '../../lib/hooks';
+import { useAction, useMeta } from '../../lib/hooks';
 import type { BandDetail, BandRole, BandSummary } from '../../lib/types';
 import { ArtistWorkspace } from '../artist/ArtistWorkspace';
 import { ProfileFields, ProfileFormSchema, toArtistPayload, toFormValues, type ProfileFormValues } from '../artist/ArtistProfileForm';
@@ -72,14 +74,18 @@ function CreateBand({ onCancel }: { onCancel: () => void }) {
   const navigate = useNavigate();
   const toast = useToast();
   const [formError, setFormError] = useState<string | null>(null);
+  const [photo, setPhoto] = useState<File | null>(null);
   const form = useForm<ProfileFormValues>({ resolver: zodResolver(ProfileFormSchema), defaultValues: toFormValues() });
   const onSubmit = form.handleSubmit(async (v) => {
     setFormError(null);
     try {
       const band = await api.post<BandDetail>('/bands', toArtistPayload(v));
+      if (photo) {
+        await api.upload('PUT', `/artists/${band.artist.id}/photo`, uploadForm(photo)).catch(() => toast('A banda foi criada, mas a imagem não pôde ser enviada.', 'error'));
+      }
       await qc.invalidateQueries({ queryKey: ['bands'] });
       await qc.invalidateQueries({ queryKey: ['me'] });
-      toast('Banda criada. Você é o proprietário (OWNER).');
+      toast('Banda criada. Você é o proprietário.');
       navigate(`/painel/bandas/${band.bandId}`);
     } catch (e) {
       setFormError(applyServerErrors(e, form.setError));
@@ -90,6 +96,7 @@ function CreateBand({ onCancel }: { onCancel: () => void }) {
       <h2 className="lbl">Nova banda</h2>
       <div className="notice">Os dados da banda não são copiados do seu perfil individual. A banda começa privada.</div>
       <FormError message={formError} />
+      <ImagePicker label="Imagem da banda" value={photo} onChange={setPhoto} />
       <ProfileFields form={form} solo={false} />
       <div className="actions">
         <button className="btn ghost" type="button" onClick={onCancel}>
@@ -106,15 +113,32 @@ function CreateBand({ onCancel }: { onCancel: () => void }) {
 const InviteSchema = z.object({
   email: z.email('Informe o e-mail da conta RiderSync da pessoa.'),
   role: z.enum(['MEMBER', 'ADMIN']),
-  instrument: z.string().trim().max(60),
+  instrument: z.string(),
 });
+
+/** Dropdown de função/cargo. Valores antigos fora da lista continuam visíveis até serem trocados. */
+function PositionSelect({ value, onChange, label }: { value: string | null; onChange: (v: string | null) => void; label: string }) {
+  const { data: meta } = useMeta();
+  const positions = meta?.bandPositions ?? [];
+  return (
+    <select className="input" aria-label={label} value={value ?? ''} onChange={(e) => onChange(e.target.value || null)}>
+      <option value="">Função não informada</option>
+      {value && !positions.includes(value) && <option value={value}>{value}</option>}
+      {positions.map((p) => (
+        <option key={p}>{p}</option>
+      ))}
+    </select>
+  );
+}
 
 function MembersTab({ band }: { band: BandDetail }) {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const toast = useToast();
+  const { data: meta } = useMeta();
   const key = ['band', band.bandId];
   const [formError, setFormError] = useState<string | null>(null);
+  const [transferOpen, setTransferOpen] = useState(false);
   const form = useForm<z.infer<typeof InviteSchema>>({ resolver: zodResolver(InviteSchema), defaultValues: { email: '', role: 'MEMBER', instrument: '' } });
   const isOwner = band.myRole === 'OWNER';
   const isManager = band.myRole !== 'MEMBER';
@@ -148,40 +172,50 @@ function MembersTab({ band }: { band: BandDetail }) {
 
   const active = band.members.filter((m) => m.status === 'ACTIVE');
   const invited = band.members.filter((m) => m.status === 'INVITED');
+  const candidates = active.filter((m) => !m.isMe).map((m) => ({ id: m.id, name: m.name }));
 
   return (
     <div className="stack">
       <section className="box" aria-label="Integrantes ativos">
-        <h2 className="lbl">Integrantes ativos ({active.length})</h2>
+        <div className="row space">
+          <h2 className="lbl">Integrantes ativos ({active.length})</h2>
+          {isOwner && (
+            <button className="btn sm dark" type="button" onClick={() => setTransferOpen(true)}>
+              Transferir propriedade
+            </button>
+          )}
+        </div>
         <ul className="mlist">
           {active.map((m) => (
             <li key={m.id}>
               <Avatar name={m.name} />
-              <div>
+              <div className="stack-sm">
                 <strong>
                   {m.name}
                   {m.isMe && ' (você)'}
                 </strong>
-                <small className="hint" style={{ display: 'block' }}>
-                  {m.instrument ?? 'Função não informada'}
-                  {m.musicianProfile && (
-                    <>
-                      {' · '}
-                      <Link className="link" to={`/artistas/${m.musicianProfile.slug}`}>
-                        perfil público
-                      </Link>
-                    </>
-                  )}
-                </small>
+                {m.musicianProfile && (
+                  <Link className="handle" to={`/artistas/${m.musicianProfile.slug}`}>
+                    @{m.musicianProfile.slug}
+                  </Link>
+                )}
+                {isManager || m.isMe ? (
+                  <PositionSelect
+                    label={`Função de ${m.name}`}
+                    value={m.instrument}
+                    onChange={(v) => run(() => api.patch(`/bands/${band.bandId}/members/${m.id}/position`, { instrument: v }), 'Função atualizada.')}
+                  />
+                ) : (
+                  <small className="hint">{m.instrument ?? 'Função não informada'}</small>
+                )}
               </div>
-              {isOwner && !m.isMe ? (
+              {isOwner && !m.isMe && m.role !== 'OWNER' ? (
                 <select
                   className="input"
                   aria-label={`Papel de ${m.name}`}
                   value={m.role}
                   onChange={(e) => run(() => api.patch(`/bands/${band.bandId}/members/${m.id}`, { role: e.target.value as BandRole }), 'Papel atualizado.')}
                 >
-                  <option value="OWNER">Proprietário</option>
                   <option value="ADMIN">Administrador</option>
                   <option value="MEMBER">Integrante</option>
                 </select>
@@ -189,19 +223,12 @@ function MembersTab({ band }: { band: BandDetail }) {
                 <span className={`role ${m.role === 'OWNER' ? 'owner' : ''}`}>{ROLE_LABEL[m.role]}</span>
               )}
               <span className="row" style={{ gap: 4 }}>
-                {isOwner && !m.isMe && m.role !== 'OWNER' && (
-                  <ConfirmButton
-                    className="btn sm ghost"
-                    confirm={`Transferir a propriedade para ${m.name}? Você passará a ADMIN.`}
-                    onConfirm={() => run(() => api.post(`/bands/${band.bandId}/transfer-ownership`, { memberId: m.id }), 'Propriedade transferida.')}
-                  >
-                    Tornar dono
-                  </ConfirmButton>
-                )}
-                {!m.isMe && (isOwner || (band.myRole === 'ADMIN' && m.role === 'MEMBER')) && (
+                {!m.isMe && m.role !== 'OWNER' && (isOwner || (band.myRole === 'ADMIN' && m.role === 'MEMBER')) && (
                   <ConfirmButton
                     className="btn sm ghost danger"
                     confirm={`Remover ${m.name} da banda?`}
+                    confirmLabel="Remover"
+                    danger
                     onConfirm={() => run(() => api.delete(`/bands/${band.bandId}/members/${m.id}`), 'Integrante removido.')}
                   >
                     Remover
@@ -212,11 +239,11 @@ function MembersTab({ band }: { band: BandDetail }) {
           ))}
         </ul>
         <div className="row" style={{ justifyContent: 'flex-end' }}>
-          <ConfirmButton className="btn sm danger" confirm="Sair desta banda?" onConfirm={() => leave.mutate(undefined)}>
+          <ConfirmButton className="btn sm danger" confirm="Sair desta banda?" confirmLabel="Sair da banda" danger onConfirm={() => leave.mutate(undefined)}>
             Sair da banda
           </ConfirmButton>
         </div>
-        <p className="hint">A banda precisa sempre de ao menos um proprietário (OWNER). Para sair sendo o único, transfira a propriedade antes.</p>
+        <p className="hint">A banda precisa sempre de um proprietário. Para sair sendo o único, transfira a propriedade antes.</p>
       </section>
 
       {isManager && (
@@ -233,12 +260,15 @@ function MembersTab({ band }: { band: BandDetail }) {
                     <strong>{m.name}</strong>
                     <small className="hint" style={{ display: 'block' }}>
                       {m.email} · {ROLE_LABEL[m.role]}
+                      {m.instrument ? ` · ${m.instrument}` : ''}
                     </small>
                   </div>
                   <span className="st pend">Pendente</span>
                   <ConfirmButton
                     className="btn sm ghost danger"
                     confirm="Cancelar este convite?"
+                    confirmLabel="Cancelar convite"
+                    danger
                     onConfirm={() => run(() => api.delete(`/bands/${band.bandId}/invitations/${m.id}`), 'Convite cancelado.')}
                   >
                     Cancelar
@@ -252,12 +282,17 @@ function MembersTab({ band }: { band: BandDetail }) {
             <div className="row3">
               <TextField label="E-mail da conta da pessoa" type="email" {...form.register('email')} error={form.formState.errors.email} />
               <SelectField label="Papel" {...form.register('role')}>
-                <option value="MEMBER">Integrante (MEMBER)</option>
-                {isOwner && <option value="ADMIN">Administrador (ADMIN)</option>}
+                <option value="MEMBER">Integrante</option>
+                {isOwner && <option value="ADMIN">Administrador</option>}
               </SelectField>
-              <TextField label="Função/instrumento" {...form.register('instrument')} />
+              <SelectField label="Função" {...form.register('instrument')}>
+                <option value="">Definir depois</option>
+                {meta?.bandPositions.map((p) => (
+                  <option key={p}>{p}</option>
+                ))}
+              </SelectField>
             </div>
-            <p className="hint">A pessoa precisa ter conta no RiderSync. Ela verá o convite no painel e poderá aceitar ou recusar.</p>
+            <p className="hint">A pessoa precisa ter uma conta de artista no RiderSync. Ela verá o convite no painel e poderá aceitar ou recusar.</p>
             <div className="actions">
               <button className="btn dark" type="submit" disabled={form.formState.isSubmitting}>
                 Enviar convite
@@ -265,6 +300,22 @@ function MembersTab({ band }: { band: BandDetail }) {
             </div>
           </form>
         </section>
+      )}
+
+      {isOwner && (
+        <TransferOwnershipDialog
+          open={transferOpen}
+          onClose={() => setTransferOpen(false)}
+          entityLabel="banda"
+          entityName={band.artist.name}
+          candidates={candidates}
+          onTransfer={async (memberId, password) => {
+            await api.post(`/bands/${band.bandId}/transfer-ownership`, { memberId, password });
+            await qc.invalidateQueries({ queryKey: key });
+            await qc.invalidateQueries({ queryKey: ['bands'] });
+            toast('Propriedade transferida. Você agora é administrador(a).');
+          }}
+        />
       )}
     </div>
   );
