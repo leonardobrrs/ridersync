@@ -7,6 +7,7 @@ import { Empty, ErrorState, Loading, Status } from '../../components/States';
 import { useToast } from '../../components/Toast';
 import { api, errorMessage } from '../../lib/api';
 import { BOOKING_STATUS, dateTime, duration, money, OFFER_STATUS, SIDE_LABEL } from '../../lib/format';
+import { BookingChat } from './BookingChat';
 import type { BookingDetail, BookingRow } from '../../lib/types';
 import { CompatibilityView } from '../artist/Compatibility';
 import { OfferForm } from './OfferForm';
@@ -72,8 +73,6 @@ export function BookingPage() {
   const [counter, setCounter] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
-  const [msg, setMsg] = useState('');
-  const [sending, setSending] = useState(false);
   const [perfNotes, setPerfNotes] = useState('');
 
   if (q.isLoading) return <Loading />;
@@ -91,12 +90,16 @@ export function BookingPage() {
       toast(errorMessage(e), 'error');
     }
   };
-  const send = async () => {
-    if (!msg.trim()) return;
-    setSending(true);
-    await apply(() => api.post<BookingDetail>(`/bookings/${b.id}/messages`, { body: msg.trim() }), 'Mensagem enviada.');
-    setMsg('');
-    setSending(false);
+  /** A conversa já mostra a mensagem enviada: sem aviso de sucesso; em erro avisa e mantém o texto no campo. */
+  const sendMessage = async (text: string) => {
+    try {
+      qc.setQueryData(key, await api.post<BookingDetail>(`/bookings/${b.id}/messages`, { body: text }));
+      await qc.invalidateQueries({ queryKey: ['bookings'] });
+      return true;
+    } catch (e) {
+      toast(errorMessage(e), 'error');
+      return false;
+    }
   };
   const p = b.pendingOffer;
 
@@ -336,34 +339,7 @@ export function BookingPage() {
         </div>
 
         <aside className="side">
-          <section className="box" aria-label="Mensagens">
-            <h2 className="lbl">Mensagens</h2>
-            {b.messages.length === 0 ? (
-              <p className="hint">Nenhuma mensagem ainda.</p>
-            ) : (
-              <ol className="chat" aria-live="polite">
-                {b.messages.map((m) => (
-                  <li key={m.id} className={`bubble ${m.author?.isMe ? 'me' : ''}`}>
-                    <small>
-                      {m.author?.name ?? 'Conta removida'} · {SIDE_LABEL[m.authorSide]} · {dateTime(m.createdAt)}
-                    </small>
-                    {m.body}
-                  </li>
-                ))}
-              </ol>
-            )}
-            {b.allowed.message && (
-              <div className="form">
-                <label className="field">
-                  <span className="sr-only">Nova mensagem</span>
-                  <textarea className="input" placeholder="Escreva uma mensagem…" maxLength={2000} value={msg} onChange={(e) => setMsg(e.target.value)} style={{ minHeight: 80 }} />
-                </label>
-                <button className="btn dark" type="button" onClick={send} disabled={sending || !msg.trim()}>
-                  Enviar
-                </button>
-              </div>
-            )}
-          </section>
+          <BookingChat b={b} onSend={sendMessage} />
         </aside>
       </div>
 

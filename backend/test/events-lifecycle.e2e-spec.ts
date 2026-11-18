@@ -1,5 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
+import sharp from 'sharp';
 import { EventLifecycleService } from '../src/modules/events/event-lifecycle.service';
 import { bootApp, Client, createPublicMusician, createVenue, inDays, registerContractor, registerUser } from './helpers';
 
@@ -216,6 +217,41 @@ describe('Eventos: visibilidade, vagas e ciclo de vida (integração)', () => {
       expect(profile.body.upcomingEvents[0]).toMatchObject({ private: false, title: 'Show Público Confirmado' });
       const venuePage = await visitor.get(`/public/venues/${venue.slug}`);
       expect(venuePage.body.upcomingShows.map((s: { title: string }) => s.title)).toContain('Show Público Confirmado');
+    });
+  });
+
+  describe('imagem do evento (card)', () => {
+    const png = () => sharp({ create: { width: 640, height: 360, channels: 3, background: '#ffc83a' } }).png().toBuffer();
+    const upload = async (who: Client, eventId: string) =>
+      who.agent.put(`/api/events/${eventId}/image`).set('X-Requested-With', 'RiderSync').attach('file', await png(), { filename: 'cartaz.png', contentType: 'image/png' });
+
+    it('organizador envia, todos veem em evento público e só ele altera; remoção apaga', async () => {
+      const eventId = await newEvent(venueOwner, venue.id, { title: 'Show com Cartaz' });
+      expect((await upload(artistA, eventId)).status).toBe(403);
+      const res = await upload(venueOwner, eventId);
+      expect(res.status).toBe(200);
+      expect(res.body.imageUrl).toMatch(/^\/api\/media\//);
+      const pub = await visitor.get(`/public/events/${eventId}`);
+      expect(pub.body.imageThumbUrl).toBe(`${res.body.imageUrl}?v=thumb`);
+      const list = await visitor.get('/public/events');
+      expect(list.body.find((e: { id: string }) => e.id === eventId).imageUrl).toBe(res.body.imageUrl);
+      const img = await visitor.agent.get(res.body.imageUrl);
+      expect(img.status).toBe(200);
+      expect(img.headers['content-type']).toBe('image/webp');
+      const removed = await venueOwner.agent.delete(`/api/events/${eventId}/image`).set('X-Requested-With', 'RiderSync');
+      expect(removed.body.imageUrl).toBeNull();
+      expect((await visitor.agent.get(res.body.imageUrl)).status).toBe(404);
+    });
+
+    it('imagem de evento privado: só contas de artista e o organizador; rascunho: só o organizador', async () => {
+      const draft = await venueOwner.post(`/organizations/${venue.id}/events`, { title: 'Privado com Cartaz', startsAt: inDays(30), applicationDeadline: inDays(10), slots: 1, visibility: 'PRIVATE' });
+      const url = (await upload(venueOwner, draft.body.id)).body.imageUrl as string;
+      expect((await artistA.agent.get(url)).status).toBe(404);
+      await venueOwner.post(`/events/${draft.body.id}/transition`, { action: 'publish' }).expect(201);
+      expect((await visitor.agent.get(url)).status).toBe(404);
+      expect((await contractor.agent.get(url)).status).toBe(404);
+      expect((await artistA.agent.get(url)).status).toBe(200);
+      expect((await venueOwner.agent.get(url)).status).toBe(200);
     });
   });
 });

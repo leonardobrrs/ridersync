@@ -3,10 +3,11 @@ import { useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import { FormError } from '../../components/Fields';
 import { Poster } from '../../components/Poster';
+import { OpportunityCard } from '../marketplace/MarketplacePage';
 import { Empty, ErrorState, Loading, Status } from '../../components/States';
 import { useToast } from '../../components/Toast';
 import { api, errorMessage, qs } from '../../lib/api';
-import { APPLICATION_STATUS, dateTime, dayMonth, duration, EVENT_STATUS, money } from '../../lib/format';
+import { APPLICATION_STATUS, dateTime, duration, EVENT_STATUS, money } from '../../lib/format';
 import { useMe, useMeta } from '../../lib/hooks';
 import type { ApplicationStatus, EventPublic } from '../../lib/types';
 
@@ -59,42 +60,13 @@ export function OpportunitiesPage() {
       {q.isLoading && <Loading />}
       {q.error && <ErrorState error={q.error} retry={q.refetch} />}
       {q.data?.length === 0 && <Empty title="Nenhuma oportunidade aberta">Volte em breve ou ajuste os filtros.</Empty>}
-      <div className="stack-sm">
-        {q.data?.map((e) => {
-          const d = dayMonth(e.startsAt);
-          return (
-            <article className="prop" key={e.id}>
-              <div className="dt">
-                <b>{d.day}</b>
-                <small>{d.month}</small>
-              </div>
-              <div>
-                <h2 style={{ fontSize: 17, fontWeight: 700 }}>
-                  <Link className="link" to={`/oportunidades/${e.id}`} style={{ color: 'var(--ink)' }}>
-                    {e.title}
-                  </Link>{' '}
-                  {e.visibility === 'PRIVATE' && <span className="st draft">Privado</span>}
-                </h2>
-                <p className="muted">
-                  {e.location.name ?? e.organizer.name} · {e.location.city} · {e.slots} vaga(s) · inscrições até {dateTime(e.applicationDeadline)}
-                </p>
-                <div className="chips" style={{ marginTop: 6 }}>
-                  {e.genres.map((g) => (
-                    <span key={g} className="chip">
-                      {g}
-                    </span>
-                  ))}
-                  {e.paymentType && <span className="chip">{e.paymentType}</span>}
-                </div>
-              </div>
-              <div className="price" style={{ margin: 0, textAlign: 'right' }}>
-                {e.feeCents != null ? money(e.feeCents) : 'A combinar'}
-                <small>cachê</small>
-              </div>
-            </article>
-          );
-        })}
-      </div>
+      {!!q.data?.length && (
+        <div className="ads">
+          {q.data.map((e) => (
+            <OpportunityCard key={e.id} e={e} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -253,7 +225,11 @@ export function OpportunityPage() {
         </div>
         <aside className="side">
           <section className="box" aria-label="Candidatura">
-            <Poster name={e.organizer.name} photoUrl={e.organizer.photoUrl} top={[place.city ?? '', place.state ?? '']} bottom={[e.organizer.venueKind ?? '', '']} />
+            {e.imageUrl ? (
+              <img className="ev-cover" src={e.imageUrl} alt={`Imagem do evento ${e.title}`} />
+            ) : (
+              <Poster name={e.organizer.name} photoUrl={e.organizer.photoUrl} top={[place.city ?? '', place.state ?? '']} bottom={[e.organizer.venueKind ?? '', '']} />
+            )}
             {!e.acceptingApplications && (
               <div className="inline-msg info">{e.status === 'FILLED' ? 'Todas as vagas foram preenchidas.' : 'Inscrições encerradas para esta oportunidade.'}</div>
             )}

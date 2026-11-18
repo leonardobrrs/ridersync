@@ -313,6 +313,9 @@ export interface EventPublic {
   location: Place;
   postponedAt: string | null;
   filledSlots?: number;
+  /** Imagem do evento (cartaz) exibida no card; null quando o organizador não enviou. */
+  imageUrl: string | null;
+  imageThumbUrl: string | null;
   description: string;
   startsAt: string;
   durationMinutes: number | null;
@@ -353,6 +356,7 @@ export interface OrgEventRow {
   title: string;
   status: EventStatus;
   statusLabel: string;
+  imageThumbUrl: string | null;
   visibility: EventVisibility;
   filledSlots: number;
   startsAt: string;

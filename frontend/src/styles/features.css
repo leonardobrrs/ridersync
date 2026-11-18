@@ -250,3 +250,62 @@ a.chip{height:auto;min-height:26px;max-width:100%;flex-wrap:wrap;column-gap:4px;
   .tabbar{transition:transform .15s ease .25s,visibility 0s linear .25s}
   body:has(:is(input:not([type=checkbox],[type=radio],[type=range],[type=file],[type=button],[type=submit]),textarea,[contenteditable=true]):focus) .tabbar{transform:translateY(110%);visibility:hidden;transition:transform .15s ease,visibility 0s linear .15s}
 }
+
+/* ───────── Reunião 18/11: responsividade e novos componentes ───────── */
+/* Logo: o fundo amarelo acompanha só o texto (antes esticava com a célula do grid conforme a largura da tela). */
+.hdr .logo{justify-self:start;align-self:center;width:max-content;max-width:100%}
+/* Próximos shows / próximos eventos: nome, título e horário em linhas próprias, com respiro. */
+.dates li>span:not(.dt),.dates li>.row>span{display:grid;gap:4px;min-width:0}
+.dates strong{display:block;line-height:1.3}
+.dates small{display:block;color:var(--muted);font-size:13px;line-height:1.45}
+.dates li{padding-block:12px}
+.show-b{gap:6px}
+.show-t{line-height:1.4}
+.show-m{line-height:1.45}
+/* Card de oportunidade (mesma grade dos anúncios) e imagem do evento */
+.opp-card .tape{max-width:calc(100% - 20px);overflow:hidden;text-overflow:ellipsis}
+.ev-cover{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:12px;background:var(--sunk)}
+.picker-prev.wide{width:160px;height:90px}
+/* Menu do perfil: atalhos com ícone e casas de show do contratante */
+.menu a:has(svg){display:flex;align-items:center;gap:8px}
+.menu a svg{flex:none;color:var(--muted)}
+.menu-venue span{display:grid;min-width:0}
+.menu-venue span,.menu-venue small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.menu-venue small{color:var(--muted);font-size:12px;font-weight:500}
+/* Chat da negociação */
+.chat-compose{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end}
+.chat-compose textarea{min-height:44px;max-height:160px;resize:vertical}
+.chat-tip{grid-column:1/-1}
+.chat-box .chat{max-height:420px;overflow-y:auto}
+.clamp-1{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chat-dock{position:fixed;left:max(12px,env(safe-area-inset-left,0px));right:max(12px,env(safe-area-inset-right,0px));
+  bottom:calc(var(--tabbar-h) + env(safe-area-inset-bottom,0px) + 8px);z-index:29;display:grid;grid-template-columns:auto minmax(0,1fr) auto;
+  align-items:center;gap:10px;padding:10px 14px;border:0;border-radius:16px;background:var(--case);color:var(--case-ink);
+  box-shadow:0 8px 24px rgb(0 0 0/.22);text-align:left;font:inherit;cursor:pointer}
+.chat-dock-i{width:36px;height:36px;border-radius:50%;background:var(--cue);color:var(--cue-ink);display:grid;place-items:center}
+.chat-dock-t{display:grid;min-width:0}
+.chat-dock-t small{opacity:.8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body:has(.chat-dock) #root{padding-bottom:calc(var(--tabbar-h) + env(safe-area-inset-bottom,0px) + 84px)}
+.chat-backdrop{position:fixed;inset:0;z-index:60;background:rgb(0 0 0/.45)}
+.chat-sheet{position:fixed;left:0;right:0;bottom:0;z-index:61;height:min(88dvh,720px);display:grid;grid-template-rows:auto minmax(0,1fr) auto;
+  background:var(--surface);border-radius:18px 18px 0 0;box-shadow:0 -8px 30px rgb(0 0 0/.25);
+  padding:0 max(14px,env(safe-area-inset-right,0px)) calc(12px + env(safe-area-inset-bottom,0px)) max(14px,env(safe-area-inset-left,0px))}
+.chat-sheet-h{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 0 10px;border-bottom:1px solid var(--line)}
+.chat-sheet .chat-body{overflow-y:auto;padding-block:12px;margin:0;align-content:start}
+.chat-sheet .chat-compose{padding-top:10px;border-top:1px solid var(--line)}
+.chat-sheet .chat-tip{display:none}
+.chat-closed{padding-top:10px}
+@media (max-width:700px){
+  /* Celular: sem o filtro de instrumentos (poluía a tela); a busca por instrumento continua nos filtros de artistas. */
+  .cats .cat.sm,.cats .vsep{display:none}
+  .cats .wrap{justify-content:space-between}
+  .cat{min-width:0;flex:1 1 0;white-space:nowrap;font-size:12px}
+  .cat .ci{width:42px;height:42px}
+  .logo{font-size:21px;padding:5px 11px 3px}
+}
+@media (max-width:380px){
+  /* Duas colunas de cards até 330 px: um card por linha deixava a página enorme. */
+  .ads{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .logo{font-size:19px;padding:5px 9px 2px}
+}
+@media (max-width:330px){ .ads{grid-template-columns:1fr} }

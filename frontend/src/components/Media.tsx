@@ -72,12 +72,18 @@ export function ImagePicker({
   value,
   onChange,
   currentUrl,
+  onRemoveCurrent,
+  wide = false,
   hint = 'JPG, PNG ou WEBP. Imagens grandes são reduzidas automaticamente.',
 }: {
   label: string;
   value: File | null;
   onChange: (f: File | null) => void;
   currentUrl?: string | null;
+  /** Remove a imagem já salva (quando não há arquivo novo escolhido). */
+  onRemoveCurrent?: () => void;
+  /** Prévia horizontal (cartaz de evento) em vez de quadrada. */
+  wide?: boolean;
   hint?: string;
 }) {
   const id = useId();
@@ -91,8 +97,8 @@ export function ImagePicker({
         {label}
       </span>
       <div className="picker">
-        <span className="picker-prev" aria-hidden={!shown}>
-          {shown ? <img src={shown} alt="Pré-visualização" /> : <Icon name="user" size={28} />}
+        <span className={`picker-prev${wide ? ' wide' : ''}`} aria-hidden={!shown}>
+          {shown ? <img src={shown} alt="Pré-visualização" /> : <Icon name={wide ? 'calendar' : 'user'} size={28} />}
         </span>
         <div className="stack-sm">
           <input
@@ -121,6 +127,11 @@ export function ImagePicker({
                 }}
               >
                 Remover
+              </button>
+            )}
+            {!value && currentUrl && onRemoveCurrent && (
+              <button type="button" className="btn sm ghost danger" onClick={onRemoveCurrent}>
+                Remover imagem
               </button>
             )}
           </div>

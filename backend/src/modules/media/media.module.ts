@@ -13,7 +13,8 @@ import { createStorageDriver, STORAGE_DRIVER } from './storage';
  * Regras de visualização de arquivos:
  *  - quem enviou sempre vê;
  *  - foto/portfólio de artista: público se o perfil é PUBLIC; senão apenas quem participa;
- *  - foto de casa de show (VENUE): pública; foto de contratante individual (e avatares legados de conta, ainda servidos): apenas usuários autenticados.
+ *  - foto de casa de show (VENUE): pública; foto de contratante individual (e avatares legados de conta, ainda servidos): apenas usuários autenticados;
+ *  - imagem de evento: segue a visibilidade do evento (ver canSeeEventImage).
  */
 @Injectable()
 export class MediaAccessPolicy {
@@ -30,10 +31,12 @@ export class MediaAccessPolicy {
         artistPhoto: { select: { id: true, visibility: true } },
         orgPhoto: { select: { id: true, type: true } },
         portfolioItem: { select: { artist: { select: { id: true, visibility: true } } } },
+        eventImage: { select: { visibility: true, status: true, organizerId: true } },
       },
     });
     if (!asset) return null;
     if (userId && asset.uploadedById === userId) return asset;
+    if (asset.eventImage) return (await this.canSeeEventImage(asset.eventImage, userId)) ? asset : null;
     if (asset.userAvatar) return userId ? asset : null;
     if (asset.orgPhoto) return asset.orgPhoto.type === 'VENUE' || userId ? asset : null;
     const artist = asset.artistPhoto ?? asset.portfolioItem?.artist;
@@ -44,6 +47,16 @@ export class MediaAccessPolicy {
       if (acc?.canView) return asset;
     }
     return null;
+  }
+
+  /** Mesma visibilidade do evento: público → todos; privado → contas de artista; rascunho → só o organizador. */
+  private async canSeeEventImage(e: { visibility: string; status: string; organizerId: string }, userId: string | null) {
+    if (e.status !== 'DRAFT' && e.visibility === 'PUBLIC') return true;
+    if (!userId) return false;
+    if (await this.access.orgRole(userId, e.organizerId)) return true;
+    if (e.status === 'DRAFT') return false;
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { accountType: true } });
+    return user?.accountType === 'ARTIST';
   }
 }
 

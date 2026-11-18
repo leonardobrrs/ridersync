@@ -6,6 +6,7 @@ import { Avatar, Poster } from '../../components/Poster';
 import { Empty, ErrorState, Loading } from '../../components/States';
 import { api, qs } from '../../lib/api';
 import { dateTime, dayMonth } from '../../lib/format';
+import { formatPhone, phoneDigits } from '../../lib/phone';
 import { useMeta } from '../../lib/hooks';
 import type { PublicVenue, VenueCard } from '../../lib/types';
 import { RiderList } from './ArtistPublicPage';
@@ -208,7 +209,9 @@ export function VenuePublicPage() {
               {v.contactPhone && (
                 <div>
                   <dt>Telefone</dt>
-                  <dd>{v.contactPhone}</dd>
+                  <dd>
+                    <a className="link" href={`tel:+55${phoneDigits(v.contactPhone)}`}>{formatPhone(v.contactPhone)}</a>
+                  </dd>
                 </div>
               )}
               {v.website && (

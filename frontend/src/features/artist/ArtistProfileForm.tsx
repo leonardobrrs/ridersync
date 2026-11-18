@@ -4,7 +4,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { applyServerErrors, ChipPicker, FormError, SelectField, TextArea, TextField } from '../../components/Fields';
+import { applyServerErrors, PhoneField, ChipPicker, FormError, SelectField, TextArea, TextField } from '../../components/Fields';
+import { formatPhone, isValidPhoneBR } from '../../lib/phone';
 import { useToast } from '../../components/Toast';
 import { api } from '../../lib/api';
 import { centsFromReais, reaisFromCents } from '../../lib/format';
@@ -33,7 +34,7 @@ export const ProfileFormSchema = z.object({
     .trim()
     .refine((v) => v === '' || /^\d+([.,]\d{1,2})?$/.test(v), 'Valor inválido (ex.: 600 ou 600,00).'),
   contactEmail: z.string().trim().refine((v) => v === '' || z.email().safeParse(v).success, 'E-mail inválido.'),
-  contactPhone: z.string().trim().max(20),
+  contactPhone: z.string().trim().max(20).refine(isValidPhoneBR, 'Telefone incompleto. Use DDD + número, ex.: (82) 99999-9999.'),
   instagram: z.string().trim().max(31),
   website: optionalUrl,
   mainInstrument: z.string(),
@@ -53,7 +54,7 @@ export function toFormValues(a?: Partial<ManagedArtist>): ProfileFormValues {
     careerStartYear: a?.careerStartYear ? String(a.careerStartYear) : '',
     baseFee: reaisFromCents(a?.baseFeeCents),
     contactEmail: a?.contactEmail ?? '',
-    contactPhone: a?.contactPhone ?? '',
+    contactPhone: formatPhone(a?.contactPhone),
     instagram: a?.instagram ?? '',
     website: a?.website ?? '',
     mainInstrument: a?.mainInstrument ?? '',
@@ -137,7 +138,7 @@ export function ProfileFields({ form, solo }: { form: ReturnType<typeof useForm<
         <legend>Contatos públicos (aparecem no perfil público)</legend>
         <div className="row2">
           <TextField label="E-mail de contato" type="email" {...form.register('contactEmail')} error={e.contactEmail} />
-          <TextField label="Telefone/WhatsApp" {...form.register('contactPhone')} error={e.contactPhone} />
+          <PhoneField label="Telefone/WhatsApp" {...form.register('contactPhone')} error={e.contactPhone} />
           <TextField label="Instagram" placeholder="@usuario" {...form.register('instagram')} error={e.instagram} />
           <TextField label="Site" placeholder="https://" {...form.register('website')} error={e.website} />
         </div>

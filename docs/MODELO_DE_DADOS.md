@@ -8,6 +8,7 @@ Fonte de verdade: `backend/prisma/schema.prisma`. CHECKs que o Prisma não expre
 |---|---|
 | `20261117113114_init` | Modelo do MVP, CHECKs de domínio e catálogo técnico. |
 | `20261118120000_evolucao_contas_eventos_notificacoes` | Tipo de conta, verificação de e-mail, Google, avatar, consentimento, bloqueio de login, anonimização; tokens; notificações, preferências e outbox; eventos públicos/privados, local livre, estados `FILLED`/`POSTPONED`; candidatura `CANCELLED`; organização `INDIVIDUAL`; catálogo `artistRequirement`; miniatura de portfólio; variantes de mídia. Recuperação em `ROLLBACK.md` na pasta da migration. |
+| `20261118200000_imagem_do_evento` | `Event.imageId` (opcional, único, FK para `MediaAsset` com `SET NULL`): imagem exibida no card do evento. Aditiva. |
 
 ## Entidades
 

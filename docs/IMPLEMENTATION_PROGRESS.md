@@ -125,3 +125,22 @@ Detalhes: `docs/RELATORIO_EVOLUCAO.md` (situação de cada requisito), `docs/CHE
 | Playwright (desktop/tablet/celular) | **18 testes passando** |
 | Auditoria de layout com dados extremos (7 páginas públicas + 5 do painel × 6 larguras) | 46/72 com problema antes → **0/72** depois |
 | `npm run build` | API e SPA ok |
+
+## Reunião de 18/11 (`docs/reuniao18_11.md`)
+
+| Item | Situação |
+|---|---|
+| Celular: tirar filtro de instrumentos | Feito (fica no painel "Filtros") |
+| Chat da negociação em pop-up (celular) | Feito (barra fixa + painel sobreposto; desktop na lateral) |
+| Responsividade no celular (logo, fontes, cards, espaçamentos) | Feito (logo sem fundo esticado; 2 colunas de cards até 330 px; categorias sem quebra) |
+| Feed por tipo de perfil | Feito (ver `DECISOES_TECNICAS.md`) |
+| Espaçamento em "Próximos shows" | Feito (textos colados por elementos em linha) |
+| Máscara de telefone | Feito (perfil e casa; exibição formatada) |
+| Menus fecham ao clicar fora | Feito (`useDismiss`: menu do perfil e sino) |
+| Enter envia mensagem | Feito (Shift+Enter quebra linha) |
+| Feed do artista: casas e oportunidades em cards | Feito (também em `/oportunidades`) |
+| Imagem do evento | Feito (migration `20261118200000_imagem_do_evento`) |
+| Acesso direto à casa pelo menu do perfil | Feito (e "Minha casa" na barra inferior) |
+
+Verificação: backend 232 testes; frontend 26; Playwright 24 (desktop, tablet, celular); lint, typecheck e build ok.
+Migration aplicada só nos bancos locais.

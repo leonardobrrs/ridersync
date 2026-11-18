@@ -1,8 +1,9 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { api } from '../lib/api';
 import { useMe } from '../lib/hooks';
+import { useDismiss } from '../lib/useDismiss';
 import type { AccountType, Me } from '../lib/types';
 import { AccountGate } from './AccountGate';
 import { Icon } from './Icon';
@@ -16,9 +17,14 @@ function UserMenu({ me }: { me: Me }) {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const toast = useToast();
-  // Menu aberto apenas na rota em que foi aberto (fecha ao navegar).
+  // Menu aberto apenas na rota em que foi aberto (fecha ao navegar), ao clicar/tocar fora e com Esc.
   const [menuPath, setMenuPath] = useState<string | null>(null);
   const open = menuPath === location.pathname;
+  const box = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const close = useCallback(() => setMenuPath(null), []);
+  useDismiss(open, box, close, trigger);
+  const venues = me.organizations.filter((o) => o.type === 'VENUE');
   const logout = async () => {
     await api.post('/auth/logout').catch(() => undefined);
     qc.clear();
@@ -28,8 +34,8 @@ function UserMenu({ me }: { me: Me }) {
   };
   const isArtist = me.user.accountType === 'ARTIST';
   return (
-    <div style={{ position: 'relative' }}>
-      <button type="button" className="hlink" aria-haspopup="menu" aria-expanded={open} onClick={() => setMenuPath(open ? null : location.pathname)}>
+    <div style={{ position: 'relative' }} ref={box}>
+      <button ref={trigger} type="button" className="hlink" aria-haspopup="menu" aria-expanded={open} onClick={() => setMenuPath(open ? null : location.pathname)}>
         <Avatar name={me.user.name} photoUrl={me.user.profilePhotoUrl} size={28} />
         <span className="t">{me.user.name.split(' ')[0]}</span>
         {me.pendingInvitations > 0 && <span className="n">{me.pendingInvitations}</span>}
@@ -41,14 +47,41 @@ function UserMenu({ me }: { me: Me }) {
             <small>{isArtist ? 'Conta de artista' : me.user.accountType === 'CONTRACTOR' ? 'Conta de contratante' : 'Tipo de conta pendente'}</small>
           </span>
           <hr />
+          {isArtist && (
+            <>
+              <Link role="menuitem" to="/painel/perfil">
+                <Icon name="user" size={16} /> Meu perfil
+              </Link>
+              <Link role="menuitem" to="/painel/bandas">
+                <Icon name="users" size={16} /> Minhas bandas
+              </Link>
+            </>
+          )}
+          {me.user.accountType === 'CONTRACTOR' && (
+            <>
+              {venues.map((v) => (
+                <Link key={v.id} role="menuitem" to={`/painel/casas/${v.id}`} className="menu-venue">
+                  <Icon name="venue" size={16} />
+                  <span>
+                    {v.name}
+                    <small>Minha casa de show</small>
+                  </span>
+                </Link>
+              ))}
+              {venues.length === 0 && (
+                <Link role="menuitem" to="/painel/casas">
+                  <Icon name="venue" size={16} /> Cadastrar casa de show
+                </Link>
+              )}
+              <Link role="menuitem" to="/painel/eventos">
+                <Icon name="calendar" size={16} /> Eventos particulares
+              </Link>
+            </>
+          )}
+          <hr />
           <Link role="menuitem" to="/painel">
             Painel
           </Link>
-          {isArtist && (
-            <Link role="menuitem" to="/painel/perfil">
-              Meu perfil
-            </Link>
-          )}
           <Link role="menuitem" to="/painel/negociacoes">
             Negociações
           </Link>
@@ -100,9 +133,12 @@ function Header() {
           <NavLink to="/" end className="hlink hide-m">
             <span className="t">Início</span>
           </NavLink>
-          <NavLink to="/oportunidades" className="hlink hide-m">
-            <span className="t">Oportunidades</span>
-          </NavLink>
+          {/* Oportunidades são vagas para artistas: contratantes não as veem no menu principal. */}
+          {me?.user.accountType !== 'CONTRACTOR' && (
+            <NavLink to="/oportunidades" className="hlink hide-m">
+              <span className="t">Oportunidades</span>
+            </NavLink>
+          )}
           <NavLink to="/casas" className="hlink hide-m">
             <span className="t">Casas de show</span>
           </NavLink>
@@ -184,17 +220,28 @@ function MobileTabbar() {
       </nav>
     );
   }
-  const inPanel = pathname.startsWith('/painel') && !/^\/painel\/(negociacoes|menu)(\/|$)/.test(pathname);
+  const contractor = me.user.accountType === 'CONTRACTOR';
+  const venues = me.organizations.filter((o) => o.type === 'VENUE');
+  const venueLink = venues.length === 1 ? `/painel/casas/${venues[0].id}` : '/painel/casas';
+  const inVenue = contractor && pathname.startsWith('/painel/casas');
+  const inPanel = pathname.startsWith('/painel') && !inVenue && !/^\/painel\/(negociacoes|menu)(\/|$)/.test(pathname);
   return (
     <nav className="tabbar" aria-label="Atalhos">
       <NavLink to="/" end>
         <Icon name="home" />
         Início
       </NavLink>
-      <NavLink to="/oportunidades">
-        <Icon name="ticket" />
-        Vagas
-      </NavLink>
+      {contractor ? (
+        <Link to={venueLink} aria-current={inVenue ? 'page' : undefined} className={inVenue ? 'active' : undefined}>
+          <Icon name="venue" />
+          {venues.length === 1 ? 'Minha casa' : 'Casas'}
+        </Link>
+      ) : (
+        <NavLink to="/oportunidades">
+          <Icon name="ticket" />
+          Vagas
+        </NavLink>
+      )}
       {/* "Painel" fica ativo em todas as subpáginas do painel que não têm atalho próprio (agenda, perfil, eventos…). */}
       <Link to="/painel" aria-current={inPanel ? 'page' : undefined} className={inPanel ? 'active' : undefined}>
         <Icon name="grid" />

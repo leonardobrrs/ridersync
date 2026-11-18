@@ -8,7 +8,7 @@ import { alCity, genres, moneyCents, optionalText, text, uf } from '../../common
 import { PrismaService, Tx } from '../../prisma/prisma.service';
 import { AccessService } from '../access/access.service';
 import { publicArtistCardSelect, toArtistCard } from '../artists/artist.presenter';
-import { mediaThumbUrl } from '../media/media.service';
+import { MediaService, mediaThumbUrl, mediaUrl, type UploadedFile } from '../media/media.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EventLifecycleService } from './event-lifecycle.service';
 import {
@@ -122,6 +122,7 @@ const eventPublicSelect = {
   locationAddress: true,
   locationCity: true,
   locationState: true,
+  imageId: true,
   organizer: { select: orgPublicSelect },
   venue: { select: orgPublicSelect },
 } satisfies Prisma.EventSelect;
@@ -139,9 +140,11 @@ export function eventLocation(e: Pick<EventPublicRow, 'venue' | 'locationName' |
 }
 
 function eventOut(e: EventPublicRow, filledSlots?: number) {
-  const { organizer, venue, locationName: _n, locationAddress: _a, locationCity: _c, locationState: _s, ...rest } = e;
+  const { organizer, venue, imageId, locationName: _n, locationAddress: _a, locationCity: _c, locationState: _s, ...rest } = e;
   return {
     ...rest,
+    imageUrl: mediaUrl(imageId),
+    imageThumbUrl: mediaThumbUrl(imageId),
     statusLabel: EVENT_STATUS_LABEL[e.status],
     organizer: orgOut(organizer)!,
     venue: orgOut(venue),
@@ -163,7 +166,27 @@ export class EventsService {
     private readonly access: AccessService,
     private readonly lifecycle: EventLifecycleService,
     private readonly notifications: NotificationsService,
+    private readonly media: MediaService,
   ) {}
+
+  /** Imagem do evento (exibida no card). Só responsáveis do organizador; eventos encerrados/cancelados não mudam. */
+  async setImage(userId: string, eventId: string, file: UploadedFile | undefined) {
+    const event = await this.loadForManage(userId, eventId);
+    if (!EDITABLE_EVENT_STATUSES.includes(event.status)) throw conflict('EVENT_LOCKED', 'Eventos realizados ou cancelados não podem ser editados.');
+    const asset = await this.media.store(file, userId, 'image');
+    await this.prisma.event.update({ where: { id: eventId }, data: { imageId: asset.id } });
+    if (event.imageId) await this.media.remove(event.imageId);
+    return this.manageDetail(userId, eventId);
+  }
+
+  async removeImage(userId: string, eventId: string) {
+    const event = await this.loadForManage(userId, eventId);
+    if (event.imageId) {
+      await this.prisma.event.update({ where: { id: eventId }, data: { imageId: null } });
+      await this.media.remove(event.imageId);
+    }
+    return this.manageDetail(userId, eventId);
+  }
 
   private async viewer(userId: string | null): Promise<Viewer | null> {
     if (!userId) return null;
@@ -275,12 +298,14 @@ export class EventsService {
         startsAt: true,
         applicationDeadline: true,
         slots: true,
+        imageId: true,
         applications: { select: { status: true } },
         bookings: { where: { origin: 'DIRECT', status: { in: ['NEGOTIATING', 'AGREED', 'CONFIRMED'] } }, select: { id: true } },
       },
     });
-    return rows.map(({ applications, bookings, ...e }) => ({
+    return rows.map(({ applications, bookings, imageId, ...e }) => ({
       ...e,
+      imageThumbUrl: mediaThumbUrl(imageId),
       statusLabel: EVENT_STATUS_LABEL[e.status],
       filledSlots: applications.filter((a) => a.status === 'ACCEPTED').length + bookings.length,
       applicationCounts: {

@@ -1,7 +1,8 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { api } from '../lib/api';
+import { useDismiss } from '../lib/useDismiss';
 import { dateTime } from '../lib/format';
 import type { NotificationItem } from '../lib/types';
 import { Icon } from './Icon';
@@ -36,17 +37,8 @@ export function NotificationBell() {
   });
   const count = unread.data?.unread ?? 0;
 
-  useEffect(() => {
-    if (!open) return;
-    const onDoc = (e: MouseEvent) => !box.current?.contains(e.target as Node) && setOpenPath(null);
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpenPath(null);
-    document.addEventListener('mousedown', onDoc);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDoc);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
+  const close = useCallback(() => setOpenPath(null), []);
+  useDismiss(open, box, close);
 
   const refresh = () => qc.invalidateQueries({ queryKey: ['notifications'] });
   const openItem = async (n: NotificationItem) => {
