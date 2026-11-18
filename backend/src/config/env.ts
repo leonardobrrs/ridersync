@@ -23,11 +23,35 @@ const EnvSchema = z
     S3_SECRET_ACCESS_KEY: z.string().optional(),
     S3_FORCE_PATH_STYLE: bool,
     THROTTLE_AUTH_LIMIT: z.coerce.number().int().positive().default(20),
+    // Login com Google (opcional): as três juntas ou nenhuma.
+    GOOGLE_CLIENT_ID: z.string().trim().optional(),
+    GOOGLE_CLIENT_SECRET: z.string().trim().optional(),
+    GOOGLE_REDIRECT_URI: z.string().trim().optional(),
   })
   .superRefine((env, ctx) => {
     if (env.STORAGE_DRIVER === 's3') {
       for (const key of ['S3_BUCKET', 'S3_REGION'] as const) {
         if (!env[key]) ctx.addIssue({ code: 'custom', path: [key], message: `${key} é obrigatória quando STORAGE_DRIVER=s3` });
+      }
+    }
+    const google = ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REDIRECT_URI'] as const;
+    const present = google.filter((k) => env[k]);
+    if (present.length > 0 && present.length < google.length) {
+      for (const k of google.filter((k) => !env[k])) {
+        ctx.addIssue({ code: 'custom', path: [k], message: `${k} é obrigatória quando o login com Google está configurado` });
+      }
+    }
+    if (env.GOOGLE_REDIRECT_URI) {
+      try {
+        const u = new URL(env.GOOGLE_REDIRECT_URI);
+        const local = u.hostname === 'localhost' || u.hostname === '127.0.0.1';
+        if (u.pathname !== '/api/auth/google/callback' || (u.protocol !== 'https:' && !local) || u.search || u.hash) throw new Error();
+      } catch {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['GOOGLE_REDIRECT_URI'],
+          message: 'GOOGLE_REDIRECT_URI deve ser https://<domínio-do-front>/api/auth/google/callback (http só em localhost)',
+        });
       }
     }
   });

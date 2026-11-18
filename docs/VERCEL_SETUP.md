@@ -67,3 +67,11 @@ de rotas. Atenção: regras de projeto valem para **todos** os ambientes, inclus
 - Neon staging populado com o seed de demonstração (`src/seed/demo-seed.ts`, idempotente, só adiciona): 7 contas
   fictícias `<nome>@demo.ridersync.local` (ana, lia, davi, joao, bia, rafael, marina) com a senha de desenvolvimento
   definida no seed. O app de staging é público: trate essas contas como públicas.
+
+## Login com Google (2026-11-18)
+
+Variáveis no projeto `ridersync` (API): `GOOGLE_CLIENT_ID` (Config), `GOOGLE_CLIENT_SECRET` (Secret em Preview;
+Config em Development, que não aceita sensíveis) e `GOOGLE_REDIRECT_URI`:
+Preview `https://ridersync-front-staging.vercel.app/api/auth/google/callback`;
+Development `http://localhost:5173/api/auth/google/callback`. Detalhes em `docs/DECISOES_TECNICAS.md` §9.
+O login com Google só funciona no alias estável `ridersync-front-staging.vercel.app` (e em localhost).
