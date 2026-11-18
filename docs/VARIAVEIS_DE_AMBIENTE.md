@@ -37,6 +37,7 @@ Modelo comentado: `backend/.env.example`. O frontend não usa variáveis em prod
 | `COOKIE_SECURE`, `CORS_ORIGINS`, `STORAGE_DRIVER` | ✔ | ✔ | — |
 | `BLOB_READ_WRITE_TOKEN` | ✔ | ✔ | — |
 | `APP_SECRET`, `CRON_SECRET` (gerados aleatoriamente, secretos) | ✔ | ✔ | — |
-| `PUBLIC_APP_URL` | `https://ridersync-front.vercel.app` | `http://localhost:5173` | — |
+| `PUBLIC_APP_URL` | `https://ridersync-front-staging.vercel.app` | `http://localhost:5173` | — |
+| `CORS_ORIGINS` (Preview) | `https://ridersync-front-staging.vercel.app` + `https://ridersync-front-*-projetao2.vercel.app` | `http://localhost:5173` | — |
 | `RESEND_API_KEY`, `MAIL_DRIVER=resend`, `MAIL_FROM` | **pendente (credencial)** | — | — |
 | `GOOGLE_CLIENT_ID/SECRET` | **pendente (credencial)** | — | — |

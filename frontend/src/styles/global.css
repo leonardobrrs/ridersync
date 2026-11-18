@@ -253,7 +253,7 @@ tr:last-child td{border-bottom:0}
 .cmp-f .field{flex:1 1 200px}
 .sum{display:flex;flex-wrap:wrap;gap:6px}
 .similar{margin-top:40px;display:grid;gap:14px}
-.rowscroll{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(220px,1fr);gap:16px;overflow-x:auto;padding-bottom:6px}
+.rowscroll{position:relative;display:grid;grid-auto-flow:column;grid-auto-columns:minmax(220px,1fr);gap:16px;overflow-x:auto;padding-bottom:6px}
 
 /* Conta */
 .acc{padding-block:28px 72px;display:grid;gap:24px}

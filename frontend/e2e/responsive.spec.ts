@@ -41,3 +41,28 @@ test('perfil público do artista (abas) e painel autenticado sem rolagem horizon
   }
   await contractor.context.close();
 });
+
+/**
+ * Regressão (Preview de 2026-11-18): com vários shows confirmados, o texto para leitor de tela dos cards
+ * (`.sr-only`, posicionado) escapava do carrossel e criava rolagem horizontal no celular/tablet.
+ * A resposta da API é complementada no navegador para não depender do volume de dados do banco de teste.
+ */
+test('página inicial com muitos shows confirmados sem rolagem horizontal', async ({ page }) => {
+  await page.route('**/api/public/home', async (route) => {
+    const res = await route.fetch();
+    const data = await res.json();
+    const shows = Array.from({ length: 10 }, (_, i) => ({
+      id: `00000000-0000-4000-8000-00000000000${i}`,
+      title: `Show de teste ${i + 1}`,
+      startsAt: new Date(Date.now() + (i + 3) * 86400_000).toISOString(),
+      durationMinutes: 90,
+      place: { name: 'Casa de teste com nome bem comprido', venueSlug: null, city: 'Maceió', state: 'AL', address: null },
+      artist: { name: `Artista de teste ${i + 1}`, slug: `artista-teste-${i + 1}`, kind: 'SOLO', photoUrl: null },
+      eventId: null,
+    }));
+    await route.fulfill({ response: res, json: { ...data, shows } });
+  });
+  await page.goto('/');
+  await expect(page.getByText('Artista de teste 1', { exact: true })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+});

@@ -32,8 +32,8 @@ Nenhuma integração é simulada: sem credencial, e-mails ficam registrados como
 1. Google Cloud Console → crie um projeto → **APIs e serviços → Tela de consentimento OAuth** (tipo Externo; escopos
    `openid`, `email`, `profile`; adicione usuários de teste enquanto o app estiver em modo de teste).
 2. **Credenciais → Criar credenciais → ID do cliente OAuth → Aplicativo da Web**.
-   - Origens JavaScript autorizadas: `https://ridersync-front.vercel.app` (e `http://localhost:5173` para dev).
-   - URIs de redirecionamento autorizados: `https://ridersync-front.vercel.app/api/auth/google/callback`
+   - Origens JavaScript autorizadas: `https://ridersync-front-staging.vercel.app` (Preview) e `http://localhost:5173` (dev).
+   - URIs de redirecionamento autorizados: `https://ridersync-front-staging.vercel.app/api/auth/google/callback`
      (e `http://localhost:5173/api/auth/google/callback`). O redirect usa `PUBLIC_APP_URL` + `/api/auth/google/callback`.
 3. Cadastre na Vercel (Preview): `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET` (`--sensitive`). Confirme que
    `PUBLIC_APP_URL` aponta para o mesmo domínio autorizado.

@@ -35,7 +35,7 @@ testes para obter links de confirmação/redefinição.
 | Backend — unitários | `src/**/*.spec.ts` (13 arquivos) | **passando** |
 | Backend — integração | `test/*.e2e-spec.ts` (8 arquivos) | **passando** — total backend: 201 testes |
 | Frontend — unitários | `src/**/*.test.tsx?` (3 arquivos) | **13 passando** |
-| Playwright | `e2e/*.spec.ts` (4 arquivos) | **14 passando** (desktop 9, tablet 2, celular 3) |
+| Playwright | `e2e/*.spec.ts` (4 arquivos) | **17 passando** (desktop 10, tablet 3, celular 4) |
 
 ### O que é testado
 

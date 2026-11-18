@@ -178,3 +178,11 @@ A suíte Jest/Supertest **não** foi executada contra o Neon (ela trunca tabelas
 > **Windows:** os scripts `*:neon:staging` usam `sh -c '…'` e só funcionam com shell POSIX. Pelo `npm run` no Windows
 > (que usa `cmd.exe`) eles terminam sem fazer nada. No Git Bash, rode a mesma cadeia diretamente em `backend/`:
 > `npx dotenv -o -e .env.neon-staging -- sh -c '[ "$NEON_BRANCH" = ridersync-staging ] || exit 1; DATABASE_URL="$DATABASE_URL_UNPOOLED" npx prisma migrate deploy'`.
+
+## 2026-11-18 — evolução
+
+- Backup: `staging-pre-evolucao` (`br-weathered-bar-b66k9nvk`), criada de `ridersync-staging` antes da migration, sem expiração.
+  Restauração: apontar o `DATABASE_URL` do Preview para essa branch ou usar *Restore* do Neon a partir dela.
+- `20261118120000_evolucao_contas_eventos_notificacoes` aplicada em `ridersync-staging`: `migrate status` = up to date;
+  `migrate diff` schema × banco = sem diferenças. `production` não foi tocada (sem migration, seed ou conexão).
+- Seed v2 executado duas vezes (contagens idênticas na 2ª execução); 6 contas não-demo preexistentes preservadas.

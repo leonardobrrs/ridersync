@@ -103,5 +103,5 @@ Detalhes: `docs/RELATORIO_EVOLUCAO.md` (situação de cada requisito), `docs/CHE
 | `npm run lint` / `npm run typecheck` | sem erros |
 | Backend (Jest: 13 unitários + 8 integração) | **201 testes passando** |
 | Frontend (Vitest) | **13 testes passando** |
-| Playwright (desktop/tablet/celular) | **14 testes passando** |
+| Playwright (desktop/tablet/celular) | **17 testes passando** (inclui regressão da home) |
 | `npm run build` | API e SPA ok |

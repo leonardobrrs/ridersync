@@ -88,3 +88,40 @@ Pré-requisitos já feitos: variáveis `APP_SECRET`, `CRON_SECRET` e `PUBLIC_APP
 
 Rollback: reatribuir o alias `ridersync-api-staging.vercel.app` ao deployment anterior da API e, se necessário,
 restaurar o staging a partir da branch do passo 1 (a migration não remove dados; ver `ROLLBACK.md` da migration).
+
+## Estado em 2026-11-18 — Preview da evolução publicado (branch `feat/evolucao-ridersync`)
+
+| Item | Valor |
+|---|---|
+| Neon | backup `staging-pre-evolucao` (`br-weathered-bar-b66k9nvk`, filha de `ridersync-staging`, sem expiração); migration `20261118120000_*` aplicada **só** em `ridersync-staging`; `production` intocada |
+| Seed | executado 2× no staging (idempotente); contas `@demo.ridersync.local`, senha `Demo@RiderSync2026` |
+| API (Preview) | deployment da branch, alias **`ridersync-api-staging.vercel.app`** |
+| Front (Preview) | deployment da branch, alias **`ridersync-front-staging.vercel.app`** |
+| Variáveis alteradas (Preview da API) | `PUBLIC_APP_URL=https://ridersync-front-staging.vercel.app`; `CORS_ORIGINS` = front-staging + `ridersync-front-*-projetao2.vercel.app` |
+
+### Regras de roteamento do projeto `ridersync-front` (valem para todos os deployments)
+
+| # | Regra | Condição | Destino |
+|---|---|---|---|
+| 1 | `API RiderSync (front-staging)` | `has host = ridersync-front-staging.vercel.app` (igualdade exata) | `https://ridersync-api-staging.vercel.app/api/:path` |
+| 2 | `API RiderSync (site publico, API legada)` | `missing host = ridersync-front-staging.vercel.app` | `https://ridersync-api-legado.vercel.app/api/:path` |
+
+As duas injetam `x-vercel-protection-bypass` com o segredo de automação da API (só na configuração da regra; não está no
+código, no bundle nem no navegador). O segredo anterior foi **revogado** em 2026-11-18 e substituído.
+
+`ridersync-api-legado.vercel.app` fixa o deployment **antigo** da API (`ridersync-jhsjo916p`), para que o site público
+(`ridersync-front.vercel.app`, front antigo) continue exatamente como estava, sem passar a falar com a API nova.
+O site público continua usando o banco de **staging** (não existe API de produção configurada) — decisão pendente.
+
+### Acesso ao Preview
+
+`ridersync-front-staging.vercel.app` é um deployment de Preview, protegido pela *Vercel Authentication*: abra logado na
+Vercel com uma conta do time `projetao2`. Para testes automatizados use o segredo de automação do projeto `ridersync-front`
+(`x-vercel-protection-bypass`). Links de e-mail e o retorno do Google também passam por essa proteção.
+
+### Atualizar o Preview depois de novos commits na branch
+
+Cada push em `feat/evolucao-ridersync` gera deployments de Preview nos dois projetos, mas os aliases **não** se movem
+sozinhos: depois que ficarem *Ready*, rode `vercel alias set <url-api> ridersync-api-staging.vercel.app` e
+`vercel alias set <url-front> ridersync-front-staging.vercel.app` (escopo `projetao2`). Se mudar variáveis da API, faça
+`vercel redeploy <url-api>` antes de mover o alias (as variáveis são fixadas no deploy).

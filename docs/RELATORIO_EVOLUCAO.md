@@ -26,7 +26,7 @@ validação manual · **P** parcialmente implementado · **N** não implementado
 | Requisito | Situação | Observação |
 |---|---|---|
 | Página inicial no modelo do HTML (OLX) | T | Categorias, filtros, anúncios mistos, promo; e2e + verificação visual. |
-| Bateria de testes de todo o sistema | T | Backend 201, frontend 13, Playwright em 3 tamanhos de tela. |
+| Bateria de testes de todo o sistema | T | Backend 201, frontend 13, Playwright 17 em 3 tamanhos de tela; roteiro remoto no Preview. |
 | Padrões da LGPD + documento | M | Política, termos, exportação, exclusão, retenção, consentimento. Revisão jurídica recomendada. |
 | Povoar o deploy com perfis (seeders) | P | Seed idempotente pronto e validado localmente; aplicar no staging junto com o deploy do Preview (ver "Pendências"). |
 | Rotas sem vazamento; botões em vez de rota na URL | M | Guardas por login e tipo de conta; autorização no servidor; rotas exibidas como texto trocadas por botões. |
@@ -84,22 +84,22 @@ validação manual · **P** parcialmente implementado · **N** não implementado
 
 ## Ambientes
 
-- Migration aplicada **somente** nos bancos locais (`ridersync`, `ridersync_test`, `ridersync_e2e`); diff schema × banco vazio.
-- Neon **staging** e **production**: não alterados. Nenhum deploy, commit ou push.
+- Migration aplicada nos bancos locais e, em 2026-11-18, no Neon **staging** (com backup `staging-pre-evolucao` antes); diff schema × banco vazio.
+- Neon **production**: não alterado. Seed executado no staging. Preview publicado da branch `feat/evolucao-ridersync` (`ridersync-front-staging.vercel.app` → `ridersync-api-staging.vercel.app`); ver `docs/VERCEL_SETUP.md`.
 - Vercel: criadas `APP_SECRET`, `CRON_SECRET` (aleatórias, secretas) e `PUBLIC_APP_URL` em Preview/Development do projeto `ridersync`.
 
 ## Pendências que dependem de você
 
 1. **Resend**: conta, domínio verificado e `RESEND_API_KEY` + `MAIL_DRIVER=resend` + `MAIL_FROM` (ver `docs/PROVEDORES_EXTERNOS.md`).
-2. **Google OAuth**: projeto no Google Cloud, redirect `https://ridersync-front.vercel.app/api/auth/google/callback`, `GOOGLE_CLIENT_ID/SECRET`.
-3. **Autorizar** a publicação do Preview: migration no Neon staging → deploy da API → alias → seed → deploy do front (`docs/VERCEL_SETUP.md`).
+2. **Google OAuth**: projeto no Google Cloud, redirect `https://ridersync-front-staging.vercel.app/api/auth/google/callback`, `GOOGLE_CLIENT_ID/SECRET`.
+3. **Decidir o destino do site público** `ridersync-front.vercel.app` (front antigo + API antiga + banco de staging): promover a nova versão ou dar a ele um banco próprio.
 4. **E-mail do encarregado (LGPD)** real em `PRIVACY_CONTACT_EMAIL` e revisão jurídica da política.
-5. Commit/push quando aprovar.
+5. Revisar a branch `feat/evolucao-ridersync` e decidir o merge na `main`.
 
 ## Limitações conhecidas e riscos técnicos
 
-- **Build na Vercel com dependências nativas** (`argon2`, `sharp`): binários de Linux estão no lockfile, mas o build na
-  Vercel ainda não foi executado. Validar no primeiro Preview.
+- **Dependências nativas na Vercel** (`argon2`, `sharp`): validadas no Preview de 2026-11-18 (login com Argon2id e
+  reprocessamento de imagem para WebP funcionando na função em `gru1`).
 - **Cron só em Production**: no Preview, transições por data ocorrem sob demanda (antes das consultas, 1×/min por instância)
   e falhas de e-mail só são reenviadas na próxima ação que dispara notificações.
 - **E-mail enviado dentro da requisição** (após o commit): adiciona a latência do provedor às ações que notificam; o outbox
@@ -111,3 +111,8 @@ validação manual · **P** parcialmente implementado · **N** não implementado
   em texto livre são preservadas e exibidas até serem trocadas.
 - **Alagoas apenas**: perfis antigos de outra UF continuam existindo, mas edições exigem município de Alagoas.
 - Nenhum teste automatizado contra Resend/Google/Vercel Blob reais (o Blob foi validado manualmente em 2026-11-17).
+- **Página inicial com muitos shows** (corrigido em 2026-11-18, encontrado no Preview): o texto para leitor de tela dos cards
+  escapava do carrossel e criava rolagem horizontal no celular/tablet. Correção em `global.css` (`.rowscroll` posicionado)
+  e teste de regressão em `frontend/e2e/responsive.spec.ts`.
+- **Preview protegido**: `ridersync-front-staging.vercel.app` exige login na Vercel (membros do time); links de e-mail e o
+  retorno do Google também passam por essa proteção enquanto ela estiver ativa.
