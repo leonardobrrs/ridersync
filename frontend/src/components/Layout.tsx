@@ -30,7 +30,7 @@ function UserMenu({ me }: { me: Me }) {
   return (
     <div style={{ position: 'relative' }}>
       <button type="button" className="hlink" aria-haspopup="menu" aria-expanded={open} onClick={() => setMenuPath(open ? null : location.pathname)}>
-        <Avatar name={me.user.name} photoUrl={me.user.avatarUrl} size={28} />
+        <Avatar name={me.user.name} photoUrl={me.user.profilePhotoUrl} size={28} />
         <span className="t">{me.user.name.split(' ')[0]}</span>
         {me.pendingInvitations > 0 && <span className="n">{me.pendingInvitations}</span>}
       </button>
@@ -161,6 +161,7 @@ export function SiteLayout() {
 /** Barra inferior no celular (públicos e painel). */
 function MobileTabbar() {
   const { data: me } = useMe();
+  const { pathname } = useLocation();
   if (!me) {
     return (
       <nav className="tabbar" aria-label="Atalhos">
@@ -183,6 +184,7 @@ function MobileTabbar() {
       </nav>
     );
   }
+  const inPanel = pathname.startsWith('/painel') && !/^\/painel\/(negociacoes|menu)(\/|$)/.test(pathname);
   return (
     <nav className="tabbar" aria-label="Atalhos">
       <NavLink to="/" end>
@@ -193,10 +195,11 @@ function MobileTabbar() {
         <Icon name="ticket" />
         Vagas
       </NavLink>
-      <NavLink to="/painel" end>
+      {/* "Painel" fica ativo em todas as subpáginas do painel que não têm atalho próprio (agenda, perfil, eventos…). */}
+      <Link to="/painel" aria-current={inPanel ? 'page' : undefined} className={inPanel ? 'active' : undefined}>
         <Icon name="grid" />
         Painel
-      </NavLink>
+      </Link>
       <NavLink to="/painel/negociacoes">
         <Icon name="chat" />
         Propostas

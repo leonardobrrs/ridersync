@@ -7,7 +7,6 @@ import { z } from 'zod';
 import { ConfirmButton, CountdownButton, Dialog } from '../../components/Dialog';
 import { applyServerErrors, FormError, TextField } from '../../components/Fields';
 import { PageHead } from '../../components/Layout';
-import { ImagePicker, uploadForm } from '../../components/Media';
 import { PasswordField } from '../../components/PasswordField';
 import { Avatar } from '../../components/Poster';
 import { useToast } from '../../components/Toast';
@@ -44,8 +43,6 @@ function ProfileSection({ me }: { me: Me }) {
   const qc = useQueryClient();
   const toast = useToast();
   const [nameErr, setNameErr] = useState<string | null>(null);
-  const [avatar, setAvatar] = useState<File | null>(null);
-  const [busy, setBusy] = useState(false);
   const nameForm = useForm<z.infer<typeof NameSchema>>({ resolver: zodResolver(NameSchema), values: { name: me.user.name } });
 
   const saveName = nameForm.handleSubmit(async (v) => {
@@ -57,25 +54,11 @@ function ProfileSection({ me }: { me: Me }) {
       setNameErr(applyServerErrors(e, nameForm.setError));
     }
   });
-  const saveAvatar = async () => {
-    if (!avatar) return;
-    setBusy(true);
-    try {
-      qc.setQueryData(['me'], await api.upload<Me>('PUT', '/account/avatar', uploadForm(avatar)));
-      setAvatar(null);
-      toast('Foto atualizada.');
-    } catch (e) {
-      toast(e instanceof ApiError ? e.message : 'Não foi possível enviar a foto.', 'error');
-    } finally {
-      setBusy(false);
-    }
-  };
-
   return (
     <section className="box stack">
       <h2 className="lbl">Dados da conta</h2>
       <div className="row">
-        <Avatar name={me.user.name} photoUrl={me.user.avatarUrl} size={64} />
+        <Avatar name={me.user.name} photoUrl={me.user.profilePhotoUrl} size={64} />
         <dl className="dl">
           <dt>E-mail</dt>
           <dd>
@@ -89,25 +72,13 @@ function ProfileSection({ me }: { me: Me }) {
           <dd>{date(me.user.createdAt)}</dd>
         </dl>
       </div>
-      <ImagePicker label="Foto da conta" value={avatar} onChange={setAvatar} currentUrl={me.user.avatarUrl} />
-      <div className="row">
-        {avatar && (
-          <button className="btn dark sm" type="button" onClick={saveAvatar} disabled={busy}>
-            {busy ? 'Enviando…' : 'Salvar foto'}
-          </button>
-        )}
-        {me.user.avatarUrl && !avatar && (
-          <ConfirmButton
-            className="btn sm ghost danger"
-            confirm="A foto da conta será removida."
-            confirmLabel="Remover foto"
-            danger
-            onConfirm={async () => qc.setQueryData(['me'], await api.delete<Me>('/account/avatar'))}
-          >
-            Remover foto
-          </ConfirmButton>
-        )}
-      </div>
+      <p className="hint">
+        A foto exibida é a do seu perfil{me.user.accountType === 'CONTRACTOR' ? ' (casa ou organização)' : ''}. Para trocá-la, edite{' '}
+        <Link className="link" to={me.user.accountType === 'CONTRACTOR' ? '/painel/casas' : '/painel/perfil'}>
+          {me.user.accountType === 'CONTRACTOR' ? 'sua casa ou organização' : 'seu perfil'}
+        </Link>
+        .
+      </p>
       <form className="form" onSubmit={saveName} noValidate>
         <FormError message={nameErr} />
         <TextField label="Nome" {...nameForm.register('name')} error={nameForm.formState.errors.name} />

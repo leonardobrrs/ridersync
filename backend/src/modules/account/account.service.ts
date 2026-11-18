@@ -7,7 +7,6 @@ import { AuthUser } from '../auth/auth.decorators';
 import { PRIVACY_POLICY_VERSION } from '../auth/auth.service';
 import { hashPassword, verifyPassword } from '../auth/password';
 import { SessionService } from '../auth/session.service';
-import { MediaService, UploadedFile } from '../media/media.service';
 import { NotificationsService } from '../notifications/notifications.service';
 
 export const UpdateAccountSchema = z.object({ name: text(2, 120, 'Nome') }).strict();
@@ -31,7 +30,6 @@ export class AccountService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly sessions: SessionService,
-    private readonly media: MediaService,
     private readonly notifications: NotificationsService,
   ) {}
 
@@ -70,20 +68,6 @@ export class AccountService {
 
   async acceptTerms(userId: string) {
     await this.prisma.user.update({ where: { id: userId }, data: { termsAcceptedAt: new Date(), termsVersion: PRIVACY_POLICY_VERSION } });
-  }
-
-  async setAvatar(userId: string, file: UploadedFile | undefined) {
-    const prev = await this.prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { avatarId: true } });
-    const asset = await this.media.store(file, userId, 'image');
-    await this.prisma.user.update({ where: { id: userId }, data: { avatarId: asset.id } });
-    if (prev.avatarId) await this.media.remove(prev.avatarId);
-  }
-
-  async removeAvatar(userId: string) {
-    const u = await this.prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { avatarId: true } });
-    if (!u.avatarId) return;
-    await this.prisma.user.update({ where: { id: userId }, data: { avatarId: null } });
-    await this.media.remove(u.avatarId);
   }
 
   async revokeOtherSessions(user: AuthUser) {

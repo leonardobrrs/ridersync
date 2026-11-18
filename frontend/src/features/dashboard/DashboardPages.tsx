@@ -7,6 +7,7 @@ import { api, errorMessage } from '../../lib/api';
 import { BOOKING_STATUS, dateTime, dayMonth, duration, money, ROLE_LABEL } from '../../lib/format';
 import { useMe } from '../../lib/hooks';
 import type { Dashboard, Invitations, Schedule, ScheduleItem } from '../../lib/types';
+import { InstrumentLabel } from '../../components/InstrumentLabel';
 
 function ScheduleList({ items, empty }: { items: ScheduleItem[]; empty: string }) {
   if (items.length === 0) return <p className="hint">{empty}</p>;
@@ -201,7 +202,11 @@ export function InvitationsPage() {
             <h3>Banda: {i.bandName}</h3>
             <div className="meta">
               <span>Papel: {ROLE_LABEL[i.role]}</span>
-              {i.instrument && <span>Função: {i.instrument}</span>}
+              {i.instrument && (
+                <span>
+                  Função: <InstrumentLabel value={i.instrument} size={13} />
+                </span>
+              )}
               {i.invitedBy && <span>Convidado por {i.invitedBy}</span>}
               <span>{dateTime(i.invitedAt)}</span>
             </div>

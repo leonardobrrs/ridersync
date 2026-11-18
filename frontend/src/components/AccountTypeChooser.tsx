@@ -10,7 +10,7 @@ const OPTIONS: { value: AccountType; title: string; text: string; icon: string }
   },
   {
     value: 'CONTRACTOR',
-    title: 'Sou proprietário ou contratante',
+    title: 'Sou contratante',
     text: 'Casa de show, bar, teatro ou pessoa que contrata música para um evento (ex.: aniversário).',
     icon: 'venue',
   },

@@ -9,17 +9,26 @@ import { api, qs } from '../../lib/api';
 import { dayMonth, money } from '../../lib/format';
 import { useMe, useMeta } from '../../lib/hooks';
 import type { ArtistCard, EventPublic, HomeData, Paged, PublicShow, VenueCard } from '../../lib/types';
+import { InstrumentLabel } from '../../components/InstrumentLabel';
+import { instrumentIcon } from '../../lib/instruments';
 
 export function ArtistAd({ a }: { a: ArtistCard }) {
   return (
     <article className="ad">
       <Link to={`/artistas/${a.slug}`} aria-label={`${a.name} — ver perfil`}>
-        <span className="tape">{a.kind === 'BAND' ? 'Banda' : (a.mainInstrument ?? 'Músico')}</span>
+        {a.kind === 'BAND' ? (
+          <span className="tape">
+            <Icon name="users" size={12} />
+            Banda
+          </span>
+        ) : (
+          <InstrumentLabel className="tape" size={12} value={a.mainInstrument ?? 'Músico'} />
+        )}
         <Poster name={a.name} photoUrl={a.photoUrl} top={[a.city ?? '', a.state]} bottom={[a.genres.slice(0, 2).join(' · '), a.formats[0] ?? '']} />
         <div className="ad-b">
-          <h3>{a.name}</h3>
+          <h3 title={a.name}>{a.name}</h3>
           <span className="handle">@{a.slug}</span>
-          <span className="sub">{a.headline || a.genres.join(', ') || '—'}</span>
+          <span className="sub" title={a.headline || undefined}>{a.headline || a.genres.join(', ') || '—'}</span>
           <span className="price">
             {a.baseFeeCents != null ? money(a.baseFeeCents) : 'A combinar'}
             <small>{a.baseFeeCents != null ? 'cachê a partir de' : 'cachê'}</small>
@@ -43,7 +52,7 @@ export function VenueAd({ v }: { v: Pick<VenueCard, 'slug' | 'name' | 'venueKind
         <span className="tape">{v.openEvents ? `${v.openEvents} vaga(s) aberta(s)` : 'Casa de show'}</span>
         <Poster name={v.name} photoUrl={v.photoUrl} top={[v.city, v.state]} bottom={[v.venueKind ?? '', v.capacity ? `${v.capacity} pessoas` : '']} />
         <div className="ad-b">
-          <h3>{v.name}</h3>
+          <h3 title={v.name}>{v.name}</h3>
           <span className="handle">@{v.slug}</span>
           <span className="sub">{v.venueKind ?? 'Espaço cultural'}</span>
           <span className="price">
@@ -66,10 +75,10 @@ export function ShowCard({ s }: { s: PublicShow }) {
         <small>{d.month}</small>
       </span>
       <div className="show-b">
-        <Link className="show-a" to={`/artistas/${s.artist.slug}`}>
+        <Link className="show-a" to={`/artistas/${s.artist.slug}`} title={s.artist.name}>
           {s.artist.name}
         </Link>
-        <span className="show-t">{s.title}</span>
+        <span className="show-t" title={s.title}>{s.title}</span>
         <span className="show-m">
           <Icon name="pin" size={14} />
           {s.place.venueSlug ? <Link to={`/casas/${s.place.venueSlug}`}>{s.place.name}</Link> : (s.place.name ?? 'Local a confirmar')}
@@ -88,7 +97,7 @@ export function ShowCard({ s }: { s: PublicShow }) {
 function OpportunityTile({ e }: { e: EventPublic }) {
   return (
     <Link className="opp-tile" to={`/oportunidades/${e.id}`}>
-      <strong>{e.title}</strong>
+      <strong title={e.title}>{e.title}</strong>
       <span>
         {e.location.name ?? e.organizer.name} · {e.location.city}
       </span>
@@ -125,7 +134,7 @@ function CategoryBar({ params, set }: { params: URLSearchParams; set: (patch: Re
         {meta?.instruments.map((i) => (
           <button key={i} type="button" className="cat sm" aria-pressed={instrument === i} onClick={() => set({ instrument: instrument === i ? '' : i, kind: '' })}>
             <span className="ci">
-              <Icon name="music" size={18} />
+              <Icon name={instrumentIcon(i)} size={20} />
             </span>
             {i}
           </button>

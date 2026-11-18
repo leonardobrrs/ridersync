@@ -153,13 +153,15 @@ describe('Segurança: IDOR, permissões, CSRF/CORS, arquivos (integração)', ()
       expect(res.body.code).toBe('FILE_INVALID');
     });
 
-    it('foto válida vira WebP; avatar da conta só é visível para usuários autenticados', async () => {
+    it('foto do perfil vira WebP e é a foto da pessoa no app; não existe mais foto de conta separada', async () => {
       const jpg = await sharp({ create: { width: 900, height: 900, channels: 3, background: '#123456' } }).jpeg().toBuffer();
-      const res = await upload(artist, '/account/avatar', jpg, 'eu.jpg', 'image/jpeg');
+      expect((await upload(artist, '/account/avatar', jpg, 'eu.jpg', 'image/jpeg')).status).toBe(404);
+      const res = await upload(artist, `/artists/${art.id}/photo`, jpg, 'eu.jpg', 'image/jpeg');
       expect(res.status).toBe(200);
-      const url = res.body.user.avatarUrl.replace('/api', '');
-      await new Client(app).get(url).expect(404);
-      const seen = await outsider.get(url);
+      const me = await artist.get('/auth/me');
+      expect(me.body.user.profilePhotoUrl).toMatch(/^\/api\/media\/[0-9a-f-]+\?v=thumb$/);
+      expect(me.body.user).not.toHaveProperty('avatarUrl');
+      const seen = await artist.get(me.body.user.profilePhotoUrl.replace('/api', ''));
       expect(seen.status).toBe(200);
       expect(seen.headers['content-type']).toBe('image/webp');
     });

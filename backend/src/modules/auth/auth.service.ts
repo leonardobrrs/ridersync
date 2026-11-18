@@ -7,7 +7,7 @@ import { email, password, passwordsMatch, passwordsMatchError, text } from '../.
 import { PrismaService } from '../../prisma/prisma.service';
 import { MailService } from '../mail/mail.module';
 import { passwordResetEmail, verificationEmail } from '../mail/mail.templates';
-import { mediaUrl } from '../media/media.service';
+import { mediaThumbUrl } from '../media/media.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { burnPasswordCheck, hashPassword, verifyPassword } from './password';
 import { TokenService } from './token.service';
@@ -199,9 +199,8 @@ export class AuthService {
         emailVerifiedAt: true,
         passwordHash: true,
         googleSub: true,
-        avatarId: true,
         termsVersion: true,
-        musicianProfile: { select: { artist: { select: { id: true, slug: true, name: true, visibility: true } } } },
+        musicianProfile: { select: { artist: { select: { id: true, slug: true, name: true, visibility: true, photoId: true } } } },
         bandMemberships: {
           where: { status: 'ACTIVE' },
           orderBy: { joinedAt: 'asc' },
@@ -210,7 +209,7 @@ export class AuthService {
         orgMemberships: {
           where: { status: 'ACTIVE' },
           orderBy: { joinedAt: 'asc' },
-          select: { role: true, organization: { select: { id: true, slug: true, name: true, type: true } } },
+          select: { role: true, organization: { select: { id: true, slug: true, name: true, type: true, photoId: true } } },
         },
       },
     });
@@ -229,14 +228,17 @@ export class AuthService {
         emailVerified: !!user.emailVerifiedAt,
         hasPassword: !!user.passwordHash,
         googleLinked: !!user.googleSub,
-        avatarUrl: mediaUrl(user.avatarId),
+        // Foto única da pessoa: a do perfil individual; para contratantes, a da organização. (Não há foto de conta.)
+        profilePhotoUrl: mediaThumbUrl(
+          user.musicianProfile?.artist?.photoId ?? user.orgMemberships.find((m) => m.organization.photoId)?.organization.photoId ?? null,
+        ),
         needsTermsAcceptance: user.termsVersion !== PRIVACY_POLICY_VERSION,
       },
-      musician: user.musicianProfile?.artist ?? null,
+      musician: user.musicianProfile?.artist ? withoutPhotoId(user.musicianProfile.artist) : null,
       bands: user.bandMemberships
         .filter((m) => m.band.artist)
         .map((m) => ({ bandId: m.bandId, role: m.role, artist: m.band.artist! })),
-      organizations: user.orgMemberships.map((m) => ({ ...m.organization, role: m.role })),
+      organizations: user.orgMemberships.map((m) => ({ ...withoutPhotoId(m.organization), role: m.role })),
       pendingInvitations: bandInvites + orgInvites,
       unreadNotifications,
       features: { emailVerificationRequired: this.verificationRequired, googleLogin: googleEnabled(this.env) },
@@ -247,4 +249,9 @@ export class AuthService {
   publicConfig() {
     return { googleLogin: googleEnabled(this.env), emailVerificationRequired: this.verificationRequired, privacyPolicyVersion: PRIVACY_POLICY_VERSION };
   }
+}
+
+function withoutPhotoId<T extends { photoId: string | null }>(o: T): Omit<T, 'photoId'> {
+  const { photoId: _photoId, ...rest } = o;
+  return rest;
 }

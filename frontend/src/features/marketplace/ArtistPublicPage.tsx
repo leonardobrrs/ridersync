@@ -13,6 +13,7 @@ import { dayMonth, money, PORTFOLIO_KIND } from '../../lib/format';
 import { useMe } from '../../lib/hooks';
 import type { BookingDetail, OrgEventRow, PortfolioItem, PublicArtist, Rider, UpcomingEvent } from '../../lib/types';
 import { OfferForm } from '../bookings/OfferForm';
+import { InstrumentLabel } from '../../components/InstrumentLabel';
 
 export function PortfolioGrid({ items }: { items: PortfolioItem[] }) {
   if (items.length === 0) return <p className="muted">Nenhum material publicado.</p>;
@@ -241,9 +242,14 @@ export function ArtistPublicPage() {
           </div>
           <section className="box">
             <div className="adh">
-              <span className="tape" style={{ justifySelf: 'start' }}>
-                {a.kind === 'BAND' ? 'Banda' : (a.mainInstrument ?? 'Músico')}
-              </span>
+              {a.kind === 'BAND' ? (
+                <span className="tape" style={{ justifySelf: 'start' }}>
+                  <Icon name="users" size={12} />
+                  Banda
+                </span>
+              ) : (
+                <InstrumentLabel className="tape tape-start" size={12} value={a.mainInstrument ?? 'Músico'} />
+              )}
               <h1 tabIndex={-1}>{a.name}</h1>
               <Link className="handle" to={`/artistas/${a.slug}`}>
                 @{a.slug}
@@ -290,7 +296,17 @@ export function ArtistPublicPage() {
                     {a.kind === 'SOLO' && (
                       <div>
                         <dt>Instrumentos</dt>
-                        <dd>{[a.mainInstrument, ...a.instruments].filter(Boolean).join(', ') || '—'}</dd>
+                        <dd>
+                          {[a.mainInstrument, ...a.instruments].filter(Boolean).length ? (
+                            <span className="insts">
+                              {[...new Set([a.mainInstrument, ...a.instruments].filter((x): x is string => !!x))].map((i) => (
+                                <InstrumentLabel key={i} value={i} />
+                              ))}
+                            </span>
+                          ) : (
+                            '—'
+                          )}
+                        </dd>
                       </div>
                     )}
                   </dl>
@@ -317,10 +333,8 @@ export function ArtistPublicPage() {
                               <Avatar name={m.name} photoUrl={m.photoUrl} />
                               <span>
                                 {m.name}
-                                <small>
-                                  @{m.slug}
-                                  {m.instrument ? ` · ${m.instrument}` : ''}
-                                </small>
+                                <small>@{m.slug}</small>
+                                {m.instrument && <InstrumentLabel value={m.instrument} size={13} />}
                               </span>
                             </Link>
                           </li>

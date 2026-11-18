@@ -34,7 +34,8 @@ export interface Me {
     emailVerified: boolean;
     hasPassword: boolean;
     googleLinked: boolean;
-    avatarUrl: string | null;
+    /** Foto da pessoa: a do perfil individual ou, para contratantes, a da organização. */
+    profilePhotoUrl: string | null;
     needsTermsAcceptance: boolean;
   };
   musician: ArtistRef | null;

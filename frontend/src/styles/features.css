@@ -171,3 +171,82 @@ a.handle:hover{text-decoration:underline}
   .ads{grid-template-columns:1fr}
   .logo{font-size:20px;padding:5px 10px 2px}
 }
+
+/* Cadastro: escolha do tipo de conta (abre o modal com o formulário) */
+.signup-kinds{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.signup-kind{display:grid;gap:6px;align-content:start;text-align:left;padding:18px;border:2px solid var(--line);border-radius:16px;background:var(--surface);color:var(--ink);cursor:pointer;min-width:0;transition:border-color .15s,box-shadow .15s,transform .1s}
+.signup-kind:hover{border-color:var(--ink);box-shadow:var(--shadow)}
+.signup-kind:active{transform:translateY(1px)}
+.signup-kind strong{font-size:17px}
+.signup-kind span:last-child{font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+.signup-kind-ico{display:grid;place-items:center;width:48px;height:48px;border-radius:50%;background:var(--cue);color:var(--cue-ink)}
+@media (max-width:520px){.signup-kinds{grid-template-columns:1fr}}
+/* Modais longos: rolagem interna, cabeçalho visível */
+dialog{overflow:auto;overscroll-behavior:contain}
+dialog .dlg-h{position:sticky;top:0;z-index:1;background:var(--surface);margin:-22px -22px 0;padding:22px 22px 8px}
+
+/* ───────── Texto informado pelo usuário: nunca estoura o layout ─────────
+   Nomes, descrições, links e títulos podem conter palavras/URLs enormes sem espaço.
+   `overflow-wrap:anywhere` só quebra uma palavra quando ela não cabe na linha e também reduz o
+   tamanho mínimo do conteúdo — assim itens de grid/flex não alargam o contêiner. */
+main{overflow-wrap:anywhere}
+main :where(.btn,.chip,.st,.role,.tape,.seg button,.tabs button,.qty,.mono,time){overflow-wrap:normal}
+.stack,.stack-sm,.form,.sec,.adh,.ad-b,.card,.box,.prow>*,.prop>*,.kpi,.dates li>*,.offer,.bubble{min-width:0}
+.stack{grid-template-columns:minmax(0,1fr)}
+.prose{white-space:pre-line;max-width:72ch}
+/* Breadcrumb: o item atual (nome longo) é truncado em uma linha; o título completo fica no h1 logo abaixo. */
+.bc li:last-child{min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Cards de resumo: altura previsível; o texto completo está na página do perfil/evento (e no title). */
+.clamp-2,.ad h3,.opp-tile strong,.show-a,.show-t{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden}
+.clamp-3{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;line-clamp:3;overflow:hidden}
+.ad .handle,.opp-tile span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Cartaz gerado: nome gigante sem espaço não ultrapassa a capa (é decorativo; o nome real está no card). */
+.poster .pn{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:4;line-clamp:4;overflow:hidden}
+.poster .pt span,.poster .pr span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kpi b{font-size:clamp(28px,8vw,38px)}
+.ad .handle{justify-self:stretch;max-width:100%}
+/* Chips que são links (ex.: bandas do artista) podem ter nomes longos: quebram em vez de vazar. */
+a.chip{height:auto;min-height:26px;max-width:100%;flex-wrap:wrap;column-gap:4px;padding:3px 10px;line-height:1.35;overflow-wrap:anywhere}
+/* Botões com rótulo longo nunca ultrapassam o contêiner; em telas estreitas quebram a linha (altura mínima de toque mantida). */
+.btn{max-width:100%}
+@media (max-width:420px){
+  .btn{white-space:normal;height:auto;min-height:42px;padding-block:8px;line-height:1.25;text-align:center}
+  .btn.sm{min-height:36px;padding-block:6px}
+}
+.card,.box,.offer{grid-template-columns:minmax(0,1fr)}
+.btn .st{white-space:normal;height:auto;min-height:22px}
+/* Linhas de metadado do show: texto corrido (link longo + cidade) em vez de colunas flex espremidas. */
+.show-m{display:block}
+.show-m svg{display:inline-block;vertical-align:-2px;margin-right:5px}
+/* Instrumento/função com ícone */
+.inst{display:inline-flex;align-items:center;gap:5px;min-width:0;vertical-align:middle;overflow-wrap:anywhere}
+.inst svg,.tape svg{flex:none}
+.tape{display:inline-flex;align-items:center;gap:4px}
+.tape-start{justify-self:start}
+.insts{display:flex;flex-wrap:wrap;gap:6px 14px}
+.members small+.inst{display:flex;font-size:12px;color:var(--muted)}
+.mlist .inst{display:flex;font-size:12px;color:var(--muted);margin-top:2px}
+
+/* ───────── Barra inferior (celular/tablet) ─────────
+   Altura única em --tabbar-h: o conteúdo, a barra de salvar e os avisos se posicionam acima dela.
+   Os modais (<dialog> nativo) ficam na camada superior e cobrem a barra. */
+:root{--tabbar-h:64px}
+@media (max-width:900px){
+  .tabbar{grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);min-height:var(--tabbar-h);align-items:stretch;
+    padding:4px max(4px,env(safe-area-inset-right,0px)) env(safe-area-inset-bottom,0px) max(4px,env(safe-area-inset-left,0px));box-shadow:0 -4px 16px rgb(0 0 0/.06)}
+  .tabbar a{min-height:52px;align-content:center;padding:4px 2px;border-radius:12px;-webkit-tap-highlight-color:transparent;text-align:center;line-height:1.15;overflow-wrap:normal;min-width:0}
+  .tabbar a:focus-visible{outline:2px solid var(--ink);outline-offset:-2px}
+  .tabbar a:active svg{background:var(--sunk);border-radius:999px}
+  .tabbar a[aria-current="page"]{font-weight:800}
+  #root{padding-bottom:calc(var(--tabbar-h) + env(safe-area-inset-bottom,0px) + 8px)}
+  .savebar{bottom:calc(var(--tabbar-h) + env(safe-area-inset-bottom,0px));padding-bottom:0}
+  body:has(.savebar) #root{padding-bottom:calc(var(--tabbar-h) + env(safe-area-inset-bottom,0px) + 72px)}
+}
+@media (max-width:340px){ .tabbar a{font-size:10px} .tabbar svg{padding-inline:8px} }
+/* Teclado virtual (telas de toque com campo de texto em foco): a barra de atalhos sai da frente do campo.
+   Nada mais muda de lugar, e ela só volta 250 ms depois do blur — o toque que fechou o teclado (ex.: num
+   chip ou botão perto do rodapé) termina antes, sem cair na barra. */
+@media (max-width:900px) and (hover:none) and (pointer:coarse){
+  .tabbar{transition:transform .15s ease .25s,visibility 0s linear .25s}
+  body:has(:is(input:not([type=checkbox],[type=radio],[type=range],[type=file],[type=button],[type=submit]),textarea,[contenteditable=true]):focus) .tabbar{transform:translateY(110%);visibility:hidden;transition:transform .15s ease,visibility 0s linear .15s}
+}

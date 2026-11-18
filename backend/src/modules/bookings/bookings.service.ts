@@ -11,6 +11,7 @@ import { ACTIVE_EVENT_STATUSES } from '../events/event.rules';
 import { mediaThumbUrl } from '../media/media.service';
 import { NotificationInput } from '../notifications/notification.types';
 import { NotificationsService } from '../notifications/notifications.service';
+import { AgendaService } from './agenda.service';
 import { assertBookingTransition, assertCanConfirm, assertCanRespondToOffer, MESSAGE_ALLOWED, resolveSide } from './booking.rules';
 
 const futureDate = z.iso
@@ -56,6 +57,7 @@ export class BookingsService {
     private readonly access: AccessService,
     private readonly lifecycle: EventLifecycleService,
     private readonly notifications: NotificationsService,
+    private readonly agenda: AgendaService,
   ) {}
 
   private async sidesFor(userId: string, booking: { organizationId: string; artistId: string }, db?: Tx) {
@@ -137,6 +139,7 @@ export class BookingsService {
         const event = await this.lifecycle.lock(tx, input.eventId);
         if (event.organizerId !== input.organizationId) throw notFound('Evento não encontrado.');
         if (!ACTIVE_EVENT_STATUSES.includes(event.status) && event.status !== 'DRAFT') throw conflict('EVENT_NOT_ACTIVE', 'Este evento não está mais ativo.');
+        await this.lifecycle.assertNotFullyBooked(tx, event);
         if ((await this.lifecycle.filledSlots(tx, event.id)) >= event.slots) throw conflict('SLOTS_FULL', 'Todas as vagas deste evento já estão ocupadas.');
         const duplicate = await tx.booking.count({ where: { eventId: event.id, artistId: input.artistId, status: { in: ['NEGOTIATING', 'AGREED', 'CONFIRMED'] } } });
         if (duplicate) throw conflict('BOOKING_EXISTS', 'Já existe uma negociação ativa com este artista para este evento.');
@@ -182,8 +185,11 @@ export class BookingsService {
     if (app.booking) throw conflict('BOOKING_EXISTS', 'Já existe uma negociação para esta candidatura.');
     const sides = await this.sidesFor(userId, { organizationId: app.event.organizerId, artistId: app.artistId });
     if (sides.has('ARTIST')) throw conflict('BOTH_SIDES', 'Você administra este perfil artístico; outra pessoa deve conduzir a negociação.');
-    const id = await this.prisma.$transaction((tx) =>
-      this.createBooking(
+    const id = await this.prisma.$transaction(async (tx) => {
+      const event = await this.lifecycle.lock(tx, app.event.id);
+      await this.lifecycle.assertNotFullyBooked(tx, event);
+      if (['CANCELLED', 'COMPLETED'].includes(event.status)) throw conflict('EVENT_NOT_ACTIVE', 'Este evento não está mais ativo.');
+      return this.createBooking(
         tx,
         userId,
         {
@@ -196,8 +202,8 @@ export class BookingsService {
         },
         input.offer,
         input.message,
-      ),
-    );
+      );
+    });
     await this.notifications.flush();
     return this.detail(userId, id);
   }
@@ -379,11 +385,17 @@ export class BookingsService {
     return this.act(userId, bookingId, async (tx, booking, side) => {
       assertCanConfirm(booking.status, side);
       if (booking.eventId) {
-        const event = await tx.event.findUniqueOrThrow({ where: { id: booking.eventId }, select: { status: true } });
+        // O evento já está bloqueado por act(): capacidade e estado não mudam até o commit.
+        const event = await tx.event.findUniqueOrThrow({ where: { id: booking.eventId } });
         if (event.status === 'CANCELLED') throw conflict('EVENT_CANCELLED', 'O evento desta negociação foi cancelado.');
+        if (event.status === 'COMPLETED') throw conflict('EVENT_NOT_ACTIVE', 'Este evento já foi realizado.');
+        await this.lifecycle.assertNotFullyBooked(tx, event);
       }
+      // Agenda do artista/banda e do local: com locks por recurso, dentro desta transação.
+      await this.agenda.assertNoConflicts(tx, booking);
       const now = new Date();
       await tx.booking.update({ where: { id: booking.id }, data: { status: 'CONFIRMED', confirmedAt: now, confirmedById: userId } });
+      if (booking.eventId) await this.lifecycle.applySlotChange(tx, await tx.event.findUniqueOrThrow({ where: { id: booking.eventId } }), now);
       await this.logStatus(tx, booking.id, booking.status, 'CONFIRMED', userId, side, 'Contratação confirmada (pagamento é externo à plataforma)');
       await this.notifySide(tx, booking, 'ARTIST', userId, {
         type: 'BOOKING_CONFIRMED',

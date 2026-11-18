@@ -14,7 +14,7 @@ Marque ✔/✘ e anote o problema.
 - [ ] "Esqueci minha senha": e-mail chega; nova senha funciona; sessões abertas em outro navegador são encerradas.
 - [ ] Cinco senhas erradas seguidas bloqueiam a conta por 15 minutos (mensagem clara).
 - [ ] **Com Google configurado**: "Cadastrar com Google" (após escolher tipo e aceitar termos) e "Entrar com Google" funcionam; conta sem cadastro é levada ao cadastro.
-- [ ] Conta e privacidade: trocar nome, foto da conta, senha; "Baixar cópia" gera JSON sem senha; "Encerrar outras sessões".
+- [ ] Conta e privacidade: trocar nome e senha (a foto exibida é a do perfil/casa — não há mais foto de conta); "Baixar cópia" gera JSON sem senha; "Encerrar outras sessões".
 - [ ] Excluir conta: exige senha + "EXCLUIR"; botão só habilita após 3 s; dono único de banda com integrantes é bloqueado.
 
 ## Tipos de conta
@@ -57,3 +57,13 @@ Marque ✔/✘ e anote o problema.
 - [ ] Rodapé sem botão "API"; "Documentação" abre a página de ajuda; Privacidade e Termos abrem.
 - [ ] Nenhum texto em inglês; nenhuma rota exibida como texto (botões "Ver perfil público"/"Ver página pública").
 - [ ] Celular (≈ 390 px), tablet (≈ 820 px) e desktop: sem rolagem horizontal, textos sem cortes, modais e menus utilizáveis, barra inferior no celular.
+
+## Lote de UX e agenda (2026-11-18)
+
+- [ ] `/cadastro`: só "Sou artista"/"Sou contratante" + "Continuar com Google"; o modal abre, troca de tipo sem perder dados, Esc/Voltar fecham.
+- [ ] `/entrar`: "Entrar com Google" visível sem escolher nada.
+- [ ] Perfil com descrição/URL enorme sem espaços: cards, perfil público, painel e propostas sem rolagem horizontal (320 px).
+- [ ] Barra inferior no celular: item ativo marcado, nada coberto no fim da página, some ao digitar.
+- [ ] Confirmar duas contratações do mesmo artista em horários sobrepostos → a segunda mostra "Conflito de agenda".
+- [ ] Horários consecutivos (19h–22h e 22h–23h) → ambas confirmam.
+- [ ] Evento com todas as vagas confirmadas: candidatura e nova proposta são recusadas; o evento continua na agenda.

@@ -18,6 +18,7 @@ import { useAction, useMeta } from '../../lib/hooks';
 import type { BandDetail, BandRole, BandSummary } from '../../lib/types';
 import { ArtistWorkspace } from '../artist/ArtistWorkspace';
 import { ProfileFields, ProfileFormSchema, toArtistPayload, toFormValues, type ProfileFormValues } from '../artist/ArtistProfileForm';
+import { InstrumentLabel } from '../../components/InstrumentLabel';
 
 export function BandsPage() {
   const q = useQuery({ queryKey: ['bands'], queryFn: () => api.get<BandSummary[]>('/bands/mine') });
@@ -206,7 +207,7 @@ function MembersTab({ band }: { band: BandDetail }) {
                     onChange={(v) => run(() => api.patch(`/bands/${band.bandId}/members/${m.id}/position`, { instrument: v }), 'Função atualizada.')}
                   />
                 ) : (
-                  <small className="hint">{m.instrument ?? 'Função não informada'}</small>
+                  m.instrument ? <InstrumentLabel value={m.instrument} /> : <small className="hint">Função não informada</small>
                 )}
               </div>
               {isOwner && !m.isMe && m.role !== 'OWNER' ? (
@@ -260,8 +261,8 @@ function MembersTab({ band }: { band: BandDetail }) {
                     <strong>{m.name}</strong>
                     <small className="hint" style={{ display: 'block' }}>
                       {m.email} · {ROLE_LABEL[m.role]}
-                      {m.instrument ? ` · ${m.instrument}` : ''}
                     </small>
+                    {m.instrument && <InstrumentLabel value={m.instrument} size={13} />}
                   </div>
                   <span className="st pend">Pendente</span>
                   <ConfirmButton

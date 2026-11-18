@@ -130,6 +130,8 @@ export class AuthController {
   @Get('google/start')
   @ApiZodQuery(GoogleStartSchema)
   googleStart(@ZQuery(GoogleStartSchema) q: z.infer<typeof GoogleStartSchema>, @Res() res: Response) {
+    // Navegação de página inteira: sem Google configurado, volta ao login com aviso (nunca uma página de erro JSON).
+    if (!this.google.enabled) return res.redirect(302, '/entrar?erro=google-indisponivel');
     const { url, cookie } = this.google.start(q);
     res.cookie(OAUTH_COOKIE, cookie, { httpOnly: true, secure: env.COOKIE_SECURE, sameSite: 'lax', path: '/api/auth/google', maxAge: 10 * 60 * 1000 });
     res.redirect(302, url);

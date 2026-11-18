@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { fillRegistration, linkFromMail, newUser, PASSWORD, stamp, toast } from './helpers';
+import { fillRegistration, openSignupModal, linkFromMail, newUser, PASSWORD, stamp, toast } from './helpers';
 
 test('visitante: página inicial em português, rodapé sem botão de API e documentação funcionando; painel exige login', async ({ page }) => {
   await page.goto('/');
@@ -23,10 +23,32 @@ test('visitante encontra e pesquisa casas de show', async ({ page }) => {
   await expect(page.getByRole('searchbox', { name: 'Buscar casa de show' })).toBeVisible();
 });
 
-test('cadastro: tipo de conta obrigatório, senha forte com confirmação, olho alterna visibilidade', async ({ page }) => {
+test('cadastro e login: Google visível desde o início; escolha do tipo abre o modal, que permite trocar e voltar', async ({ page }) => {
+  // O botão do Google não depende de escolher o perfil (no E2E o Google não está configurado: aparece desabilitado com aviso).
+  const google = (name: string) => page.getByRole('link', { name }).or(page.getByRole('button', { name }));
+  await page.goto('/entrar');
+  await expect(google('Entrar com Google')).toBeVisible();
   await page.goto('/cadastro');
+  await expect(google('Continuar com Google')).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Sou artista/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Sou contratante/ })).toBeVisible();
+  await expect(page.getByLabel('E-mail', { exact: true })).toHaveCount(0);
+
+  const dialog = await openSignupModal(page, 'CONTRACTOR');
+  await dialog.getByLabel('Nome', { exact: true }).fill('Nome Preservado');
+  await dialog.getByRole('button', { name: /Sou artista — trocar/ }).click();
+  const artist = page.getByRole('dialog', { name: 'Criar conta de artista' });
+  await expect(artist).toBeVisible();
+  await expect(artist.getByLabel('Nome', { exact: true })).toHaveValue('Nome Preservado');
+  await artist.getByRole('button', { name: 'Voltar' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /^Sou contratante/ })).toBeFocused();
+});
+
+test('cadastro: campos obrigatórios, senha forte com confirmação, olho alterna visibilidade', async ({ page }) => {
+  await page.goto('/cadastro');
+  await openSignupModal(page, 'ARTIST');
   await page.getByRole('button', { name: 'Criar conta' }).click();
-  await expect(page.getByText('Escolha se você é artista ou contratante.')).toBeVisible();
   await expect(page.getByText('Informe seu nome')).toBeVisible();
   await expect(page.getByText('É preciso aceitar os Termos de Uso')).toBeVisible();
 

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { ApiZodBody, ZBody } from '../../common/zod';
 import { AuthUser, CurrentUser } from '../auth/auth.decorators';
 import { EventsModule } from '../events/events.module';
+import { AgendaService } from './agenda.service';
 import {
   BookingsService,
   CancelSchema,
@@ -95,5 +96,5 @@ export class BookingsController {
   }
 }
 
-@Module({ imports: [EventsModule], controllers: [BookingsController], providers: [BookingsService], exports: [BookingsService] })
+@Module({ imports: [EventsModule], controllers: [BookingsController], providers: [BookingsService, AgendaService], exports: [BookingsService] })
 export class BookingsModule {}

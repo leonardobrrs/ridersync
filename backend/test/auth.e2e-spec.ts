@@ -233,9 +233,10 @@ describe('Autenticação e conta (integração)', () => {
     it('sem credenciais configuradas, o login com Google fica indisponível (sem simulação)', async () => {
       const cfg = await new Client(app).get('/auth/config');
       expect(cfg.body.googleLogin).toBe(false);
+      // Navegação de página inteira: volta ao login com aviso, em vez de exibir erro JSON.
       const start = await new Client(app).get('/auth/google/start');
-      expect(start.status).toBe(400);
-      expect(start.body.code).toBe('GOOGLE_DISABLED');
+      expect(start.status).toBe(302);
+      expect(start.headers.location).toBe('/entrar?erro=google-indisponivel');
       const cb = await new Client(app).get('/auth/google/callback?code=x&state=y');
       expect(cb.status).toBe(302);
       expect(cb.headers.location).toBe('/entrar?erro=google');

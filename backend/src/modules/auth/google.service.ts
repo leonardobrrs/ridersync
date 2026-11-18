@@ -61,9 +61,8 @@ export class GoogleAuthService {
   /** Monta a URL de autorização e o cookie de estado assinado (nonce + PKCE verifier). */
   start(input: z.infer<typeof GoogleStartSchema>) {
     if (!this.enabled) throw badRequest('GOOGLE_DISABLED', 'Login com Google não está configurado neste ambiente.');
-    if (input.intent === 'signup' && (!input.accountType || input.acceptTerms !== '1')) {
-      throw badRequest('SIGNUP_INCOMPLETE', 'Escolha o tipo de conta e aceite os termos antes de continuar com o Google.');
-    }
+    // Cadastro pelo Google não exige escolha prévia: sem tipo de conta ou sem aceite dos termos, a conta é
+    // criada assim mesmo e o AccountGate exige as duas pendências no primeiro acesso ao painel.
     const state: OAuthState = {
       nonce: randomBytes(16).toString('base64url'),
       verifier: randomBytes(48).toString('base64url'),
@@ -130,7 +129,7 @@ export class GoogleAuthService {
       return { kind: 'session', userId: byEmail.id, next: state.next };
     }
 
-    if (state.intent !== 'signup' || !state.accountType || !state.acceptTerms) {
+    if (state.intent !== 'signup') {
       return { kind: 'redirect', to: '/cadastro?google=sem-conta' };
     }
     const user = await this.prisma.user.create({
@@ -138,10 +137,9 @@ export class GoogleAuthService {
         email: profile.email,
         name: profile.name.slice(0, 120) || profile.email.split('@')[0],
         googleSub: profile.sub,
-        accountType: state.accountType,
+        accountType: state.accountType ?? null,
         emailVerifiedAt: new Date(),
-        termsAcceptedAt: new Date(),
-        termsVersion: PRIVACY_POLICY_VERSION,
+        ...(state.acceptTerms ? { termsAcceptedAt: new Date(), termsVersion: PRIVACY_POLICY_VERSION } : {}),
       },
       select: { id: true },
     });

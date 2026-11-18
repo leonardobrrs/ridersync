@@ -1,5 +1,5 @@
-import { Controller, Delete, Get, HttpCode, Module, Patch, Post, Put, Res, UploadedFile, UseInterceptors } from '@nestjs/common';
-import { ApiConsumes, ApiCookieAuth, ApiTags } from '@nestjs/swagger';
+import { Controller, Get, HttpCode, Module, Patch, Post, Res } from '@nestjs/common';
+import { ApiCookieAuth, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { z } from 'zod';
@@ -8,8 +8,6 @@ import { AuthUser, CurrentUser } from '../auth/auth.decorators';
 import { AuthModule } from '../auth/auth.module';
 import { AuthService } from '../auth/auth.service';
 import { SessionService } from '../auth/session.service';
-import type { UploadedFile as File } from '../media/media.service';
-import { uploadInterceptor } from '../media/upload';
 import { AccountDeletionService, DeleteAccountSchema } from './account-deletion.service';
 import { AcceptTermsSchema, AccountService, AccountTypeSchema, ChangePasswordSchema, UpdateAccountSchema } from './account.service';
 
@@ -52,20 +50,6 @@ export class AccountController {
   @ApiZodBody(AcceptTermsSchema)
   async acceptTerms(@CurrentUser() user: AuthUser, @ZBody(AcceptTermsSchema) _body: z.infer<typeof AcceptTermsSchema>) {
     await this.account.acceptTerms(user.id);
-    return this.auth.me(user.id);
-  }
-
-  @Put('avatar')
-  @ApiConsumes('multipart/form-data')
-  @UseInterceptors(uploadInterceptor())
-  async setAvatar(@CurrentUser() user: AuthUser, @UploadedFile() file: File) {
-    await this.account.setAvatar(user.id, file);
-    return this.auth.me(user.id);
-  }
-
-  @Delete('avatar')
-  async removeAvatar(@CurrentUser() user: AuthUser) {
-    await this.account.removeAvatar(user.id);
     return this.auth.me(user.id);
   }
 

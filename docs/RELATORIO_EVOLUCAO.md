@@ -50,7 +50,7 @@ validação manual · **P** parcialmente implementado · **N** não implementado
 
 | Requisito | Situação | Observação |
 |---|---|---|
-| Imagem na criação (bandas, casas, músicos, visitantes) | M | Seletor com pré-visualização nos formulários de criação; "visitante" = foto da conta (cadastro e Conta). Upload coberto por integração. |
+| Imagem na criação (bandas, casas, músicos, visitantes) | M | Seletor com pré-visualização nos formulários de criação; foto da conta removida em 2026-11-18 (vale a foto do perfil/casa; ver DECISOES_TECNICAS). Upload coberto por integração. |
 | Portfólio e Rider em abas | T | |
 | Miniatura de vídeo externo | T | YouTube (por ID) e Vimeo (oEmbed). |
 | Rider sem exigências do local ("Palco e energia") | T | |

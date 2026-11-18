@@ -105,3 +105,23 @@ Detalhes: `docs/RELATORIO_EVOLUCAO.md` (situação de cada requisito), `docs/CHE
 | Frontend (Vitest) | **13 testes passando** |
 | Playwright (desktop/tablet/celular) | **17 testes passando** (inclui regressão da home) |
 | `npm run build` | API e SPA ok |
+
+## Lote de UX, responsividade e agenda (2026-11-18)
+
+- **Agenda**: confirmação rejeita sobreposição de horário para o mesmo artista/banda e para o mesmo local
+  (`409 SCHEDULE_CONFLICT`), com advisory locks contra confirmações concorrentes; evento esgotado rejeita candidatura,
+  proposta e confirmação (`409 EVENT_FULLY_BOOKED`). Testes: `agenda.rules.spec.ts` (8) e `test/agenda.e2e-spec.ts` (11,
+  PostgreSQL real; o teste de concorrência falha se os locks forem removidos).
+- **Cadastro/login**: duas opções + modal acessível; Google visível desde o início (`test/google-signup.e2e-spec.ts`).
+- **Foto única**: removida a foto de conta; `/auth/me` expõe `profilePhotoUrl` (dados antigos preservados).
+- **Layout**: descrições/nomes/URLs longos não estouram cards, perfil, painel, propostas e agenda; home e barra inferior
+  revisadas em 1440/1280/768/390/360/320 px; ícones de instrumento/função.
+
+| Verificação | Resultado |
+|---|---|
+| `npm run lint` / `npm run typecheck` | sem erros |
+| Backend (Jest, unitários + integração) | **230 testes passando** (25 suítes) |
+| Frontend (Vitest) | **15 testes passando** |
+| Playwright (desktop/tablet/celular) | **18 testes passando** |
+| Auditoria de layout com dados extremos (7 páginas públicas + 5 do painel × 6 larguras) | 46/72 com problema antes → **0/72** depois |
+| `npm run build` | API e SPA ok |

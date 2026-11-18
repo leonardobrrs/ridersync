@@ -14,15 +14,22 @@ export function localInput(daysAhead: number, hour = 21) {
 
 export type AccountKind = 'ARTIST' | 'CONTRACTOR';
 
+/** Cadastro: a tela inicial só tem as duas opções; escolher uma abre o modal com o formulário. */
+export async function openSignupModal(page: Page, kind: AccountKind) {
+  await page.getByRole('button', { name: kind === 'ARTIST' ? /^Sou artista/ : /^Sou contratante/ }).click();
+  const dialog = page.getByRole('dialog', { name: kind === 'ARTIST' ? 'Criar conta de artista' : 'Criar conta de contratante' });
+  await expect(dialog).toBeVisible();
+  return dialog;
+}
+
 export async function fillRegistration(page: Page, opts: { name: string; email: string; kind: AccountKind; password?: string }) {
   const password = opts.password ?? PASSWORD;
   await page.goto('/cadastro');
-  await page.locator('.acct-type label', { hasText: opts.kind === 'ARTIST' ? 'Sou artista' : 'Sou proprietário ou contratante' }).click();
-  await expect(page.getByRole('radio', { name: opts.kind === 'ARTIST' ? /Sou artista/ : /Sou proprietário ou contratante/ })).toBeChecked();
-  await page.getByLabel('Nome', { exact: true }).fill(opts.name);
-  await page.getByLabel('E-mail', { exact: true }).fill(opts.email);
-  await page.getByLabel('Senha', { exact: true }).fill(password);
-  await page.getByLabel('Confirme a senha').fill(password);
+  const dialog = await openSignupModal(page, opts.kind);
+  await dialog.getByLabel('Nome', { exact: true }).fill(opts.name);
+  await dialog.getByLabel('E-mail', { exact: true }).fill(opts.email);
+  await dialog.getByLabel('Senha', { exact: true }).fill(password);
+  await dialog.getByLabel('Confirme a senha').fill(password);
   await page.getByRole('checkbox', { name: /Li e aceito os/ }).check();
 }
 

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Event, EventStatus } from '@prisma/client';
-import { notFound } from '../../common/errors';
+import { conflict, notFound } from '../../common/errors';
 import { PrismaService, Tx } from '../../prisma/prisma.service';
 import { AccessService } from '../access/access.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -37,6 +37,22 @@ export class EventLifecycleService {
       tx.booking.count({ where: { eventId, origin: 'DIRECT', status: { in: [...ACTIVE_DIRECT_BOOKING] } } }),
     ]);
     return accepted + invites;
+  }
+
+  /** Contratações CONFIRMADAS do evento — o que de fato esgota o evento (candidaturas e negociações não). */
+  confirmedBookings(tx: Tx | PrismaService, eventId: string) {
+    return tx.booking.count({ where: { eventId, status: 'CONFIRMED' } });
+  }
+
+  /**
+   * Evento com todas as vagas ocupadas por contratações confirmadas não aceita candidatura, proposta, nova
+   * negociação nem confirmação adicional — mesmo que algum estado tenha sido alterado manualmente.
+   * Chamar com o evento bloqueado.
+   */
+  async assertNotFullyBooked(tx: Tx, event: Pick<Event, 'id' | 'slots'>) {
+    if ((await this.confirmedBookings(tx, event.id)) >= event.slots) {
+      throw conflict('EVENT_FULLY_BOOKED', 'Este evento já tem todas as contratações confirmadas e não está mais disponível.');
+    }
   }
 
   /** Recalcula o estado após ocupar/liberar vaga. O evento já deve estar bloqueado pelo chamador. */

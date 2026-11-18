@@ -217,3 +217,37 @@ Decisões do responsável que **substituem** regras anteriores (ordem de autorid
 13. **LGPD**: exclusão de conta por anonimização onde há histórico com terceiros, sem `deletedAt` genérico.
 14. **Documentação**: o link "Documentação" aponta para `/ajuda` (página interna); o botão "API" (Swagger, desativado em
     produção) foi removido do rodapé.
+
+## Lote de UX, responsividade e agenda (2026-11-18)
+
+1. **Conflito de agenda (backend, obrigatório).** Só contratação `CONFIRMED` ocupa agenda; o intervalo é o da oferta
+   aceita (`performanceAt` + `durationMinutes`, máx. 720 min). Sobreposição real é `a.início < b.fim && b.início < a.fim`,
+   portanto apresentações consecutivas (19h–22h e 22h–23h) são permitidas. Recursos verificados na confirmação:
+   - **artista** (`artistId`: perfil individual ou banda);
+   - **local**: `Event.venueId` quando a negociação é de um evento; sem evento, a própria organização se for `VENUE`
+     (contratante `INDIVIDUAL` não ocupa local físico). Artistas do **mesmo evento** formam line-up e não disputam o local.
+   Regras puras em `bookings/agenda.rules.ts`; verificação em `bookings/agenda.service.ts`, dentro da transação de
+   `confirm` (lock do evento → lock da negociação → advisory locks `pg_advisory_xact_lock` de artista e local, em ordem
+   fixa). Duas confirmações concorrentes do mesmo recurso são serializadas; a segunda enxerga a primeira e recebe
+   `409 SCHEDULE_CONFLICT`. Nada é gravado parcialmente (rollback). A mensagem não expõe dados de outra negociação.
+   **Sem migration**: um constraint de exclusão (GiST) exigiria duplicar o intervalo na tabela `Booking`; os advisory
+   locks dão a mesma garantia sem mudar o schema. Reversível.
+2. **Evento esgotado.** Evento cujas vagas estão todas ocupadas por contratações confirmadas rejeita candidatura,
+   aceite de candidatura, nova proposta vinculada e nova confirmação com `409 EVENT_FULLY_BOOKED`, mesmo que o estado
+   tenha sido alterado manualmente. Continua consultável (detalhe público, histórico e agenda).
+3. **Foto única.** Removida a "foto da conta" (`PUT/DELETE /account/avatar`). A foto exibida para a pessoa é a do perfil
+   individual ou, para contratantes, a da organização (`/auth/me` → `user.profilePhotoUrl`). A coluna `User.avatarId` e
+   os arquivos existentes foram **preservados** (sem migration destrutiva); a exclusão de conta continua apagando-os.
+4. **Cadastro.** A tela inicial mostra só "Sou artista" e "Sou contratante"; a escolha abre um modal (`<dialog>` nativo:
+   foco preso, Esc fecha, foco volta ao botão de origem, rolagem interna) com o mesmo `RegisterSchema` e a mesma
+   validação do backend. É possível trocar o tipo sem perder o que foi digitado. "Continuar com Google" aparece desde o
+   primeiro carregamento (login e cadastro); sem escolha prévia, a conta Google nasce sem tipo/aceite e o `AccountGate`
+   pede ambos no primeiro acesso. Google desligado no ambiente → botão desabilitado com aviso e
+   `/api/auth/google/start` redireciona para `/entrar?erro=google-indisponivel`.
+5. **Texto do usuário nunca estoura o layout.** `overflow-wrap:anywhere` no conteúdo principal, `minmax(0,1fr)`/`min-width:0`
+   em grids e flex, limite de linhas nos cards (texto completo na página do perfil/evento e no `title`).
+6. **Ícones de instrumento/função** centralizados em `frontend/src/lib/instruments.ts` (normaliza acento/caixa só para
+   escolher o desenho; o valor gravado e o texto exibido não mudam; desconhecido → ícone genérico).
+7. **Barra inferior**: altura em `--tabbar-h`, `safe-area-inset-*`, alvos ≥ 44 px, item ativo sempre marcado ("Painel"
+   nas subpáginas sem atalho próprio), número variável de itens, barra de salvar acima dela; em telas de toque some com
+   o teclado aberto e volta com atraso (não rouba o toque que fechou o teclado).

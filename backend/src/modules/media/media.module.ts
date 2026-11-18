@@ -13,7 +13,7 @@ import { createStorageDriver, STORAGE_DRIVER } from './storage';
  * Regras de visualização de arquivos:
  *  - quem enviou sempre vê;
  *  - foto/portfólio de artista: público se o perfil é PUBLIC; senão apenas quem participa;
- *  - foto de casa de show (VENUE): pública; foto de contratante individual e avatar de conta: apenas usuários autenticados.
+ *  - foto de casa de show (VENUE): pública; foto de contratante individual (e avatares legados de conta, ainda servidos): apenas usuários autenticados.
  */
 @Injectable()
 export class MediaAccessPolicy {

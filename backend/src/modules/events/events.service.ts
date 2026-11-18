@@ -552,6 +552,10 @@ export class EventsService {
       throw unprocessable('PROFILE_NOT_PUBLIC', 'Publique o perfil artístico antes de se candidatar — o contratante precisa conseguir vê-lo.');
     }
     const id = await this.prisma.$transaction(async (tx) => {
+      // Revalida com o evento bloqueado: uma confirmação concorrente pode ter esgotado o evento.
+      const locked = await this.lifecycle.lock(tx, eventId);
+      await this.lifecycle.assertNotFullyBooked(tx, locked);
+      if (!acceptsApplications(locked, new Date())) throw conflict('APPLICATIONS_CLOSED', 'As inscrições desta oportunidade estão encerradas.');
       const existing = await tx.eventApplication.findUnique({ where: { eventId_artistId: { eventId, artistId: input.artistId } } });
       let applicationId: string;
       if (existing) {
@@ -658,6 +662,7 @@ export class EventsService {
         select: { status: true, artistId: true, booking: { select: { status: true } } },
       });
       assertApplicationTransition(current.status, decision);
+      if (decision === 'ACCEPTED') await this.lifecycle.assertNotFullyBooked(tx, event);
       if (decision === 'ACCEPTED' && (await this.lifecycle.filledSlots(tx, event.id)) >= event.slots) {
         throw conflict('SLOTS_FULL', 'Todas as vagas já foram preenchidas.');
       }
