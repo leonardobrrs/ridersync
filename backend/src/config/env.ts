@@ -28,7 +28,8 @@ const EnvSchema = z
     PUBLIC_APP_URL: z.url().default('http://localhost:5173'),
     /** Segredo para assinar links de descadastro e o estado do OAuth. Obrigatório em produção. */
     APP_SECRET: z.string().min(32).optional(),
-    MAIL_DRIVER: z.enum(['resend', 'log', 'disabled']).optional(),
+    MAIL_DRIVER: z.enum(['brevo', 'resend', 'log', 'disabled']).optional(),
+    BREVO_API_KEY: z.string().trim().optional(),
     RESEND_API_KEY: z.string().optional(),
     MAIL_FROM: z.string().default('RiderSync <nao-responda@ridersync.app>'),
     /** Somente desenvolvimento/testes: grava os e-mails do driver "log" em arquivos JSON. */
@@ -50,8 +51,16 @@ const EnvSchema = z
     if (env.MAIL_DRIVER === 'resend' && !env.RESEND_API_KEY) {
       ctx.addIssue({ code: 'custom', path: ['RESEND_API_KEY'], message: 'RESEND_API_KEY é obrigatória quando MAIL_DRIVER=resend' });
     }
+    if (env.MAIL_DRIVER === 'brevo') {
+      if (!env.BREVO_API_KEY) {
+        ctx.addIssue({ code: 'custom', path: ['BREVO_API_KEY'], message: 'BREVO_API_KEY é obrigatória quando MAIL_DRIVER=brevo' });
+      }
+      if (!/^(.*<\S+@\S+>|\S+@\S+)$/.test(env.MAIL_FROM.trim())) {
+        ctx.addIssue({ code: 'custom', path: ['MAIL_FROM'], message: 'MAIL_FROM deve ser "Nome <email>" com um remetente verificado na Brevo' });
+      }
+    }
     if (env.NODE_ENV === 'production' && env.MAIL_DRIVER === 'log') {
-      ctx.addIssue({ code: 'custom', path: ['MAIL_DRIVER'], message: 'MAIL_DRIVER=log é exclusivo de desenvolvimento; use resend ou disabled' });
+      ctx.addIssue({ code: 'custom', path: ['MAIL_DRIVER'], message: 'MAIL_DRIVER=log é exclusivo de desenvolvimento; use brevo, resend ou disabled' });
     }
     if (env.NODE_ENV === 'production' && !env.APP_SECRET) {
       ctx.addIssue({ code: 'custom', path: ['APP_SECRET'], message: 'APP_SECRET é obrigatória em produção (mínimo 32 caracteres)' });

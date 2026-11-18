@@ -4,7 +4,8 @@
 |---|---|---|
 | Neon (PostgreSQL) | Em uso (branch `ridersync-staging`) | já configurada |
 | Vercel Blob (arquivos, store privado `ridersync-staging-blob`) | Em uso | já configurada |
-| Resend (e-mail transacional) | Implementada (`ResendTransport`) | **sim** — `RESEND_API_KEY` + domínio verificado |
+| Brevo (e-mail transacional) | **Em uso no Preview** (`BrevoTransport`) | `BREVO_API_KEY` + remetente verificado (configurado) |
+| Resend (e-mail transacional) | Implementada (`ResendTransport`), alternativa | `RESEND_API_KEY` + domínio verificado |
 | Google OAuth 2.0 (login) | Implementada (PKCE + validação do `id_token`) | **sim** — `GOOGLE_CLIENT_ID/SECRET` |
 | Vercel Cron (manutenção diária) | Configurado em `backend/vercel.json` | `CRON_SECRET` já criado; o Cron só roda em deployments de Production |
 | YouTube / Vimeo (miniaturas) | Implementado (YouTube por ID; Vimeo via oEmbed público) | não |
@@ -12,7 +13,22 @@
 Nenhuma integração é simulada: sem credencial, e-mails ficam registrados como **não enviados** (`SKIPPED`, motivo
 "provedor não configurado") e o botão "Entrar com Google" não aparece.
 
-## Resend — habilitar e-mails reais
+## Brevo — e-mails reais (em uso)
+
+Conta Brevo (plano free: **300 e-mails/dia**). Driver `MAIL_DRIVER=brevo` usa a API transacional
+`POST https://api.brevo.com/v3/smtp/email` com o cabeçalho `api-key`.
+
+- Preview (projeto `ridersync`): `MAIL_DRIVER=brevo`, `BREVO_API_KEY` (Secret), `MAIL_FROM="RiderSync <projetao89@gmail.com>"`.
+- Desenvolvimento local: `BREVO_API_KEY` no `backend/.env`, mas o driver padrão continua `log` (não envia).
+  Para testar envio real localmente: `MAIL_DRIVER=brevo` no `backend/.env`.
+- O remetente precisa estar verificado na Brevo (**Senders, Domains & Dedicated IPs**). Hoje só existe o remetente
+  Gmail da conta, sem domínio próprio autenticado: as mensagens podem cair em spam. Para produção, autentique um
+  domínio próprio (registros DKIM/DMARC indicados pela Brevo) e troque `MAIL_FROM` para um endereço desse domínio.
+- Trocar a chave: Brevo → **SMTP & API → API Keys** → gerar nova chave e revogar a antiga; depois
+  `vercel env add BREVO_API_KEY --environment preview --sensitive --force --project ridersync --scope projetao2`,
+  `vercel redeploy <url-da-api>` e mover o alias `ridersync-api-staging.vercel.app`.
+
+## Resend — habilitar e-mails reais (alternativa)
 
 1. Crie a conta em https://resend.com e adicione um domínio que você controla (ex.: `mail.ridersync.app`).
 2. Publique no DNS os registros SPF/DKIM exibidos pelo Resend e aguarde o status **Verified**.

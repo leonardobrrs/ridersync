@@ -17,9 +17,10 @@ Modelo comentado: `backend/.env.example`. O frontend não usa variáveis em prod
 | `PUBLIC_APP_URL` | recomendada | `http://localhost:5173` | Origem pública da SPA: links dos e-mails e redirect do Google. |
 | `APP_SECRET` | **em produção** | segredo efêmero em dev | ≥ 32 caracteres. Assina links de descadastro e o estado do OAuth. |
 | `CRON_SECRET` | para o cron | — | ≥ 16 caracteres. Sem ela, `/api/internal/maintenance` responde 404. |
-| `MAIL_DRIVER` | não | `log` (dev) / `disabled` (produção) | `resend` (envio real), `log` (dev: não envia), `disabled`. |
+| `MAIL_DRIVER` | não | `log` (dev) / `disabled` (produção) | `brevo` ou `resend` (envio real), `log` (dev: não envia), `disabled`. |
+| `BREVO_API_KEY` | com `brevo` | — | Chave da API da Brevo (`xkeysib-…`). Secret na Vercel. |
 | `RESEND_API_KEY` | com `resend` | — | Chave da API do Resend. |
-| `MAIL_FROM` | não | `RiderSync <nao-responda@ridersync.app>` | Remetente em domínio verificado no Resend. |
+| `MAIL_FROM` | não | `RiderSync <nao-responda@ridersync.app>` | `Nome <email>` de remetente/domínio **verificado no provedor** (Brevo: hoje `RiderSync <projetao89@gmail.com>`). |
 | `MAIL_DEV_OUTBOX_DIR` | não | — | Somente dev/testes: grava e-mails do driver `log` em JSON. |
 | `EMAIL_VERIFICATION_REQUIRED` | não | `false` | `true` = login só após confirmar o e-mail. |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | juntas, para Google | — | Login com Google. Sem elas o botão não aparece e a rota responde 400. |
@@ -39,5 +40,6 @@ Modelo comentado: `backend/.env.example`. O frontend não usa variáveis em prod
 | `APP_SECRET`, `CRON_SECRET` (gerados aleatoriamente, secretos) | ✔ | ✔ | — |
 | `PUBLIC_APP_URL` | `https://ridersync-front-staging.vercel.app` | `http://localhost:5173` | — |
 | `CORS_ORIGINS` (Preview) | `https://ridersync-front-staging.vercel.app` + `https://ridersync-front-*-projetao2.vercel.app` | `http://localhost:5173` | — |
-| `RESEND_API_KEY`, `MAIL_DRIVER=resend`, `MAIL_FROM` | **pendente (credencial)** | — | — |
+| `BREVO_API_KEY` (Secret), `MAIL_DRIVER=brevo`, `MAIL_FROM` | **configurado em Preview** (2026-11-18) | — | — |
+| `RESEND_API_KEY`, `MAIL_DRIVER=resend` | alternativa não usada | — | — |
 | `GOOGLE_CLIENT_ID/SECRET` | **pendente (credencial)** | — | — |

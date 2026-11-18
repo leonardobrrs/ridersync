@@ -47,6 +47,54 @@ export class ResendTransport implements MailTransport {
   }
 }
 
+const BREVO_ENDPOINT = 'https://api.brevo.com/v3/smtp/email';
+
+/** Converte `Nome <email@dominio>` (ou só o e-mail) no formato de remetente da Brevo. */
+export function parseMailFrom(from: string): { name?: string; email: string } {
+  const m = from.trim().match(/^(.*?)\s*<([^<>\s]+@[^<>\s]+)>$/);
+  if (m) return { ...(m[1].trim() ? { name: m[1].trim().replace(/^"|"$/g, '') } : {}), email: m[2] };
+  if (/^[^<>\s]+@[^<>\s]+$/.test(from.trim())) return { email: from.trim() };
+  throw new Error('MAIL_FROM inválido: use "Nome <email@dominio>" ou apenas o e-mail');
+}
+
+/**
+ * Envio real via API transacional da Brevo (https://developers.brevo.com/reference/sendtransacemail).
+ * O remetente (MAIL_FROM) precisa ser um remetente ou domínio verificado na conta Brevo.
+ */
+export class BrevoTransport implements MailTransport {
+  readonly name = 'brevo';
+  private readonly sender: { name?: string; email: string };
+
+  constructor(
+    private readonly apiKey: string,
+    from: string,
+  ) {
+    this.sender = parseMailFrom(from);
+  }
+
+  async send(message: MailMessage): Promise<SendResult> {
+    const res = await fetch(BREVO_ENDPOINT, {
+      method: 'POST',
+      headers: { 'api-key': this.apiKey, accept: 'application/json', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        sender: this.sender,
+        to: [{ email: message.to }],
+        subject: message.subject,
+        htmlContent: message.html,
+        textContent: message.text,
+      }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) {
+      // A resposta de erro da Brevo não contém a chave; limitada para não poluir os logs.
+      const detail = await res.text().catch(() => '');
+      throw new Error(`Brevo respondeu ${res.status}: ${detail.slice(0, 300)}`);
+    }
+    const body = (await res.json().catch(() => ({}))) as { messageId?: string };
+    return { status: 'sent', providerId: body.messageId };
+  }
+}
+
 /**
  * Somente desenvolvimento/testes: não envia e-mail. Registra no log que o envio foi
  * suprimido e, se MAIL_DEV_OUTBOX_DIR estiver definido, grava a mensagem em JSON para inspeção local.
@@ -78,6 +126,7 @@ export class DisabledTransport implements MailTransport {
 }
 
 export function createMailTransport(env: Env): MailTransport {
+  if (env.MAIL_DRIVER === 'brevo') return new BrevoTransport(env.BREVO_API_KEY!, env.MAIL_FROM);
   if (env.MAIL_DRIVER === 'resend') return new ResendTransport(env.RESEND_API_KEY!, env.MAIL_FROM);
   if (env.MAIL_DRIVER === 'log') return new DevLogTransport(env.MAIL_DEV_OUTBOX_DIR);
   return new DisabledTransport();

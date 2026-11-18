@@ -49,6 +49,12 @@ describe('configuração de e-mail e segredos por ambiente', () => {
     expect(() => loadEnv({ ...base, GOOGLE_CLIENT_ID: 'abc' })).toThrow(/GOOGLE/);
     expect(loadEnv({ ...base, MAIL_DRIVER: 'resend', RESEND_API_KEY: 're_x' }).MAIL_DRIVER).toBe('resend');
   });
+  it('Brevo exige chave e remetente no formato "Nome <email>"', () => {
+    expect(() => loadEnv({ ...base, MAIL_DRIVER: 'brevo' })).toThrow(/BREVO_API_KEY/);
+    expect(() => loadEnv({ ...base, MAIL_DRIVER: 'brevo', BREVO_API_KEY: 'k', MAIL_FROM: 'sem-email' })).toThrow(/MAIL_FROM/);
+    const env = loadEnv({ ...base, MAIL_DRIVER: 'brevo', BREVO_API_KEY: 'k', MAIL_FROM: 'RiderSync <contato@exemplo.com>' });
+    expect(env.MAIL_DRIVER).toBe('brevo');
+  });
   it('confirmação de e-mail obrigatória é opcional (padrão: não bloqueia o primeiro acesso)', () => {
     expect(loadEnv(base).EMAIL_VERIFICATION_REQUIRED).toBe(false);
     expect(loadEnv({ ...base, EMAIL_VERIFICATION_REQUIRED: 'true' }).EMAIL_VERIFICATION_REQUIRED).toBe(true);
