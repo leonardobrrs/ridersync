@@ -202,6 +202,11 @@ Lista completa em [`docs/SEEDERS.md`](docs/SEEDERS.md).
 
 Roteiro de demonstração: [`docs/DEMO.md`](docs/DEMO.md).
 
+**Vitrine com imagens (opcional):** `npm run db:seed:showcase` roda o seed acima e acrescenta 17 artistas/bandas, 9 casas,
+27 eventos em todos os estados, candidaturas, negociações e imagens (perfil, portfólio, casas e eventos) a partir de
+`backend/seed-assets/showcase/` (fotos CC0/domínio público, créditos em `CREDITS.json`). Contas novas seguem o mesmo padrão
+(`fernanda@`, `caio@`, `marilia@demo.ridersync.local`…) e a mesma senha. Detalhes e uso no staging em [`docs/SEEDERS.md`](docs/SEEDERS.md).
+
 ## Comandos
 
 | Comando (raiz) | O que faz |

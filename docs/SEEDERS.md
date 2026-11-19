@@ -36,3 +36,35 @@ npm run db:migrate:neon:staging                     # prisma migrate deploy (nã
 npx dotenv -o -e .env.neon-staging -- sh -c '[ "$NEON_BRANCH" = ridersync-staging ] && npx tsx src/seed/demo-seed.ts --force'
 ```
 Nunca rode contra a branch `production` do Neon.
+
+## Seed de vitrine com imagens (`showcase-seed.ts`)
+
+`npm run db:seed:showcase` = seed de demonstração + vitrine. Idempotente (não duplica; só põe imagem onde ainda não há).
+Bloqueado com `NODE_ENV=production`.
+
+- **Conteúdo:** 13 artistas solo e 4 bandas novas, 9 casas, 2 contratantes independentes, 27 eventos (abertos, lotados,
+  encerrados, adiados, cancelados, realizados, privados e rascunho), 33 candidaturas, 20 negociações e apresentações
+  realizadas. Agenda coerente: nenhuma contratação confirmada se sobrepõe (artista ou local) e evento `FILLED` tem todas
+  as vagas confirmadas.
+- **Imagens:** `backend/seed-assets/showcase/<tag>-<n>.jpg` (instrumentos, casas, palcos — sem rostos identificáveis),
+  licenças CC0/PDM listadas em `CREDITS.json`. Cada imagem passa pelo mesmo processamento da API (WebP + miniatura) e vai
+  para o storage configurado (`STORAGE_DRIVER`).
+- **Contas novas (senha `Demo@RiderSync2026`):** artistas `caio`, `marilia`, `renato`, `julia`, `pedro`, `nanda`,
+  `zecicero`, `lucas`, `rebeca`, `thiago`, `gabi`, `damiao`, `clara`; contratantes `fernanda` (Armazém Pajuçara e Bar do
+  Cais), `gustavo`, `luana`, `roberto`, `silvia`, `antonio`, `paula` e `marcos` — todas `@demo.ridersync.local`.
+
+### Staging (Neon `ridersync-staging` + Vercel Blob privado)
+
+As imagens precisam ir para o Blob do staging, então o comando usa o token do store (variável de Development/Preview do
+projeto `ridersync` na Vercel). Nunca rodar contra produção.
+
+```bash
+cd backend
+vercel env pull /tmp/vercel-dev.env --environment=development --project ridersync --yes
+set -a; . ./.env.neon-staging; set +a
+[ "$NEON_BRANCH" = ridersync-staging ] && \
+  DATABASE_URL="$DATABASE_URL_UNPOOLED" STORAGE_DRIVER=vercel-blob \
+  BLOB_READ_WRITE_TOKEN="$(grep ^BLOB_READ_WRITE_TOKEN= /tmp/vercel-dev.env | cut -d= -f2- | tr -d '"')" \
+  npx tsx src/seed/showcase-seed.ts --force --with-demo
+rm /tmp/vercel-dev.env
+```
