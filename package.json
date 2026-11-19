@@ -14,6 +14,7 @@
     "db:up": "docker compose up -d db",
     "db:migrate": "npm run prisma:deploy -w backend",
     "db:seed": "npm run seed -w backend",
+    "db:seed:showcase": "npm run seed:showcase -w backend",
     "dev:api": "npm run start:dev -w backend",
     "dev:web": "npm run dev -w frontend",
     "lint": "npm run lint -w backend && npm run lint -w frontend",
