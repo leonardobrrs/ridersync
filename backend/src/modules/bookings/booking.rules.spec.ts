@@ -1,4 +1,4 @@
-import { assertBookingTransition, assertCanConfirm, assertCanRespondToOffer, resolveSide } from './booking.rules';
+import { assertBookingTransition, assertCanConfirm, assertCanRespondToOffer, resolveSide, unreadCount } from './booking.rules';
 
 describe('regras de Booking', () => {
   it('fluxo NEGOTIATING → AGREED → CONFIRMED', () => {
@@ -31,5 +31,23 @@ describe('regras de Booking', () => {
     expect(() => resolveSide(new Set())).toThrow(/não encontrada/);
     expect(() => resolveSide(new Set(['VENUE', 'ARTIST']))).toThrow(/dois lados/);
     expect(resolveSide(new Set(['ARTIST']))).toBe('ARTIST');
+  });
+});
+
+describe('mensagens não lidas', () => {
+  const at = (min: number) => new Date(Date.UTC(2026, 10, 18, 20, min));
+  const msgs = [
+    { createdAt: at(0), author: { id: 'outro' } },
+    { createdAt: at(5), author: { id: 'eu' } },
+    { createdAt: at(10), author: { id: 'outro' } },
+    { createdAt: at(15), author: null },
+  ];
+  it('sem leitura registrada conta todas as mensagens da outra parte (e de conta removida)', () => {
+    expect(unreadCount(msgs, 'eu', null)).toBe(3);
+  });
+  it('conta só as da outra parte posteriores à última leitura; as próprias nunca contam', () => {
+    expect(unreadCount(msgs, 'eu', at(5))).toBe(2);
+    expect(unreadCount(msgs, 'eu', at(15))).toBe(0);
+    expect(unreadCount(msgs, 'outro', at(0))).toBe(2);
   });
 });

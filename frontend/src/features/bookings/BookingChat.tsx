@@ -13,12 +13,21 @@ type Message = BookingDetail['messages'][number];
  *    painel sobre a página, como os chats da maioria dos sites. Fecha no X, no fundo escurecido ou com Esc.
  *  Enter envia; Shift+Enter quebra a linha (durante composição de acentos/IME o Enter não envia).
  */
-export function BookingChat({ b, onSend }: { b: BookingDetail; onSend: (text: string) => Promise<boolean> }) {
+export function BookingChat({ b, onSend, onRead }: { b: BookingDetail; onSend: (text: string) => Promise<boolean>; onRead: () => void }) {
   const mobile = useMediaQuery(MOBILE_QUERY);
   const [open, setOpen] = useState(false);
   const titleId = useId();
-  const count = b.messages.length;
-  const last = b.messages[count - 1];
+  const unread = b.unreadMessages ?? 0;
+  const last = b.messages[b.messages.length - 1];
+  const readRef = useRef(onRead);
+  useEffect(() => {
+    readRef.current = onRead;
+  });
+  // Conversa visível (lateral no desktop ou pop-up aberto no celular) com mensagens novas → marca como lida.
+  const visible = !mobile || open;
+  useEffect(() => {
+    if (visible && unread > 0) readRef.current();
+  }, [visible, unread]);
 
   if (!mobile) {
     return (
@@ -37,7 +46,14 @@ export function BookingChat({ b, onSend }: { b: BookingDetail; onSend: (text: st
           <Icon name="chat" size={20} />
         </span>
         <span className="chat-dock-t">
-          <strong>Mensagens{count ? ` (${count})` : ''}</strong>
+          <strong>
+            Mensagens
+            {unread > 0 && (
+              <span className="chat-dock-n" aria-label={`${unread} não lida${unread > 1 ? 's' : ''}`}>
+                {unread > 99 ? '99+' : unread}
+              </span>
+            )}
+          </strong>
           <small>{last ? `${last.author?.isMe ? 'Você' : (last.author?.name ?? 'Conta removida')}: ${last.body}` : b.allowed.message ? 'Escreva para a outra parte' : 'Nenhuma mensagem'}</small>
         </span>
         <Icon name="expand" size={18} />

@@ -309,3 +309,24 @@ body:has(.chat-dock) #root{padding-bottom:calc(var(--tabbar-h) + env(safe-area-i
   .logo{font-size:19px;padding:5px 9px 2px}
 }
 @media (max-width:330px){ .ads{grid-template-columns:1fr} }
+.chat-dock-n{display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 6px;margin-left:8px;border-radius:999px;background:var(--tally);color:#fff;font-size:12px;font-weight:800;vertical-align:1px}
+/* Celular/tablet: categorias saem do topo e vão para "Explorar" na barra inferior */
+@media (max-width:900px){ .cats{display:none} }
+.tabbar .tab-btn{display:grid;justify-items:center;align-content:center;gap:2px;min-width:0;min-height:52px;padding:4px 2px;border:0;border-radius:12px;background:none;
+  font:inherit;font-size:11px;font-weight:700;line-height:1.15;color:var(--muted);cursor:pointer;-webkit-tap-highlight-color:transparent}
+.tabbar .tab-btn.active{color:var(--ink);font-weight:800}
+.tabbar .tab-btn.active svg{color:var(--ink);background:var(--cue);border-radius:999px}
+.tabbar .tab-btn:focus-visible{outline:2px solid var(--ink);outline-offset:-2px}
+@media (max-width:340px){ .tabbar .tab-btn{font-size:10px} }
+.sheet-backdrop{position:fixed;inset:0;z-index:60;background:rgb(0 0 0/.45)}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:61;max-height:85dvh;overflow-y:auto;background:var(--surface);border-radius:18px 18px 0 0;
+  box-shadow:0 -8px 30px rgb(0 0 0/.25);padding:0 max(14px,env(safe-area-inset-right,0px)) calc(14px + env(safe-area-inset-bottom,0px)) max(14px,env(safe-area-inset-left,0px))}
+.sheet-h{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 0 10px;border-bottom:1px solid var(--line)}
+.explore-list{list-style:none;margin:0;padding:6px 0 0;display:grid;gap:2px}
+.explore-list a{display:grid;grid-template-columns:auto minmax(0,1fr);gap:14px;align-items:center;padding:10px 8px;border-radius:14px;text-decoration:none;color:var(--ink)}
+.explore-list a:hover,.explore-list a:focus-visible{background:var(--sunk)}
+.explore-list a[aria-current="page"]{background:color-mix(in oklab,var(--cue) 22%,var(--surface))}
+.explore-list .ci{width:44px;height:44px;border-radius:50%;background:var(--sunk);display:grid;place-items:center}
+.explore-list a[aria-current="page"] .ci{background:var(--cue);color:var(--cue-ink)}
+.explore-t{display:grid;min-width:0}
+.explore-t small{color:var(--muted);font-size:13px}

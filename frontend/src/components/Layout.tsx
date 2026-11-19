@@ -6,6 +6,7 @@ import { useMe } from '../lib/hooks';
 import { useDismiss } from '../lib/useDismiss';
 import type { AccountType, Me } from '../lib/types';
 import { AccountGate } from './AccountGate';
+import { ExploreSheet } from './ExploreSheet';
 import { Icon } from './Icon';
 import { NotificationBell } from './NotificationBell';
 import { Avatar } from './Poster';
@@ -194,6 +195,23 @@ export function SiteLayout() {
   );
 }
 
+/** Botão "Explorar" da barra inferior: abre as categorias da página inicial (no lugar da barra do topo no celular). */
+function ExploreTab({ accountType }: { accountType: AccountType | null }) {
+  const { pathname } = useLocation();
+  const [open, setOpen] = useState(false);
+  const close = useCallback(() => setOpen(false), []);
+  const active = pathname === "/";
+  return (
+    <>
+      <button type="button" className={`tab-btn${active ? " active" : ""}`} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}>
+        <Icon name="search" />
+        Explorar
+      </button>
+      <ExploreSheet open={open} onClose={close} accountType={accountType} />
+    </>
+  );
+}
+
 /** Barra inferior no celular (públicos e painel). */
 function MobileTabbar() {
   const { data: me } = useMe();
@@ -201,10 +219,7 @@ function MobileTabbar() {
   if (!me) {
     return (
       <nav className="tabbar" aria-label="Atalhos">
-        <NavLink to="/" end>
-          <Icon name="home" />
-          Início
-        </NavLink>
+        <ExploreTab accountType={null} />
         <NavLink to="/oportunidades">
           <Icon name="ticket" />
           Vagas
@@ -227,10 +242,7 @@ function MobileTabbar() {
   const inPanel = pathname.startsWith('/painel') && !inVenue && !/^\/painel\/(negociacoes|menu)(\/|$)/.test(pathname);
   return (
     <nav className="tabbar" aria-label="Atalhos">
-      <NavLink to="/" end>
-        <Icon name="home" />
-        Início
-      </NavLink>
+      <ExploreTab accountType={me.user.accountType} />
       {contractor ? (
         <Link to={venueLink} aria-current={inVenue ? 'page' : undefined} className={inVenue ? 'active' : undefined}>
           <Icon name="venue" />

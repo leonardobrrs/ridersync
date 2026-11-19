@@ -67,19 +67,34 @@ test('página inicial com muitos shows confirmados sem rolagem horizontal', asyn
   await expectNoHorizontalOverflow(page);
 });
 
-/** Reunião 18/11: logo sem fundo esticado e, no celular, sem a fileira de instrumentos (vai para "Filtros"). */
-test('logo do tamanho do texto e filtro de instrumentos só fora do celular', async ({ page }) => {
+/**
+ * Reunião 18/11: logo sem fundo esticado. Celular/tablet: sem a barra de categorias no topo — as categorias ficam
+ * em "Explorar" (barra inferior) e o instrumento em "Filtros". Desktop: barra de categorias no topo.
+ */
+test('logo do tamanho do texto; categorias no topo só no desktop e em "Explorar" no celular/tablet', async ({ page }) => {
   await page.goto('/');
   const logo = await page.locator('.hdr .logo').boundingBox();
   expect(logo!.width, 'fundo amarelo da logo não pode esticar').toBeLessThan(200);
   const width = page.viewportSize()!.width;
-  const chips = page.locator('.cats .cat.sm');
-  if (width <= 700) {
-    await expect(chips.first()).toBeHidden();
+  const cats = page.getByRole('navigation', { name: 'Categorias' });
+  if (width <= 900) {
+    await expect(cats).toBeHidden();
+    const explore = page.getByRole('navigation', { name: 'Atalhos' }).getByRole('button', { name: 'Explorar' });
+    await explore.click();
+    const sheet = page.getByRole('dialog', { name: 'Explorar' });
+    await expect(sheet.getByRole('link', { name: /Todos/ })).toHaveAttribute('aria-current', 'page');
+    await sheet.getByRole('link', { name: /Bandas/ }).click();
+    await expect(page).toHaveURL(/\?kind=BAND$/);
+    await expect(sheet).toHaveCount(0);
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('Bandas');
+    await explore.click();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog', { name: 'Explorar' })).toHaveCount(0);
     await page.getByRole('button', { name: /Filtros/ }).click();
     await expect(page.getByRole('dialog', { name: 'Filtros' }).getByLabel('Instrumento')).toBeVisible();
   } else {
-    await expect(chips.first()).toBeVisible();
+    await expect(cats).toBeVisible();
+    await expect(page.locator('.cats .cat.sm').first()).toBeVisible();
   }
   await expectNoHorizontalOverflow(page);
 });

@@ -90,6 +90,17 @@ export function BookingPage() {
       toast(errorMessage(e), 'error');
     }
   };
+  /** Conversa visível: zera o contador de não lidas e os avisos de "nova mensagem" desta negociação. */
+  const markRead = async () => {
+    try {
+      await api.post(`/bookings/${b.id}/messages/read`);
+      qc.setQueryData<BookingDetail>(key, (old) => (old ? { ...old, unreadMessages: 0 } : old));
+      await qc.invalidateQueries({ queryKey: ['notifications'] });
+      await qc.invalidateQueries({ queryKey: ['me'] });
+    } catch {
+      // Sem impacto para quem está lendo: o contador volta a ser calculado na próxima atualização.
+    }
+  };
   /** A conversa já mostra a mensagem enviada: sem aviso de sucesso; em erro avisa e mantém o texto no campo. */
   const sendMessage = async (text: string) => {
     try {
@@ -339,7 +350,7 @@ export function BookingPage() {
         </div>
 
         <aside className="side">
-          <BookingChat b={b} onSend={sendMessage} />
+          <BookingChat b={b} onSend={sendMessage} onRead={markRead} />
         </aside>
       </div>
 

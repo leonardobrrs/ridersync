@@ -171,7 +171,7 @@ function EventForm({
         <TextField label="Prazo de candidatura" type="datetime-local" {...form.register('applicationDeadline')} error={e.applicationDeadline} />
       </div>
       <div className="row3">
-        <TextField label="Vagas" type="number" min={1} max={50} {...form.register('slots')} error={e.slots} hint="Ao ocupar todas, o evento muda sozinho para “Vagas preenchidas”." />
+        <TextField label="Vagas" type="number" min={1} max={50} {...form.register('slots')} error={e.slots} hint="Uma vaga é ocupada quando a contratação é confirmada. Com todas confirmadas, o evento muda sozinho para “Vagas preenchidas”." />
         <SelectField label="Forma de pagamento" {...form.register('paymentType')}>
           <option value="">—</option>
           {meta?.paymentTypes.map((p) => <option key={p}>{p}</option>)}
@@ -440,7 +440,9 @@ export function EventManagePage() {
           Ver como os artistas veem
         </Link>
       )}
-      {ev.status === 'FILLED' && <div className="inline-msg ok">Todas as vagas estão ocupadas: as inscrições foram fechadas automaticamente. Se uma vaga for cancelada, o evento reabre sozinho.</div>}
+      {ev.status === 'FILLED' && (
+        <div className="inline-msg ok">Todas as vagas têm contratação confirmada: as inscrições foram fechadas automaticamente. Se uma contratação for cancelada, o evento reabre sozinho.</div>
+      )}
       {ev.status === 'POSTPONED' && <div className="inline-msg warn">Evento adiado. Defina a nova data para retomar.</div>}
       {editing ? (
         <EventForm
@@ -466,7 +468,7 @@ export function EventManagePage() {
           )}
           <dl className="attrs">
             <div>
-              <dt>Vagas ocupadas</dt>
+              <dt>Vagas confirmadas</dt>
               <dd>
                 {ev.filledSlots}/{ev.slots}
               </dd>
@@ -510,7 +512,7 @@ export function EventManagePage() {
               </li>
             ))}
           </ul>
-          <p className="hint">Convites são propostas enviadas pelo perfil do artista com este evento vinculado. Cada convite ativo ocupa uma vaga.</p>
+          <p className="hint">Convites são propostas enviadas pelo perfil do artista com este evento vinculado. Convites não ocupam vaga; a vaga só é preenchida quando a contratação é confirmada.</p>
         </section>
       )}
 
@@ -545,13 +547,9 @@ export function EventManagePage() {
                   )}
                   {a.status === 'PENDING' && (
                     <>
-                      <button
-                        className="btn sm cue"
-                        type="button"
-                        disabled={ev.filledSlots >= ev.slots}
-                        onClick={() => run(() => api.post(`/applications/${a.id}/accept`, {}), 'Candidatura selecionada. Isso não confirma a contratação.')}
-                      >
-                        Selecionar
+                      {/* Selecionar abre a negociação (proposta) direto; não ocupa vaga. */}
+                      <button className="btn sm cue" type="button" disabled={ev.filledSlots >= ev.slots} onClick={() => setNegotiate(a.id)}>
+                        Selecionar e negociar
                       </button>
                       <ConfirmButton
                         className="btn sm danger"
@@ -579,7 +577,10 @@ export function EventManagePage() {
             ))}
           </div>
         )}
-        <p className="note">Selecionar uma candidatura ocupa uma vaga, mas não confirma a contratação: a negociação e a confirmação são etapas próprias.</p>
+        <p className="note">
+          Selecionar uma candidatura abre a negociação com o artista e não ocupa vaga — você pode negociar com mais de um. A vaga só é ocupada quando uma
+          contratação é confirmada.
+        </p>
       </section>
 
       <Dialog open={!!app} onClose={() => setNegotiate(null)} title={`Proposta para ${app?.artist.name ?? ''}`}>
@@ -603,7 +604,7 @@ export function EventManagePage() {
       <TextPromptDialog
         open={prompt === 'cancel'}
         title="Cancelar evento"
-        message="Candidaturas pendentes serão recusadas, vagas ocupadas serão canceladas e negociações vinculadas serão encerradas. Os artistas serão avisados."
+        message="Candidaturas pendentes serão recusadas, contratações e negociações vinculadas serão encerradas. Os artistas serão avisados."
         label="Motivo (opcional, enviado aos artistas)"
         confirmLabel="Cancelar evento"
         danger

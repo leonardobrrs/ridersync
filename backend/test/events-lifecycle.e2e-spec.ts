@@ -102,59 +102,123 @@ describe('Eventos: visibilidade, vagas e ciclo de vida (integração)', () => {
     });
   });
 
-  describe('vagas', () => {
-    it('aceites concorrentes nunca excedem as vagas; evento fica FILLED', async () => {
-      const eventId = await newEvent(venueOwner, venue.id, { title: 'Concorrência', slots: 1 });
+  describe('vagas (ocupadas só por contratação confirmada)', () => {
+    /** Artista aceita a proposta pendente e o contratante confirma. */
+    const agree = async (artist: Client, b: { id: string; pendingOffer: { id: string } }) => {
+      await artist.post(`/bookings/${b.id}/offers/${b.pendingOffer.id}/accept`).expect(201);
+    };
+
+    it('selecionar candidatura só abre a negociação; a vaga fecha ao confirmar (FILLED) e não excede o total', async () => {
+      const eventId = await newEvent(venueOwner, venue.id, { title: 'Vaga por confirmação', slots: 1 });
       const a1 = await artistA.post(`/events/${eventId}/applications`, { artistId: artA.id });
       const a2 = await artistB.post(`/events/${eventId}/applications`, { artistId: artB.id });
-      const results = await Promise.all([
-        venueOwner.post(`/applications/${a1.body.id}/accept`),
-        venueOwner.post(`/applications/${a2.body.id}/accept`),
-      ]);
-      expect(results.map((r) => r.status).sort()).toEqual([201, 409]);
-      expect(await prisma.eventApplication.count({ where: { eventId, status: 'ACCEPTED' } })).toBe(1);
-      const ev = await venueOwner.get(`/events/${eventId}/manage`);
+      // "Selecionar" a partir da candidatura em análise já cria a negociação (sem passo de aceite separado).
+      const b1 = await venueOwner.post(`/applications/${a1.body.id}/booking`, { offer: offer(20) });
+      expect(b1.status).toBe(201);
+      const b2 = await venueOwner.post(`/applications/${a2.body.id}/booking`, { offer: offer(21) });
+      expect(b2.status).toBe(201);
+      let ev = await venueOwner.get(`/events/${eventId}/manage`);
+      expect(ev.body).toMatchObject({ status: 'OPEN', filledSlots: 0 });
+      expect(ev.body.applications.map((a: { status: string }) => a.status)).toEqual(['ACCEPTED', 'ACCEPTED']);
+
+      await agree(artistA, b1.body);
+      await agree(artistB, b2.body);
+      expect((await venueOwner.get(`/events/${eventId}/manage`)).body.status).toBe('OPEN'); // termos aceitos ainda não ocupam vaga
+      await venueOwner.post(`/bookings/${b1.body.id}/confirm`).expect(201);
+      ev = await venueOwner.get(`/events/${eventId}/manage`);
       expect(ev.body).toMatchObject({ status: 'FILLED', filledSlots: 1, statusLabel: 'Vagas preenchidas' });
-      const notes = await venueOwner.get('/me/notifications');
-      expect(notes.body.items.map((n: { type: string }) => n.type)).toContain('EVENT_FILLED');
+      expect((await venueOwner.get('/me/notifications')).body.items.map((n: { type: string }) => n.type)).toContain('EVENT_FILLED');
+      // Segunda confirmação para a mesma vaga é recusada
+      const second = await venueOwner.post(`/bookings/${b2.body.id}/confirm`);
+      expect(second.status).toBe(409);
+      expect(second.body.code).toBe('EVENT_FULLY_BOOKED');
+      expect((await visitor.get(`/public/events/${eventId}`)).body.acceptingApplications).toBe(false);
     });
 
-    it('negociação recusada cancela a vaga e reabre o evento automaticamente', async () => {
+    it('confirmações simultâneas nunca excedem as vagas', async () => {
+      const eventId = await newEvent(venueOwner, venue.id, { title: 'Confirmações concorrentes', slots: 1 });
+      const i1 = await venueOwner.post('/bookings', { organizationId: venue.id, artistId: artA.id, eventId, offer: offer(30) });
+      const i2 = await venueOwner.post('/bookings', { organizationId: venue.id, artistId: artB.id, eventId, offer: offer(31) });
+      await agree(artistA, i1.body);
+      await agree(artistB, i2.body);
+      const results = await Promise.all([venueOwner.post(`/bookings/${i1.body.id}/confirm`), venueOwner.post(`/bookings/${i2.body.id}/confirm`)]);
+      expect(results.map((r) => r.status).sort()).toEqual([201, 409]);
+      expect(await prisma.booking.count({ where: { eventId, status: 'CONFIRMED' } })).toBe(1);
+      expect((await venueOwner.get(`/events/${eventId}/manage`)).body.status).toBe('FILLED');
+    });
+
+    it('negociação recusada não mexe nas vagas e marca a candidatura como vaga cancelada', async () => {
       const eventId = await newEvent(venueOwner, venue.id, { title: 'Vaga cancelada', slots: 1 });
       const ap = await artistA.post(`/events/${eventId}/applications`, { artistId: artA.id });
-      await venueOwner.post(`/applications/${ap.body.id}/accept`).expect(201);
-      expect((await venueOwner.get(`/events/${eventId}/manage`)).body.status).toBe('FILLED');
       const b = await venueOwner.post(`/applications/${ap.body.id}/booking`, { offer: offer() });
       await artistA.post(`/bookings/${b.body.id}/offers/${b.body.pendingOffer.id}/decline`).expect(201);
       const ev = await venueOwner.get(`/events/${eventId}/manage`);
-      expect(ev.body.status).toBe('OPEN');
+      expect(ev.body).toMatchObject({ status: 'OPEN', filledSlots: 0 });
       expect(ev.body.applications[0].status).toBe('CANCELLED');
-      expect(ev.body.filledSlots).toBe(0);
     });
 
-    it('convite direto vinculado ao evento ocupa vaga; evento lotado recusa novo convite', async () => {
+    it('convite direto não ocupa vaga; contratação confirmada cancelada reabre o evento; evento lotado recusa convites', async () => {
       const eventId = await newEvent(venueOwner, venue.id, { title: 'Convites', slots: 1 });
-      const inv = await venueOwner.post('/bookings', { organizationId: venue.id, artistId: artA.id, eventId, offer: offer() });
+      const inv = await venueOwner.post('/bookings', { organizationId: venue.id, artistId: artA.id, eventId, offer: offer(70) });
       expect(inv.status).toBe(201);
-      expect((await venueOwner.get(`/events/${eventId}/manage`)).body.status).toBe('FILLED');
-      const full = await venueOwner.post('/bookings', { organizationId: venue.id, artistId: artB.id, eventId, offer: offer() });
-      expect(full.status).toBe(409);
-      expect(full.body.code).toBe('SLOTS_FULL');
+      expect((await venueOwner.get(`/events/${eventId}/manage`)).body.status).toBe('OPEN');
       // convite para evento de outra organização é recusado (sem revelar existência)
       const other = await registerContractor(app, 'Outra Casa');
       const otherVenue = await createVenue(other, 'Outra Casa Teste');
       await other.post('/bookings', { organizationId: otherVenue.id, artistId: artB.id, eventId, offer: offer() }).expect(404);
+      await agree(artistA, inv.body);
+      await venueOwner.post(`/bookings/${inv.body.id}/confirm`).expect(201);
+      expect((await venueOwner.get(`/events/${eventId}/manage`)).body.status).toBe('FILLED');
+      const full = await venueOwner.post('/bookings', { organizationId: venue.id, artistId: artB.id, eventId, offer: offer() });
+      expect(full.status).toBe(409);
+      expect(full.body.code).toBe('EVENT_FULLY_BOOKED');
       await venueOwner.post(`/bookings/${inv.body.id}/cancel`, { reason: 'Mudança de planos' }).expect(201);
-      expect((await venueOwner.get(`/events/${eventId}/manage`)).body.status).toBe('OPEN');
+      expect((await venueOwner.get(`/events/${eventId}/manage`)).body).toMatchObject({ status: 'OPEN', filledSlots: 0 });
     });
 
-    it('reduzir vagas abaixo das ocupadas é recusado; aumentar reabre o evento lotado', async () => {
+    it('reduzir vagas abaixo das confirmadas é recusado; aumentar reabre o evento lotado', async () => {
       const eventId = await newEvent(venueOwner, venue.id, { title: 'Ajuste de vagas', slots: 1 });
-      const ap = await artistA.post(`/events/${eventId}/applications`, { artistId: artA.id });
-      await venueOwner.post(`/applications/${ap.body.id}/accept`).expect(201);
+      const b = await venueOwner.post('/bookings', { organizationId: venue.id, artistId: artA.id, eventId, offer: offer(40) });
+      await agree(artistA, b.body);
+      await venueOwner.post(`/bookings/${b.body.id}/confirm`).expect(201);
       await venueOwner.patch(`/events/${eventId}`, { slots: 0 }).expect(400);
       const up = await venueOwner.patch(`/events/${eventId}`, { slots: 2 });
       expect(up.body.status).toBe('OPEN');
+    });
+
+    it('rotina automática reconcilia eventos inconsistentes (dados antigos)', async () => {
+      const full = await newEvent(venueOwner, venue.id, { title: 'Aberto mas lotado', slots: 1 });
+      const b = await venueOwner.post('/bookings', { organizationId: venue.id, artistId: artB.id, eventId: full, offer: offer(50) });
+      await agree(artistB, b.body);
+      await venueOwner.post(`/bookings/${b.body.id}/confirm`).expect(201);
+      await prisma.event.update({ where: { id: full }, data: { status: 'OPEN' } }); // como ficou na regra antiga
+      const stale = await newEvent(venueOwner, venue.id, { title: 'Preenchido sem contratação', slots: 1 });
+      await prisma.event.update({ where: { id: stale }, data: { status: 'FILLED' } });
+      await app.get(EventLifecycleService).sweep();
+      expect((await prisma.event.findUniqueOrThrow({ where: { id: full } })).status).toBe('FILLED');
+      expect((await prisma.event.findUniqueOrThrow({ where: { id: stale } })).status).toBe('OPEN');
+      expect((await app.get(EventLifecycleService).sweep()).changed).toBe(0); // idempotente
+    });
+  });
+
+  describe('mensagens não lidas', () => {
+    it('conta só mensagens da outra parte após a última leitura; abrir a conversa zera e marca o aviso como lido', async () => {
+      const b = await venueOwner.post('/bookings', { organizationId: venue.id, artistId: artA.id, offer: offer(60), message: 'Olá! Proposta enviada.' });
+      expect(b.body.unreadMessages).toBe(0); // a própria mensagem não conta
+      let seen = await artistA.get(`/bookings/${b.body.id}`);
+      expect(seen.body.unreadMessages).toBe(1);
+      await venueOwner.post(`/bookings/${b.body.id}/messages`, { body: 'Consegue às 21h?' }).expect(201);
+      expect((await artistA.get(`/bookings/${b.body.id}`)).body.unreadMessages).toBe(2);
+      await artistA.post(`/bookings/${b.body.id}/messages/read`).expect(201);
+      seen = await artistA.get(`/bookings/${b.body.id}`);
+      expect(seen.body.unreadMessages).toBe(0);
+      const notes = await artistA.get('/me/notifications');
+      expect(notes.body.items.filter((n: { type: string; link: string; readAt: string | null }) => n.type === 'NEW_MESSAGE' && n.link === `/painel/negociacoes/${b.body.id}` && !n.readAt)).toHaveLength(0);
+      // Responder também conta como leitura; a outra parte passa a ter 1 não lida.
+      await artistA.post(`/bookings/${b.body.id}/messages`, { body: 'Consigo, sim.' }).expect(201);
+      expect((await venueOwner.get(`/bookings/${b.body.id}`)).body.unreadMessages).toBe(1);
+      // Terceiros não marcam leitura
+      await artistB.post(`/bookings/${b.body.id}/messages/read`).expect(404);
     });
   });
 

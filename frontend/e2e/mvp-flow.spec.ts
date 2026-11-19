@@ -175,16 +175,16 @@ test('MVP: perfil, banda, convite e transferência, casa, evento, vagas, negocia
   await expect(cmp.getByRole('row', { name: /Pedal looper.*Conferir com a casa/ })).toBeVisible();
   await cmp.getByRole('button', { name: 'Fechar' }).click();
 
-  await vera.page.getByRole('button', { name: 'Selecionar' }).click();
-  await toast(vera.page, 'Isso não confirma a contratação');
-  await expect(vera.page.getByText('Vagas preenchidas').first()).toBeVisible();
-  await expect(vera.page.getByText('Todas as vagas estão ocupadas')).toBeVisible();
-  await vera.page.getByRole('button', { name: 'Iniciar negociação' }).click();
+  // Selecionar abre a negociação direto e NÃO ocupa a vaga (só a confirmação ocupa).
+  await vera.page.getByRole('button', { name: 'Selecionar e negociar' }).click();
   const offerDlg = vera.page.getByRole('dialog');
   await offerDlg.getByLabel('Mensagem (opcional)').fill('Parabéns! Seguem os termos.');
   await offerDlg.getByRole('button', { name: 'Enviar proposta' }).click();
   await expect(vera.page).toHaveURL(/\/painel\/negociacoes\//);
   const bookingUrl = vera.page.url();
+  await vera.page.goto(eventManageUrl);
+  await expect(vera.page.getByText('Inscrições abertas').first()).toBeVisible();
+  await vera.page.goto(new URL(bookingUrl).pathname);
 
   await sara.page.goto(bookingUrl.replace(/^https?:\/\/[^/]+/, ''));
   await expect(sara.page.getByText('Não encontrado', { exact: true })).toBeVisible();
@@ -213,6 +213,10 @@ test('MVP: perfil, banda, convite e transferência, casa, evento, vagas, negocia
   await vera.page.getByRole('button', { name: 'Confirmar contratação' }).click();
   await vera.page.getByRole('dialog', { name: 'Confirmar contratação' }).getByRole('button', { name: 'Confirmar contratação' }).click();
   await toast(vera.page, 'Contratação confirmada');
+  await vera.page.goto(eventManageUrl);
+  await expect(vera.page.getByText('Vagas preenchidas').first()).toBeVisible();
+  await expect(vera.page.getByText('Todas as vagas têm contratação confirmada')).toBeVisible();
+  await vera.page.goto(new URL(bookingUrl).pathname);
 
   // ── Conversa: Enter envia, Shift+Enter quebra a linha ──
   const chatBox = ana.page.getByRole('region', { name: 'Mensagens' });

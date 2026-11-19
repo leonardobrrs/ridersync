@@ -43,7 +43,7 @@
 ### Evento (`events/event.rules.ts`)
 
 ```
-DRAFT ──publicar──▶ OPEN ──(última vaga ocupada, automático)──▶ FILLED
+DRAFT ──publicar──▶ OPEN ──(última contratação confirmada, automático)──▶ FILLED
   │                  │ ▲                                          │
   │                  │ └──(vaga liberada, automático)─────────────┘
   │                  ├──encerrar / prazo vencido (automático)──▶ CLOSED ──reabrir──▶ OPEN
@@ -56,9 +56,9 @@ OPEN/FILLED/CLOSED ──data passada (automático)──▶ COMPLETED (com cont
 - Transições manuais são validadas por `assertEventTransition`; as automáticas por `statusAfterSlotChange` (vagas) e
   `sweepTarget` (data/prazo). A varredura roda no Cron diário e, no máximo uma vez por minuto por instância, antes de
   consultas de eventos — os estados nunca dependem do frontend.
-- **Vaga ocupada** = candidatura `ACCEPTED` ou convite direto ativo (negociação `DIRECT` vinculada ao evento).
-  Toda ocupação/liberação ocorre na mesma transação com `SELECT … FOR UPDATE` no evento: aceites concorrentes
-  nunca excedem as vagas (teste de integração com duas requisições simultâneas).
+- **Vaga ocupada** = contratação `CONFIRMED` vinculada ao evento (de candidatura ou convite). Selecionar candidatura e
+  negociar não ocupam vaga. A confirmação ocorre com `SELECT … FOR UPDATE` no evento: confirmações concorrentes
+  nunca excedem as vagas (teste de integração com duas requisições simultâneas); cancelar uma confirmada reabre o evento.
 - Cancelar o evento: candidaturas pendentes → `REJECTED`, aceitas → `CANCELLED`, negociações ativas → `CANCELLED`
   (com registro de auditoria) e aviso aos artistas.
 

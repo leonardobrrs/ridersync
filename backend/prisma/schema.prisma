@@ -59,6 +59,7 @@ model User {
   offersAuthored         BookingOffer[]          @relation("OfferAuthor")
   offersResponded        BookingOffer[]          @relation("OfferResponder")
   messages               BookingMessage[]
+  bookingReads           BookingRead[]
   bookingChanges         BookingStatusChange[]
   performances           Performance[]
 }
@@ -623,6 +624,7 @@ model Booking {
 
   offers        BookingOffer[]
   messages      BookingMessage[]
+  reads         BookingRead[]
   statusChanges BookingStatusChange[]
   performance   Performance?
 
@@ -675,6 +677,18 @@ model BookingMessage {
   createdAt  DateTime    @default(now())
 
   @@index([bookingId, createdAt])
+}
+
+/// Até quando cada pessoa leu a conversa de uma negociação (contador de mensagens não lidas).
+model BookingRead {
+  bookingId  String   @db.Uuid
+  booking    Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  userId     String   @db.Uuid
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastReadAt DateTime
+
+  @@id([bookingId, userId])
+  @@index([userId])
 }
 
 /// Trilha de auditoria das transições de estado do Booking.
