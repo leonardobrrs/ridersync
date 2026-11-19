@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { FORMATS, GENRES, INSTRUMENTS, VENUE_KINDS } from '../../common/domain-lists';
 import { notFound } from '../../common/errors';
-import { pagination } from '../../common/validation';
+import { multiEnum, multiText, pagination } from '../../common/validation';
 import { PrismaService } from '../../prisma/prisma.service';
 import { portfolioSelect, publicArtistCardSelect, toArtistCard, toPortfolioItem } from '../artists/artist.presenter';
 import { EventLifecycleService } from '../events/event-lifecycle.service';
@@ -15,22 +15,27 @@ import { RidersService } from '../riders/riders.service';
 
 const emptyToUndef = (v: unknown) => (v === '' ? undefined : v);
 
+/** Filtros com vários valores ("MPB,Forró"): dentro de um filtro valem por OU; entre filtros, por E. */
 export const ArtistSearchSchema = z.object({
   q: z.preprocess(emptyToUndef, z.string().trim().max(80).optional()),
-  genre: z.preprocess(emptyToUndef, z.enum(GENRES).optional()),
-  city: z.preprocess(emptyToUndef, z.string().trim().max(80).optional()),
+  genre: multiEnum(GENRES),
+  city: multiText(),
   kind: z.preprocess(emptyToUndef, z.enum(['SOLO', 'BAND']).optional()),
-  format: z.preprocess(emptyToUndef, z.enum(FORMATS).optional()),
-  instrument: z.preprocess(emptyToUndef, z.enum(INSTRUMENTS).optional()),
+  format: multiEnum(FORMATS),
+  instrument: multiEnum(INSTRUMENTS),
   sort: z.preprocess(emptyToUndef, z.enum(['recent', 'name']).default('recent')),
   ...pagination,
 });
 
 export const VenueSearchSchema = z.object({
   q: z.preprocess(emptyToUndef, z.string().trim().max(80).optional()),
-  city: z.preprocess(emptyToUndef, z.string().trim().max(80).optional()),
-  kind: z.preprocess(emptyToUndef, z.enum(VENUE_KINDS).optional()),
+  city: multiText(),
+  kind: multiEnum(VENUE_KINDS),
 });
+
+/** Cidade em qualquer uma das escolhidas, sem diferenciar maiúsculas/acentos digitados iguais ao cadastro. */
+export const anyCity = (field: string, cities?: string[]) =>
+  cities?.length ? { OR: cities.map((c) => ({ [field]: { equals: c, mode: 'insensitive' as const } })) } : null;
 
 const venueCardSelect = {
   id: true,
@@ -82,25 +87,28 @@ export class MarketplaceService {
 
   /** Apenas perfis PUBLIC. Seleção explícita de campos públicos. */
   async searchArtists(f: z.infer<typeof ArtistSearchSchema>) {
+    const and: Prisma.ArtistWhereInput[] = [];
+    const city = anyCity('city', f.city);
+    if (city) and.push(city);
+    if (f.q) {
+      and.push({
+        OR: [
+          { name: { contains: f.q, mode: 'insensitive' } },
+          { slug: { contains: f.q.replace(/^@/, ''), mode: 'insensitive' } },
+          { headline: { contains: f.q, mode: 'insensitive' } },
+          { bio: { contains: f.q, mode: 'insensitive' } },
+        ],
+      });
+    }
     const where: Prisma.ArtistWhereInput = {
       visibility: 'PUBLIC',
       ...(f.kind ? { kind: f.kind } : {}),
-      ...(f.genre ? { genres: { has: f.genre } } : {}),
-      ...(f.format ? { formats: { has: f.format } } : {}),
-      ...(f.instrument
-        ? { kind: 'SOLO', musicianProfile: { OR: [{ mainInstrument: f.instrument }, { instruments: { has: f.instrument } }] } }
+      ...(f.genre?.length ? { genres: { hasSome: f.genre } } : {}),
+      ...(f.format?.length ? { formats: { hasSome: f.format } } : {}),
+      ...(f.instrument?.length
+        ? { kind: 'SOLO', musicianProfile: { OR: [{ mainInstrument: { in: f.instrument } }, { instruments: { hasSome: f.instrument } }] } }
         : {}),
-      ...(f.city ? { city: { equals: f.city, mode: 'insensitive' } } : {}),
-      ...(f.q
-        ? {
-            OR: [
-              { name: { contains: f.q, mode: 'insensitive' } },
-              { slug: { contains: f.q.replace(/^@/, ''), mode: 'insensitive' } },
-              { headline: { contains: f.q, mode: 'insensitive' } },
-              { bio: { contains: f.q, mode: 'insensitive' } },
-            ],
-          }
-        : {}),
+      ...(and.length ? { AND: and } : {}),
     };
     const [total, rows] = await Promise.all([
       this.prisma.artist.count({ where }),
@@ -185,18 +193,20 @@ export class MarketplaceService {
     const rows = await this.prisma.organization.findMany({
       where: {
         type: 'VENUE',
-        ...(f.kind ? { venueKind: f.kind } : {}),
-        ...(f.city ? { city: { equals: f.city, mode: 'insensitive' } } : {}),
-        ...(f.q
-          ? {
-              OR: [
-                { name: { contains: f.q, mode: 'insensitive' } },
-                { slug: { contains: f.q.replace(/^@/, ''), mode: 'insensitive' } },
-                { neighborhood: { contains: f.q, mode: 'insensitive' } },
-                { description: { contains: f.q, mode: 'insensitive' } },
-              ],
-            }
-          : {}),
+        ...(f.kind?.length ? { venueKind: { in: f.kind } } : {}),
+        AND: [
+          anyCity('city', f.city) ?? {},
+          f.q
+            ? {
+                OR: [
+                  { name: { contains: f.q, mode: 'insensitive' } },
+                  { slug: { contains: f.q.replace(/^@/, ''), mode: 'insensitive' } },
+                  { neighborhood: { contains: f.q, mode: 'insensitive' } },
+                  { description: { contains: f.q, mode: 'insensitive' } },
+                ],
+              }
+            : {},
+        ],
       },
       orderBy: { name: 'asc' },
       take: 100,

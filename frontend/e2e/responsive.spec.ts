@@ -91,7 +91,7 @@ test('logo do tamanho do texto; categorias no topo só no desktop e em "Explorar
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog', { name: 'Explorar' })).toHaveCount(0);
     await page.getByRole('button', { name: /Filtros/ }).click();
-    await expect(page.getByRole('dialog', { name: 'Filtros' }).getByLabel('Instrumento')).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Filtros' }).getByRole('group', { name: /Instrumento/ })).toBeVisible();
   } else {
     await expect(cats).toBeVisible();
     await expect(page.locator('.cats .cat.sm').first()).toBeVisible();

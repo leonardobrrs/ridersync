@@ -39,6 +39,25 @@ describe('Marketplace público (integração)', () => {
     await v.get('/public/artists?genre=Inexistente').expect(400);
   });
 
+  it('vários valores no mesmo filtro combinam por OU; filtros diferentes por E', async () => {
+    const v = new Client(app);
+    const names = (r: { body: { items: { name: string }[] } }) => r.body.items.map((i) => i.name).sort();
+    // Estilos: Jazz OU Forró → os dois perfis
+    expect(names(await v.get(`/public/artists?genre=${encodeURIComponent('Jazz,Forró')}&q=Busca`))).toEqual(['Joana do Forró Busca', 'Trio Jazz Busca']);
+    // Mesmo resultado com o parâmetro repetido
+    expect(names(await v.get(`/public/artists?genre=Jazz&genre=${encodeURIComponent('Forró')}&q=Busca`))).toEqual(['Joana do Forró Busca', 'Trio Jazz Busca']);
+    // Cidades: Arapiraca OU Penedo → só a Joana (a banda é de Maceió); E com estilo Jazz → nenhum
+    expect(names(await v.get('/public/artists?city=Arapiraca,Penedo&q=Busca'))).toEqual(['Joana do Forró Busca']);
+    expect(names(await v.get('/public/artists?city=Arapiraca,Penedo&genre=Jazz&q=Busca'))).toEqual([]);
+    // Formações: Trio OU Solo
+    expect(names(await v.get('/public/artists?format=Trio,Solo&q=Busca'))).toEqual(['Joana do Forró Busca']);
+    // Um valor inválido na lista invalida o filtro
+    await v.get(`/public/artists?genre=${encodeURIComponent('Jazz,Inexistente')}`).expect(400);
+    // Casas e oportunidades também aceitam listas
+    await v.get(`/public/venues?city=${encodeURIComponent('Maceió,Arapiraca')}&kind=${encodeURIComponent('Casa de show,Teatro')}`).expect(200);
+    await v.get(`/public/events?genre=${encodeURIComponent('MPB,Forró')}&city=${encodeURIComponent('Maceió,Penedo')}`).expect(200);
+  });
+
   it('banda pública lista apenas integrantes com perfil individual público', async () => {
     const res = await new Client(app).get('/public/artists?kind=BAND&q=Trio Jazz');
     const slug = res.body.items[0].slug;

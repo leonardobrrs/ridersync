@@ -11,6 +11,7 @@ import { useMe, useMeta } from '../../lib/hooks';
 import type { ArtistCard, EventPublic, HomeData, Paged, PublicShow, VenueCard } from '../../lib/types';
 import { InstrumentLabel } from '../../components/InstrumentLabel';
 import { instrumentIcon } from '../../lib/instruments';
+import { CheckGroup, CityChecks, listLabel, readList, writeList } from './FilterChecks';
 
 export function ArtistAd({ a }: { a: ArtistCard }) {
   return (
@@ -134,7 +135,8 @@ const CATEGORIES = [
 function CategoryBar({ params, set, personal }: { params: URLSearchParams; set: (patch: Record<string, string>) => void; personal: boolean }) {
   const { data: meta } = useMeta();
   const kind = params.get('kind') ?? '';
-  const instrument = params.get('instrument') ?? '';
+  const instruments = readList(params, 'instrument');
+  const instrument = instruments.length > 0;
   return (
     <nav className="cats" aria-label="Categorias">
       <div className="wrap">
@@ -148,7 +150,13 @@ function CategoryBar({ params, set, personal }: { params: URLSearchParams; set: 
         ))}
         <span className="vsep" aria-hidden="true" />
         {meta?.instruments.map((i) => (
-          <button key={i} type="button" className="cat sm" aria-pressed={instrument === i} onClick={() => set({ instrument: instrument === i ? '' : i, kind: '' })}>
+          <button
+            key={i}
+            type="button"
+            className="cat sm"
+            aria-pressed={instruments.includes(i)}
+            onClick={() => set({ instrument: writeList(instruments.includes(i) ? instruments.filter((x) => x !== i) : [...instruments, i]), kind: '' })}
+          >
             <span className="ci">
               <Icon name={instrumentIcon(i)} size={20} />
             </span>
@@ -160,58 +168,26 @@ function CategoryBar({ params, set, personal }: { params: URLSearchParams; set: 
   );
 }
 
-/** venues: só casas; feed: feed do artista (oportunidades + casas: cidade e estilo); artists: busca de artistas. */
+/**
+ * Filtros laterais com marcadores (vários valores por filtro: estilo A ou B, cidade X ou Y…). Na URL ficam como
+ * "MPB,Forró". venues: só casas; feed: feed do artista (cidade e estilo das oportunidades); artists: busca de artistas.
+ */
 function Filters({ params, set, mode }: { params: URLSearchParams; set: (patch: Record<string, string>) => void; mode: 'venues' | 'feed' | 'artists' }) {
   const { data: meta } = useMeta();
-  const venues = mode === 'venues';
+  const list = (key: string) => readList(params, key);
+  const change = (key: string) => (values: string[]) => set({ [key]: writeList(values) });
   return (
     <>
-      <label className="fgroup">
-        <span className="lbl">Cidade</span>
-        <select className="input" value={params.get('city') ?? ''} onChange={(e) => set({ city: e.target.value })}>
-          <option value="">Todas as cidades de Alagoas</option>
-          {meta?.allCities.map((c) => <option key={c}>{c}</option>)}
-        </select>
-      </label>
+      <CityChecks suggestions={meta?.cities ?? []} all={meta?.allCities ?? []} selected={list('city')} onChange={change('city')} />
       {mode === 'feed' ? (
-        <label className="fgroup">
-          <span className="lbl">Estilo procurado</span>
-          <select className="input" value={params.get('genre') ?? ''} onChange={(e) => set({ genre: e.target.value })}>
-            <option value="">Todos os estilos</option>
-            {meta?.genres.map((g) => <option key={g}>{g}</option>)}
-          </select>
-        </label>
-      ) : venues ? (
-        <label className="fgroup">
-          <span className="lbl">Tipo de espaço</span>
-          <select className="input" value={params.get('venueKind') ?? ''} onChange={(e) => set({ venueKind: e.target.value })}>
-            <option value="">Todos os tipos</option>
-            {meta?.venueKinds.map((k) => <option key={k}>{k}</option>)}
-          </select>
-        </label>
+        <CheckGroup legend="Estilo procurado" options={meta?.genres ?? []} selected={list('genre')} onChange={change('genre')} />
+      ) : mode === 'venues' ? (
+        <CheckGroup legend="Tipo de espaço" options={meta?.venueKinds ?? []} selected={list('venueKind')} onChange={change('venueKind')} />
       ) : (
         <>
-          <label className="fgroup">
-            <span className="lbl">Estilo</span>
-            <select className="input" value={params.get('genre') ?? ''} onChange={(e) => set({ genre: e.target.value })}>
-              <option value="">Todos os estilos</option>
-              {meta?.genres.map((g) => <option key={g}>{g}</option>)}
-            </select>
-          </label>
-          <label className="fgroup">
-            <span className="lbl">Instrumento</span>
-            <select className="input" value={params.get('instrument') ?? ''} onChange={(e) => set({ instrument: e.target.value })}>
-              <option value="">Qualquer instrumento</option>
-              {meta?.instruments.map((i) => <option key={i}>{i}</option>)}
-            </select>
-          </label>
-          <label className="fgroup">
-            <span className="lbl">Formação</span>
-            <select className="input" value={params.get('format') ?? ''} onChange={(e) => set({ format: e.target.value })}>
-              <option value="">Qualquer formação</option>
-              {meta?.formats.map((f) => <option key={f}>{f}</option>)}
-            </select>
-          </label>
+          <CheckGroup legend="Estilo" options={meta?.genres ?? []} selected={list('genre')} onChange={change('genre')} />
+          <CheckGroup legend="Instrumento" options={meta?.instruments ?? []} selected={list('instrument')} onChange={change('instrument')} />
+          <CheckGroup legend="Formação" options={meta?.formats ?? []} selected={list('format')} onChange={change('format')} />
         </>
       )}
     </>
@@ -259,6 +235,8 @@ export function MarketplacePage() {
     page,
   };
   const active = ['q', 'genre', 'city', 'kind', 'format', 'instrument', 'venueKind'].filter((k) => params.get(k));
+  // Quantidade de opções marcadas nos filtros (cada estilo, cidade… conta 1), exibida no botão "Filtros".
+  const selectedCount = ['genre', 'city', 'format', 'instrument', 'venueKind'].reduce((n, k) => n + readList(params, k).length, 0);
   const showHome = active.length === 0 && page === 1;
   // A busca por texto (barra do topo: "músico, banda ou casa") sempre mostra o resultado completo para todos.
   const artistFeed = accountType === 'ARTIST' && kind === '' && !filters.q && !filters.instrument && !filters.format;
@@ -297,11 +275,11 @@ export function MarketplacePage() {
   };
   const clear = () => setParams(new URLSearchParams());
   const totalPages = artists.data ? Math.max(1, Math.ceil(artists.data.total / artists.data.pageSize)) : 1;
-  const place = filters.city || 'Alagoas';
+  const place = listLabel(readList(params, 'city'), 'cidades de Alagoas') || 'Alagoas';
   const title = filters.q
     ? `Resultados para “${filters.q}”`
     : filters.instrument
-      ? `${filters.instrument} em ${place}`
+      ? `${listLabel(readList(params, 'instrument'), 'instrumentos')} em ${place}`
       : artistFeed
         ? `Oportunidades e casas de show em ${place}`
         : contractorFeed
@@ -397,7 +375,7 @@ export function MarketplacePage() {
             </div>
             <div className="rtools">
               <button className="btn sm fbtn" type="button" onClick={() => setFiltersOpen(true)}>
-                <Icon name="list" size={16} /> Filtros{active.length ? ` (${active.length})` : ''}
+                <Icon name="list" size={16} /> Filtros{selectedCount ? ` (${selectedCount})` : ''}
               </button>
               {showArtists && (
                 <>

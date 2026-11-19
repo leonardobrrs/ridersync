@@ -283,3 +283,6 @@ Decisões do responsável que **substituem** regras anteriores (ordem de autorid
 - **Celular/tablet (≤ 900 px)**: a barra de categorias do topo sai; "Explorar" substitui "Início" na barra inferior
   (a logo continua levando ao início). Escolhido em vez de menu lateral: a barra inferior já é a navegação principal
   no celular e fica ao alcance do polegar.
+- **Filtros com vários valores** (18/11): estilo, cidade, instrumento, formação e tipo de espaço viraram marcadores.
+  Na URL ficam como `genre=MPB,Forró` (a API também aceita o parâmetro repetido). Dentro do mesmo filtro os valores
+  se combinam por OU; entre filtros diferentes, por E. Cidades: sugestões em destaque + busca entre os 102 municípios.

@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { GENRES, PAYMENT_TYPES } from '../../common/domain-lists';
 import { conflict, notFound, unprocessable } from '../../common/errors';
 import { uniqueSlug } from '../../common/slug';
-import { alCity, genres, moneyCents, optionalText, text, uf } from '../../common/validation';
+import { alCity, genres, moneyCents, multiEnum, multiText, optionalText, text, uf } from '../../common/validation';
 import { PrismaService, Tx } from '../../prisma/prisma.service';
 import { AccessService } from '../access/access.service';
 import { publicArtistCardSelect, toArtistCard } from '../artists/artist.presenter';
@@ -94,8 +94,8 @@ export const DecisionSchema = z.object({ note: z.string().trim().max(500).option
 const emptyToUndef = (v: unknown) => (v === '' ? undefined : v);
 export const EventSearchSchema = z.object({
   q: z.preprocess(emptyToUndef, z.string().trim().max(80).optional()),
-  genre: z.preprocess(emptyToUndef, z.enum(GENRES).optional()),
-  city: z.preprocess(emptyToUndef, z.string().trim().max(80).optional()),
+  genre: multiEnum(GENRES),
+  city: multiText(),
   visibility: z.preprocess(emptyToUndef, z.enum(['PUBLIC', 'PRIVATE']).optional()),
 });
 
@@ -512,13 +512,14 @@ export class EventsService {
         status: 'OPEN',
         applicationDeadline: { gte: now },
         ...this.visibilityFilter(viewer, f.visibility),
-        ...(f.genre ? { genres: { has: f.genre } } : {}),
-        ...(f.city
+        ...(f.genre?.length ? { genres: { hasSome: f.genre } } : {}),
+        // Cidade: qualquer uma das escolhidas (da casa de show ou, sem casa, do local informado).
+        ...(f.city?.length
           ? {
-              OR: [
-                { venue: { city: { equals: f.city, mode: 'insensitive' } } },
-                { venueId: null, locationCity: { equals: f.city, mode: 'insensitive' } },
-              ],
+              OR: f.city.flatMap((c) => [
+                { venue: { city: { equals: c, mode: 'insensitive' as const } } },
+                { venueId: null, locationCity: { equals: c, mode: 'insensitive' as const } },
+              ]),
             }
           : {}),
         ...(f.q

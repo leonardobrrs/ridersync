@@ -83,3 +83,4 @@ Marque ✔/✘ e anote o problema.
 - [ ] Contratante: o menu do perfil lista a(s) casa(s) de show e leva direto à gestão; no celular, "Minha casa" na barra inferior.
 - [ ] Chat: a barra "Mensagens" mostra número só quando há mensagens NÃO lidas da outra parte; abrir o pop-up (ou ver a conversa no desktop) zera o número e marca o aviso "Nova mensagem" do sino como lido.
 - [ ] Evento antigo que aparecia "Inscrições abertas" com todas as vagas confirmadas passa a "Vagas preenchidas" sozinho (e o contrário: "preenchido" sem contratação confirmada reabre).
+- [ ] Filtros laterais (desktop) e painel "Filtros" (celular) com marcadores: marcar 2 estilos mostra artistas de qualquer um deles; 2 cidades idem; estilo + cidade combinam (os dois). "Outra cidade…" encontra municípios sem acento (ex.: "pao" → Pão de Açúcar); "limpar" zera o grupo; recarregar a página mantém as marcações.
