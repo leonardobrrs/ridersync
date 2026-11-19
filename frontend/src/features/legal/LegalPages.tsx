@@ -204,14 +204,14 @@ export function HelpPage() {
           <li>Casas de show: cadastre a casa, a foto e o inventário de equipamentos.</li>
           <li>Pessoas físicas (ex.: aniversário): crie um evento particular sem casa de show em “Eventos particulares”.</li>
           <li>Publique o evento como público (aparece para todos) ou privado (somente artistas veem; não aparece na página inicial).</li>
-          <li>Analise candidaturas, inicie a negociação e confirme a contratação. Quando todas as vagas forem ocupadas, o evento muda para “Vagas preenchidas” automaticamente.</li>
+          <li>Analise candidaturas, inicie a negociação e confirme a contratação. A vaga só é ocupada quando a contratação é confirmada; com todas confirmadas, o evento muda para “Vagas preenchidas” automaticamente.</li>
         </ol>
 
         <h2>Estados de um evento</h2>
         <ul>
           <li><strong>Rascunho</strong> — visível só para você.</li>
           <li><strong>Inscrições abertas</strong> — recebe candidaturas até o prazo.</li>
-          <li><strong>Vagas preenchidas</strong> — automático quando todas as vagas são ocupadas; volta a abrir se uma vaga for cancelada.</li>
+          <li><strong>Vagas preenchidas</strong> — automático quando todas as vagas têm contratação confirmada; volta a abrir se uma contratação confirmada for cancelada.</li>
           <li><strong>Inscrições encerradas</strong> — automático no fim do prazo, ou manual.</li>
           <li><strong>Adiado</strong> — aguardando nova data; ao remarcar, volta ao estado coerente.</li>
           <li><strong>Realizado</strong> ou <strong>Cancelado</strong> — estados finais.</li>

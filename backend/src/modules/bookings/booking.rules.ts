@@ -47,3 +47,11 @@ export function assertCanConfirm(status: BookingStatus, side: BookingSide) {
 }
 
 export const MESSAGE_ALLOWED: BookingStatus[] = ['NEGOTIATING', 'AGREED', 'CONFIRMED'];
+
+/**
+ * Mensagens não lidas por uma pessoa: as da outra parte (ou de conta removida) enviadas depois da última leitura.
+ * Sem registro de leitura, todas as mensagens da outra parte contam.
+ */
+export function unreadCount(messages: { createdAt: Date; author: { id: string } | null }[], userId: string, lastReadAt: Date | null): number {
+  return messages.filter((m) => m.author?.id !== userId && (!lastReadAt || m.createdAt.getTime() > lastReadAt.getTime())).length;
+}

@@ -300,14 +300,14 @@ export class EventsService {
         slots: true,
         imageId: true,
         applications: { select: { status: true } },
-        bookings: { where: { origin: 'DIRECT', status: { in: ['NEGOTIATING', 'AGREED', 'CONFIRMED'] } }, select: { id: true } },
+        bookings: { where: { status: 'CONFIRMED' }, select: { id: true } },
       },
     });
     return rows.map(({ applications, bookings, imageId, ...e }) => ({
       ...e,
       imageThumbUrl: mediaThumbUrl(imageId),
       statusLabel: EVENT_STATUS_LABEL[e.status],
-      filledSlots: applications.filter((a) => a.status === 'ACCEPTED').length + bookings.length,
+      filledSlots: bookings.length,
       applicationCounts: {
         total: applications.filter((a) => a.status !== 'WITHDRAWN').length,
         pending: applications.filter((a) => a.status === 'PENDING').length,
@@ -352,7 +352,7 @@ export class EventsService {
       },
     });
     const { applications, bookings, ...rest } = e;
-    const filled = applications.filter((a) => a.status === 'ACCEPTED').length + bookings.filter((b) => ['NEGOTIATING', 'AGREED', 'CONFIRMED'].includes(b.status)).length;
+    const filled = await this.lifecycle.filledSlots(this.prisma, eventId);
     return {
       ...eventOut(rest, filled),
       organizerId: rest.organizerId,
@@ -673,7 +673,8 @@ export class EventsService {
 
   /**
    * Aceitar ≠ contratar: nenhuma negociação é criada nem confirmada automaticamente.
-   * Aceitar ocupa uma vaga; o bloqueio do evento garante que aceites simultâneos não excedam o total.
+   * Selecionar candidatura NÃO ocupa vaga (várias podem ser selecionadas e negociadas em paralelo); a vaga só
+   * fecha quando uma contratação é confirmada. Com o evento já esgotado por confirmações, não há nova seleção.
    */
   async decide(userId: string, applicationId: string, decision: 'ACCEPTED' | 'REJECTED', note?: string) {
     const app = await this.prisma.eventApplication.findUnique({ where: { id: applicationId }, select: { eventId: true, event: { select: { organizerId: true } } } });
@@ -688,9 +689,6 @@ export class EventsService {
       });
       assertApplicationTransition(current.status, decision);
       if (decision === 'ACCEPTED') await this.lifecycle.assertNotFullyBooked(tx, event);
-      if (decision === 'ACCEPTED' && (await this.lifecycle.filledSlots(tx, event.id)) >= event.slots) {
-        throw conflict('SLOTS_FULL', 'Todas as vagas já foram preenchidas.');
-      }
       if (decision === 'REJECTED' && current.booking && !['DECLINED', 'CANCELLED'].includes(current.booking.status)) {
         throw conflict('BOOKING_IN_PROGRESS', 'Há uma negociação em andamento com esta candidatura. Encerre-a antes.');
       }
@@ -698,7 +696,6 @@ export class EventsService {
         where: { id: applicationId },
         data: { status: decision, decidedAt: new Date(), decidedById: userId, decisionNote: note ?? null },
       });
-      if (decision === 'ACCEPTED' || current.status === 'ACCEPTED') await this.lifecycle.applySlotChange(tx, event);
       await this.notifications.notify(tx, await this.access.artistManagerUserIds(current.artistId, tx), {
         category: 'APPLICATIONS',
         type: decision === 'ACCEPTED' ? 'APPLICATION_ACCEPTED' : 'APPLICATION_REJECTED',

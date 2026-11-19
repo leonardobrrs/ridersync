@@ -172,7 +172,7 @@ function ProposalBox({ a }: { a: PublicArtist }) {
                     </option>
                   ))}
                 </select>
-                <small>O convite ocupa uma vaga do evento enquanto a negociação estiver ativa.</small>
+                <small>O convite não ocupa vaga: a vaga só é preenchida quando a contratação é confirmada.</small>
               </label>
             )}
             <OfferForm

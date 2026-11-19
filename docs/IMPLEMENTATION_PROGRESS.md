@@ -144,3 +144,14 @@ Detalhes: `docs/RELATORIO_EVOLUCAO.md` (situação de cada requisito), `docs/CHE
 
 Verificação: backend 232 testes; frontend 26; Playwright 24 (desktop, tablet, celular); lint, typecheck e build ok.
 Migration aplicada só nos bancos locais.
+
+### Correções pós-Preview (18/11)
+
+| Pedido | Situação |
+|---|---|
+| Categorias do topo no celular | "Explorar" na barra inferior abre painel com as categorias; barra do topo só no desktop |
+| Evento "Inscrições abertas" com vagas preenchidas | Corrigido (regra única de vaga + reconciliação automática dos dados existentes) |
+| Selecionar candidatura não ocupa vaga | Feito ("Selecionar e negociar"; vaga só fecha na confirmação) |
+| Contador do chat só com não lidas | Feito (migration `20261118210000_leitura_de_mensagens`) |
+
+Verificação: backend 237 testes; frontend 28; Playwright 24 (desktop, tablet, celular); lint e typecheck ok.

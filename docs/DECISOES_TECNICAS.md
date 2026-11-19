@@ -195,7 +195,7 @@ Decisões do responsável que **substituem** regras anteriores (ordem de autorid
    página pública nem inventário (FK composta + CHECK). Local livre em `Event.location*` (CHECK `Event_has_location`).
 3. **Eventos privados**: visíveis só para contas de artista (lista/detalhe/candidatura) e para o organizador; nunca em
    listagens públicas, página inicial ou agenda pública do artista (lá aparecem só como "Evento privado").
-4. **Vagas**: ocupadas por candidatura aceita **ou** convite direto ativo vinculado ao evento; `FILLED` automático;
+4. **Vagas** (revisado em 18/11, ver abaixo): ocupadas só por contratação **confirmada** vinculada ao evento; `FILLED` automático;
    liberação por recusa/cancelamento (`ApplicationStatus.CANCELLED` = "vaga cancelada"); `POSTPONED` com remarcação.
    Locks: evento → negociação, sempre nessa ordem.
 5. **Confirmação de e-mail**: implementada com token de uso único; por decisão do responsável **não bloqueia o primeiro
@@ -268,3 +268,18 @@ Decisões do responsável que **substituem** regras anteriores (ordem de autorid
   painel "Filtros". Chat da negociação em painel sobreposto aberto por uma barra fixa; no desktop continua na lateral.
 - **Telefone**: máscara só no frontend (o backend já aceitava o formato); exibição pública formatada com link `tel:`.
 - **Menus**: um único hook (`useDismiss`) fecha menus/painéis ao tocar fora (`pointerdown`) e com Esc.
+
+### Revisão de 18/11 (após o Preview)
+
+- **Vaga = contratação confirmada.** Selecionar candidatura ou enviar convite não ocupa vaga: o contratante pode
+  negociar com vários artistas em paralelo e a vaga só fecha quando uma negociação termina em sucesso (confirmação).
+  Confirmações concorrentes continuam serializadas pelo lock do evento (nunca excedem o total). Cancelar uma contratação
+  confirmada reabre o evento. "Selecionar e negociar" faz seleção + proposta numa única transação.
+- **Reconciliação**: a rotina automática corrige eventos futuros cujo estado não bate com as confirmações (dados da
+  regra anterior), sem notificações e de forma idempotente.
+- **Mensagens não lidas**: tabela `BookingRead` (última leitura por pessoa e negociação). Conta só mensagens da outra
+  parte posteriores à leitura; abrir a conversa (pop-up no celular, lateral no desktop) ou responder marca como lida e
+  também marca os avisos "Nova mensagem" daquela negociação.
+- **Celular/tablet (≤ 900 px)**: a barra de categorias do topo sai; "Explorar" substitui "Início" na barra inferior
+  (a logo continua levando ao início). Escolhido em vez de menu lateral: a barra inferior já é a navegação principal
+  no celular e fica ao alcance do polegar.

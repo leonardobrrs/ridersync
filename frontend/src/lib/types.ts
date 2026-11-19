@@ -426,6 +426,8 @@ export interface BookingDetail {
   event: { id: string; title: string; startsAt: string; visibility: EventVisibility; status: EventStatus } | null;
   offers: Offer[];
   messages: { id: string; authorSide: Side; body: string; createdAt: string; author: { name: string; isMe: boolean } | null }[];
+  /** Mensagens da outra parte ainda não lidas por mim (abrir a conversa zera). */
+  unreadMessages: number;
   statusChanges: { id: string; fromStatus: BookingStatus | null; toStatus: BookingStatus; actorSide: Side | null; note: string | null; createdAt: string; actor: { name: string } | null }[];
   performance: { id: string; performedAt: string; notes: string; createdAt: string; registeredBy: { name: string } | null } | null;
   mySide: Side | null;

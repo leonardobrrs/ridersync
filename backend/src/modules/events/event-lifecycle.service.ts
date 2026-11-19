@@ -6,13 +6,14 @@ import { AccessService } from '../access/access.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EVENT_STATUS_LABEL, statusAfterSlotChange, sweepTarget } from './event.rules';
 
-const ACTIVE_DIRECT_BOOKING = ['NEGOTIATING', 'AGREED', 'CONFIRMED'] as const;
 const SWEEP_INTERVAL_MS = 60_000;
 
 /**
  * Vagas e transições automáticas de eventos.
- * Vaga ocupada = candidatura ACCEPTED ou convite direto ativo (negociação DIRECT vinculada ao evento).
- * Toda ocupação/liberação acontece com o evento bloqueado (SELECT ... FOR UPDATE) na transação do chamador.
+ * Vaga ocupada = contratação CONFIRMADA vinculada ao evento (vinda de candidatura ou de convite direto).
+ * Selecionar candidatura, enviar proposta ou negociar não ocupa vaga: várias negociações podem correr em paralelo
+ * e a vaga só fecha quando uma delas termina em sucesso (confirmação). Cancelar uma contratação confirmada libera
+ * a vaga. Toda ocupação/liberação acontece com o evento bloqueado (SELECT ... FOR UPDATE) na transação do chamador.
  */
 @Injectable()
 export class EventLifecycleService {
@@ -31,12 +32,9 @@ export class EventLifecycleService {
     return tx.event.findUniqueOrThrow({ where: { id: eventId } });
   }
 
-  async filledSlots(tx: Tx | PrismaService, eventId: string) {
-    const [accepted, invites] = await Promise.all([
-      tx.eventApplication.count({ where: { eventId, status: 'ACCEPTED' } }),
-      tx.booking.count({ where: { eventId, origin: 'DIRECT', status: { in: [...ACTIVE_DIRECT_BOOKING] } } }),
-    ]);
-    return accepted + invites;
+  /** Vagas ocupadas = contratações confirmadas do evento. */
+  filledSlots(tx: Tx | PrismaService, eventId: string) {
+    return this.confirmedBookings(tx, eventId);
   }
 
   /** Contratações CONFIRMADAS do evento — o que de fato esgota o evento (candidaturas e negociações não). */
@@ -122,7 +120,32 @@ export class EventLifecycleService {
         }
       });
     }
+    changed += await this.reconcileSlots(now);
     if (changed) await this.notifications.flush();
     return { checked: candidates.length, changed };
+  }
+
+  /**
+   * Corrige o estado de eventos cujas vagas não batem com as contratações confirmadas (dados anteriores à regra
+   * atual ou alterados manualmente): aberto com todas as vagas confirmadas → "Vagas preenchidas"; marcado como
+   * preenchido sem confirmações suficientes → reaberto (ou encerrado, se o prazo já passou). Silencioso e idempotente.
+   */
+  private async reconcileSlots(now: Date) {
+    const events = await this.prisma.event.findMany({
+      where: { status: { in: ['OPEN', 'FILLED'] }, startsAt: { gt: now } },
+      take: 500,
+      select: { id: true, status: true, slots: true, applicationDeadline: true, _count: { select: { bookings: { where: { status: 'CONFIRMED' } } } } },
+    });
+    let changed = 0;
+    for (const e of events) {
+      const target = statusAfterSlotChange(e, e._count.bookings, now);
+      if (target === e.status) continue;
+      const res = await this.prisma.event.updateMany({
+        where: { id: e.id, status: e.status },
+        data: { status: target, ...(target === 'FILLED' ? { filledAt: now } : {}), ...(target === 'CLOSED' ? { closedAt: now } : {}) },
+      });
+      changed += res.count;
+    }
+    return changed;
   }
 }

@@ -180,7 +180,7 @@ export function OpportunityPage() {
               <div>
                 <dt>Vagas</dt>
                 <dd>
-                  {e.filledSlots !== undefined ? `${e.filledSlots} de ${e.slots} ocupada(s)` : e.slots}
+                  {e.filledSlots !== undefined ? `${e.filledSlots} de ${e.slots} confirmada(s)` : e.slots}
                 </dd>
               </div>
               <div>

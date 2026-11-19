@@ -7,12 +7,12 @@ import { PrismaService, Tx } from '../../prisma/prisma.service';
 import { AccessService } from '../access/access.service';
 import { publicArtistCardSelect, toArtistCard } from '../artists/artist.presenter';
 import { EventLifecycleService } from '../events/event-lifecycle.service';
-import { ACTIVE_EVENT_STATUSES } from '../events/event.rules';
+import { ACTIVE_EVENT_STATUSES, assertApplicationTransition } from '../events/event.rules';
 import { mediaThumbUrl } from '../media/media.service';
 import { NotificationInput } from '../notifications/notification.types';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AgendaService } from './agenda.service';
-import { assertBookingTransition, assertCanConfirm, assertCanRespondToOffer, MESSAGE_ALLOWED, resolveSide } from './booking.rules';
+import { assertBookingTransition, assertCanConfirm, assertCanRespondToOffer, MESSAGE_ALLOWED, resolveSide, unreadCount } from './booking.rules';
 
 const futureDate = z.iso
   .datetime({ offset: true, error: 'Data/hora inválida.' })
@@ -139,8 +139,8 @@ export class BookingsService {
         const event = await this.lifecycle.lock(tx, input.eventId);
         if (event.organizerId !== input.organizationId) throw notFound('Evento não encontrado.');
         if (!ACTIVE_EVENT_STATUSES.includes(event.status) && event.status !== 'DRAFT') throw conflict('EVENT_NOT_ACTIVE', 'Este evento não está mais ativo.');
+        // Convite não ocupa vaga: só a contratação confirmada ocupa. Evento já esgotado não recebe convites.
         await this.lifecycle.assertNotFullyBooked(tx, event);
-        if ((await this.lifecycle.filledSlots(tx, event.id)) >= event.slots) throw conflict('SLOTS_FULL', 'Todas as vagas deste evento já estão ocupadas.');
         const duplicate = await tx.booking.count({ where: { eventId: event.id, artistId: input.artistId, status: { in: ['NEGOTIATING', 'AGREED', 'CONFIRMED'] } } });
         if (duplicate) throw conflict('BOOKING_EXISTS', 'Já existe uma negociação ativa com este artista para este evento.');
         eventTitle = event.title;
@@ -166,7 +166,11 @@ export class BookingsService {
     return this.detail(userId, id);
   }
 
-  /** Inicia negociação a partir de candidatura ACEITA. A candidatura permanece registrada. */
+  /**
+   * Inicia negociação a partir de uma candidatura. Candidatura em análise é selecionada (ACCEPTED) na mesma
+   * transação — "selecionar" já abre a negociação. Nenhuma vaga é ocupada aqui: só a confirmação ocupa.
+   * A candidatura permanece registrada.
+   */
   async createFromApplication(userId: string, applicationId: string, input: z.infer<typeof FromApplicationSchema>) {
     const app = await this.prisma.eventApplication.findUnique({
       where: { id: applicationId },
@@ -181,7 +185,7 @@ export class BookingsService {
     });
     if (!app) throw notFound('Candidatura não encontrada.');
     await this.access.assertOrgMember(userId, app.event.organizerId);
-    if (app.status !== 'ACCEPTED') throw conflict('APPLICATION_NOT_ACCEPTED', 'Aceite a candidatura antes de iniciar a negociação.');
+    if (!['PENDING', 'ACCEPTED'].includes(app.status)) throw conflict('APPLICATION_NOT_ACCEPTED', 'Esta candidatura não está mais em análise.');
     if (app.booking) throw conflict('BOOKING_EXISTS', 'Já existe uma negociação para esta candidatura.');
     const sides = await this.sidesFor(userId, { organizationId: app.event.organizerId, artistId: app.artistId });
     if (sides.has('ARTIST')) throw conflict('BOTH_SIDES', 'Você administra este perfil artístico; outra pessoa deve conduzir a negociação.');
@@ -189,6 +193,14 @@ export class BookingsService {
       const event = await this.lifecycle.lock(tx, app.event.id);
       await this.lifecycle.assertNotFullyBooked(tx, event);
       if (['CANCELLED', 'COMPLETED'].includes(event.status)) throw conflict('EVENT_NOT_ACTIVE', 'Este evento não está mais ativo.');
+      const fresh = await tx.eventApplication.findUniqueOrThrow({ where: { id: app.id }, select: { status: true } });
+      if (fresh.status === 'PENDING') {
+        if (!ACTIVE_EVENT_STATUSES.includes(event.status)) throw conflict('EVENT_NOT_ACTIVE', 'Este evento não está mais ativo.');
+        assertApplicationTransition(fresh.status, 'ACCEPTED');
+        await tx.eventApplication.update({ where: { id: app.id }, data: { status: 'ACCEPTED', decidedAt: new Date(), decidedById: userId } });
+      } else if (fresh.status !== 'ACCEPTED') {
+        throw conflict('APPLICATION_NOT_ACCEPTED', 'Esta candidatura não está mais em análise.');
+      }
       return this.createBooking(
         tx,
         userId,
@@ -297,11 +309,14 @@ export class BookingsService {
     const agreed = b.offers.find((o) => o.status === 'ACCEPTED') ?? null;
     const now = Date.now();
     const { photoId, slug, ...org } = b.organization;
+    const read = await this.prisma.bookingRead.findUnique({ where: { bookingId_userId: { bookingId, userId } }, select: { lastReadAt: true } });
     return {
       ...b,
       organization: { ...org, slug: org.type === 'VENUE' ? slug : null, photoUrl: mediaThumbUrl(photoId) },
       artist: toArtistCard(b.artist),
       messages: b.messages.map((m) => ({ ...m, author: m.author ? { name: m.author.name, isMe: m.author.id === userId } : null })),
+      /** Mensagens da outra parte recebidas depois da última leitura desta pessoa. */
+      unreadMessages: unreadCount(b.messages, userId, read?.lastReadAt ?? null),
       mySide: side,
       bothSides: sides.size > 1,
       pendingOffer: pending,
@@ -316,6 +331,28 @@ export class BookingsService {
         registerPerformance: !!side && b.status === 'CONFIRMED' && !b.performance && !!agreed && agreed.performanceAt.getTime() <= now,
       },
     };
+  }
+
+  /**
+   * Marca a conversa como lida por esta pessoa (abrir o chat). Também marca como lidas as notificações de
+   * "nova mensagem" desta negociação, para o sino e o contador do chat ficarem coerentes.
+   */
+  async markMessagesRead(userId: string, bookingId: string) {
+    const b = await this.prisma.booking.findUnique({ where: { id: bookingId }, select: { organizationId: true, artistId: true } });
+    if (!b || (await this.sidesFor(userId, b)).size === 0) throw notFound('Negociação não encontrada.');
+    const now = new Date();
+    await this.prisma.$transaction([
+      this.prisma.bookingRead.upsert({
+        where: { bookingId_userId: { bookingId, userId } },
+        create: { bookingId, userId, lastReadAt: now },
+        update: { lastReadAt: now },
+      }),
+      this.prisma.notification.updateMany({
+        where: { userId, type: 'NEW_MESSAGE', readAt: null, link: `/painel/negociacoes/${bookingId}` },
+        data: { readAt: now },
+      }),
+    ]);
+    return { unreadMessages: 0 };
   }
 
   // ─────────── Ações ───────────
@@ -427,8 +464,15 @@ export class BookingsService {
   async message(userId: string, bookingId: string, body: string) {
     return this.act(userId, bookingId, async (tx, booking, side) => {
       if (!MESSAGE_ALLOWED.includes(booking.status)) throw conflict('BOOKING_CLOSED', 'Esta negociação está encerrada.');
-      await tx.bookingMessage.create({ data: { bookingId: booking.id, authorId: userId, authorSide: side, body } });
-      await tx.booking.update({ where: { id: booking.id }, data: { updatedAt: new Date() } });
+      const sentAt = new Date();
+      await tx.bookingMessage.create({ data: { bookingId: booking.id, authorId: userId, authorSide: side, body, createdAt: sentAt } });
+      await tx.booking.update({ where: { id: booking.id }, data: { updatedAt: sentAt } });
+      // Quem escreve leu a conversa até aqui.
+      await tx.bookingRead.upsert({
+        where: { bookingId_userId: { bookingId: booking.id, userId } },
+        create: { bookingId: booking.id, userId, lastReadAt: sentAt },
+        update: { lastReadAt: sentAt },
+      });
       // Uma notificação por negociação a cada 30 min evita enxurrada de e-mails em conversas ativas.
       const bucket = Math.floor(Date.now() / (30 * 60 * 1000));
       await this.notifySide(tx, booking, side === 'VENUE' ? 'ARTIST' : 'VENUE', userId, {

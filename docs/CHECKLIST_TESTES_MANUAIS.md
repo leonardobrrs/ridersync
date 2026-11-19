@@ -37,9 +37,9 @@ Marque ✔/✘ e anote o problema.
 ## Eventos e contratação
 - [ ] Criar evento público e privado (casa) e evento particular sem casa (contratante independente, com local).
 - [ ] Evento privado: aparece para conta de artista em "Oportunidades" com selo; não aparece para visitante, contratante, nem na página inicial.
-- [ ] Com 1 vaga, selecionar uma candidatura muda o evento para "Vagas preenchidas" e bloqueia novas candidaturas.
-- [ ] Recusar a proposta/encerrar a negociação dessa candidatura → candidatura "Vaga cancelada" e evento volta a "Inscrições abertas".
-- [ ] Convidar artista pelo perfil vinculando o evento ocupa vaga.
+- [ ] Com 1 vaga, "Selecionar e negociar" abre a proposta direto e o evento continua "Inscrições abertas"; dá para negociar com mais de um artista.
+- [ ] Confirmar a contratação com 1 vaga → evento vira "Vagas preenchidas", fecha inscrições e recusa outra confirmação; cancelar essa contratação reabre o evento. Recusar uma proposta não mexe nas vagas (candidatura fica "Vaga cancelada").
+- [ ] Convidar artista pelo perfil vinculando o evento NÃO ocupa vaga; com o evento esgotado, novo convite é recusado.
 - [ ] Adiar (com mensagem) → artistas notificados; "Definir nova data" restaura o estado.
 - [ ] Cancelar evento (com motivo) → candidaturas e negociações encerradas e artistas notificados.
 - [ ] "Aceitar proposta" e "Confirmar contratação" abrem modal do sistema (nunca alerta do navegador); "Encerrar negociação" pede motivo em modal.
@@ -69,7 +69,7 @@ Marque ✔/✘ e anote o problema.
 - [ ] Evento com todas as vagas confirmadas: candidatura e nova proposta são recusadas; o evento continua na agenda.
 
 ## Reunião 18/11
-- [ ] Celular: a página inicial não mostra a fileira de instrumentos; o filtro de instrumento está em "Filtros" (abas Músicos/Bandas).
+- [ ] Celular e tablet: sem barra de categorias no topo; "Explorar" na barra inferior abre Para você/Todos, Músicos, Bandas, Casas de show e Oportunidades (artistas e visitantes). Instrumento fica em "Filtros".
 - [ ] Celular: a logo do RiderSync mantém o fundo amarelo do tamanho do texto em qualquer largura (320, 360, 390, 412 px e tablet).
 - [ ] Negociação no celular: barra "Mensagens" fixa no rodapé; ao tocar abre a conversa por cima da página; fecha no X, no fundo escuro e com Esc.
 - [ ] Chat: Enter envia; Shift+Enter quebra a linha; se o envio falhar, o texto continua no campo.
@@ -81,3 +81,5 @@ Marque ✔/✘ e anote o problema.
 - [ ] Criar evento (casa e evento particular) com imagem; a imagem aparece no card da oportunidade e na página do evento; "Remover imagem" funciona na edição.
 - [ ] Evento privado com imagem: visitante e contratante não abrem a imagem; contas de artista sim.
 - [ ] Contratante: o menu do perfil lista a(s) casa(s) de show e leva direto à gestão; no celular, "Minha casa" na barra inferior.
+- [ ] Chat: a barra "Mensagens" mostra número só quando há mensagens NÃO lidas da outra parte; abrir o pop-up (ou ver a conversa no desktop) zera o número e marca o aviso "Nova mensagem" do sino como lido.
+- [ ] Evento antigo que aparecia "Inscrições abertas" com todas as vagas confirmadas passa a "Vagas preenchidas" sozinho (e o contrário: "preenchido" sem contratação confirmada reabre).

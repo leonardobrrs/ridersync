@@ -179,15 +179,14 @@ describe('Casas, inventário, comparação, eventos, candidaturas e bookings (in
       expect(await prisma.booking.count({ where: { applicationId } })).toBe(0);
     });
 
-    it('vagas esgotadas: evento muda para FILLED automaticamente e fecha inscrições', async () => {
+    it('selecionar candidatura não ocupa a vaga: o evento segue aberto até uma contratação ser confirmada', async () => {
       const manage = await venueOwner.get(`/events/${eventId}/manage`);
-      expect(manage.body.status).toBe('FILLED');
-      expect(manage.body.filledSlots).toBe(1);
+      expect(manage.body.status).toBe('OPEN');
+      expect(manage.body.filledSlots).toBe(0);
       const other = await registerUser(app, 'Caio Extra');
       const otherArtist = await createPublicMusician(other, 'Caio Extra Som');
       const a2 = await other.post(`/events/${eventId}/applications`, { artistId: otherArtist.id });
-      expect(a2.status).toBe(409);
-      expect(a2.body.code).toBe('APPLICATIONS_CLOSED');
+      expect(a2.status).toBe(201);
     });
 
     it('inicia booking a partir da candidatura aceita (estado inicial NEGOTIATING)', async () => {

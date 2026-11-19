@@ -85,6 +85,12 @@ export class BookingsController {
     return this.bookings.message(user.id, id, body.body);
   }
 
+  /** Abrir a conversa marca as mensagens como lidas por esta pessoa. */
+  @Post('bookings/:bookingId/messages/read')
+  markRead(@CurrentUser() user: AuthUser, @Param('bookingId', ParseUUIDPipe) id: string) {
+    return this.bookings.markMessagesRead(user.id, id);
+  }
+
   @Post('bookings/:bookingId/performance')
   @ApiZodBody(PerformanceSchema)
   performance(
