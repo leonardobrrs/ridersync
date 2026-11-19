@@ -155,7 +155,10 @@ function CategoryBar({ params, set, personal }: { params: URLSearchParams; set: 
             type="button"
             className="cat sm"
             aria-pressed={instruments.includes(i)}
-            onClick={() => set({ instrument: writeList(instruments.includes(i) ? instruments.filter((x) => x !== i) : [...instruments, i]), kind: '' })}
+            onClick={() => {
+              const cur = readList(new URLSearchParams(window.location.search), 'instrument');
+              set({ instrument: writeList(cur.includes(i) ? cur.filter((x) => x !== i) : [...cur, i]), kind: '' });
+            }}
           >
             <span className="ci">
               <Icon name={instrumentIcon(i)} size={20} />
@@ -175,19 +178,24 @@ function CategoryBar({ params, set, personal }: { params: URLSearchParams; set: 
 function Filters({ params, set, mode }: { params: URLSearchParams; set: (patch: Record<string, string>) => void; mode: 'venues' | 'feed' | 'artists' }) {
   const { data: meta } = useMeta();
   const list = (key: string) => readList(params, key);
-  const change = (key: string) => (values: string[]) => set({ [key]: writeList(values) });
+  // Lê a URL atual no clique (não a da última renderização): dois cliques rápidos não sobrescrevem um ao outro.
+  const toggle = (key: string) => (value: string) => {
+    const cur = readList(new URLSearchParams(window.location.search), key);
+    set({ [key]: writeList(cur.includes(value) ? cur.filter((x) => x !== value) : [...cur, value]) });
+  };
+  const props = (key: string) => ({ selected: list(key), onToggle: toggle(key), onClear: () => set({ [key]: '' }) });
   return (
     <>
-      <CityChecks suggestions={meta?.cities ?? []} all={meta?.allCities ?? []} selected={list('city')} onChange={change('city')} />
+      <CityChecks suggestions={meta?.cities ?? []} all={meta?.allCities ?? []} {...props('city')} />
       {mode === 'feed' ? (
-        <CheckGroup legend="Estilo procurado" options={meta?.genres ?? []} selected={list('genre')} onChange={change('genre')} />
+        <CheckGroup legend="Estilo procurado" options={meta?.genres ?? []} {...props('genre')} />
       ) : mode === 'venues' ? (
-        <CheckGroup legend="Tipo de espaço" options={meta?.venueKinds ?? []} selected={list('venueKind')} onChange={change('venueKind')} />
+        <CheckGroup legend="Tipo de espaço" options={meta?.venueKinds ?? []} {...props('venueKind')} />
       ) : (
         <>
-          <CheckGroup legend="Estilo" options={meta?.genres ?? []} selected={list('genre')} onChange={change('genre')} />
-          <CheckGroup legend="Instrumento" options={meta?.instruments ?? []} selected={list('instrument')} onChange={change('instrument')} />
-          <CheckGroup legend="Formação" options={meta?.formats ?? []} selected={list('format')} onChange={change('format')} />
+          <CheckGroup legend="Estilo" options={meta?.genres ?? []} {...props('genre')} />
+          <CheckGroup legend="Instrumento" options={meta?.instruments ?? []} {...props('instrument')} />
+          <CheckGroup legend="Formação" options={meta?.formats ?? []} {...props('format')} />
         </>
       )}
     </>
@@ -265,7 +273,8 @@ export function MarketplacePage() {
   });
 
   const set = (patch: Record<string, string>) => {
-    const next = new URLSearchParams(params);
+    // Parte da URL atual (e não do render anterior), para ações rápidas em sequência não se perderem.
+    const next = new URLSearchParams(window.location.search);
     for (const [k, v] of Object.entries(patch)) {
       if (v) next.set(k, v);
       else next.delete(k);

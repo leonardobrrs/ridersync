@@ -102,3 +102,14 @@ test('filtros laterais com marcadores: vários estilos e cidades ao mesmo tempo'
   await aside.getByRole('button', { name: 'Limpar estilo' }).click();
   await expect(page).not.toHaveURL(/genre=/);
 });
+
+test('cliques rápidos em vários marcadores não se perdem (cada clique lê a URL atual)', async ({ page }) => {
+  await page.goto('/?kind=SOLO');
+  const style = page.getByRole('complementary', { name: 'Filtros' }).getByRole('group', { name: /^Estilo/ });
+  // Sem esperar entre os cliques: o segundo não pode sobrescrever o primeiro.
+  await style.getByRole('checkbox', { name: 'MPB' }).click();
+  await style.getByRole('checkbox', { name: 'Forró' }).click();
+  await style.getByRole('checkbox', { name: 'Samba' }).click();
+  await expect(page).toHaveURL(/genre=MPB%2CForr%C3%B3%2CSamba/);
+  for (const g of ['MPB', 'Forró', 'Samba']) await expect(style.getByRole('checkbox', { name: g })).toBeChecked();
+});
