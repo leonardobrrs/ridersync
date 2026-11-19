@@ -12,30 +12,33 @@ describe('filtros com marcadores', () => {
   });
 
   it('marca e desmarca vários valores; "Ver mais" mostra o resto; selecionados sempre visíveis', () => {
-    const onChange = vi.fn();
+    const onToggle = vi.fn();
+    const onClear = vi.fn();
     const options = ['MPB', 'Forró', 'Samba', 'Rock', 'Jazz', 'Pop', 'Brega', 'Reggae'];
-    const { rerender } = render(<CheckGroup legend="Estilo" options={options} selected={['Reggae']} onChange={onChange} initial={3} />);
+    const { rerender } = render(<CheckGroup legend="Estilo" options={options} selected={['Reggae']} onToggle={onToggle} onClear={onClear} initial={3} />);
     // Reggae está fora dos 3 primeiros, mas aparece por estar marcado
     expect(screen.getByRole('checkbox', { name: 'Reggae' })).toBeChecked();
     expect(screen.queryByRole('checkbox', { name: 'Jazz' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('checkbox', { name: 'MPB' }));
-    expect(onChange).toHaveBeenLastCalledWith(['Reggae', 'MPB']);
+    expect(onToggle).toHaveBeenLastCalledWith('MPB');
+    // Mostra o clique na hora, antes de a URL (prop selected) confirmar
+    expect(screen.getByRole('checkbox', { name: 'MPB' })).toBeChecked();
     fireEvent.click(screen.getByRole('checkbox', { name: 'Reggae' }));
-    expect(onChange).toHaveBeenLastCalledWith([]);
+    expect(onToggle).toHaveBeenLastCalledWith('Reggae');
     fireEvent.click(screen.getByRole('button', { name: /Ver mais/ }));
     expect(screen.getByRole('checkbox', { name: 'Jazz' })).toBeInTheDocument();
-    rerender(<CheckGroup legend="Estilo" options={options} selected={['MPB', 'Rock']} onChange={onChange} initial={3} />);
+    rerender(<CheckGroup legend="Estilo" options={options} selected={['MPB', 'Rock']} onToggle={onToggle} onClear={onClear} initial={3} />);
     fireEvent.click(screen.getByRole('button', { name: 'Limpar estilo' }));
-    expect(onChange).toHaveBeenLastCalledWith([]);
+    expect(onClear).toHaveBeenCalled();
   });
 
   it('cidades: sugestões + busca sem acento entre os municípios', () => {
-    const onChange = vi.fn();
-    render(<CityChecks suggestions={['Maceió', 'Arapiraca']} all={['Maceió', 'Arapiraca', 'Piranhas', 'Pão de Açúcar', 'Penedo']} selected={['Maceió']} onChange={onChange} />);
+    const onToggle = vi.fn();
+    render(<CityChecks suggestions={['Maceió', 'Arapiraca']} all={['Maceió', 'Arapiraca', 'Piranhas', 'Pão de Açúcar', 'Penedo']} selected={['Maceió']} onToggle={onToggle} onClear={vi.fn()} />);
     expect(screen.getByRole('checkbox', { name: 'Maceió' })).toBeChecked();
     expect(screen.queryByRole('checkbox', { name: 'Pão de Açúcar' })).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Buscar outra cidade de Alagoas'), { target: { value: 'pao' } });
     fireEvent.click(screen.getByRole('checkbox', { name: 'Pão de Açúcar' }));
-    expect(onChange).toHaveBeenLastCalledWith(['Maceió', 'Pão de Açúcar']);
+    expect(onToggle).toHaveBeenLastCalledWith('Pão de Açúcar');
   });
 });

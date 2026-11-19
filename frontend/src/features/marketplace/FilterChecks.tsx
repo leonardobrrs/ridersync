@@ -24,31 +24,33 @@ export function CheckGroup({
   legend,
   options,
   selected,
-  onChange,
+  onToggle,
+  onClear,
   initial = 6,
 }: {
   legend: string;
   options: string[];
   selected: string[];
-  onChange: (values: string[]) => void;
+  /** Liga/desliga um valor. Quem chama lê a lista atual da URL no momento do clique (cliques rápidos não se perdem). */
+  onToggle: (value: string) => void;
+  onClear: () => void;
   initial?: number;
 }) {
   const [expanded, setExpanded] = useState(false);
   const shown = expanded ? options : [...new Set([...selected.filter((s) => options.includes(s)), ...options.slice(0, initial)])];
   const hidden = options.length - shown.length;
-  const toggle = (v: string) => onChange(selected.includes(v) ? selected.filter((s) => s !== v) : [...selected, v]);
   return (
     <fieldset className="fgroup fchecks">
       <legend className="lbl">
         {legend}
         {selected.length > 0 && (
-          <button type="button" className="link fclear" onClick={() => onChange([])} aria-label={`Limpar ${legend.toLowerCase()}`}>
+          <button type="button" className="link fclear" onClick={onClear} aria-label={`Limpar ${legend.toLowerCase()}`}>
             limpar ({selected.length})
           </button>
         )}
       </legend>
       {shown.map((o) => (
-        <Check key={o} label={o} checked={selected.includes(o)} onChange={() => toggle(o)} />
+        <Check key={o} label={o} checked={selected.includes(o)} onChange={() => onToggle(o)} />
       ))}
       {options.length > initial && (
         <button type="button" className="link fmore" aria-expanded={expanded} onClick={() => setExpanded((x) => !x)}>
@@ -64,31 +66,32 @@ export function CityChecks({
   suggestions,
   all,
   selected,
-  onChange,
+  onToggle,
+  onClear,
 }: {
   suggestions: string[];
   all: string[];
   selected: string[];
-  onChange: (values: string[]) => void;
+  onToggle: (value: string) => void;
+  onClear: () => void;
 }) {
   const id = useId();
   const [term, setTerm] = useState('');
   const base = [...new Set([...selected, ...suggestions])];
   const t = normalizeInstrument(term);
   const matches = t.length >= 2 ? all.filter((c) => !base.includes(c) && normalizeInstrument(c).includes(t)).slice(0, 6) : [];
-  const toggle = (v: string) => onChange(selected.includes(v) ? selected.filter((s) => s !== v) : [...selected, v]);
   return (
     <fieldset className="fgroup fchecks">
       <legend className="lbl">
         Cidade
         {selected.length > 0 && (
-          <button type="button" className="link fclear" onClick={() => onChange([])} aria-label="Limpar cidades">
+          <button type="button" className="link fclear" onClick={onClear} aria-label="Limpar cidades">
             limpar ({selected.length})
           </button>
         )}
       </legend>
       {base.map((c) => (
-        <Check key={c} label={c} checked={selected.includes(c)} onChange={() => toggle(c)} />
+        <Check key={c} label={c} checked={selected.includes(c)} onChange={() => onToggle(c)} />
       ))}
       <label className="sr-only" htmlFor={id}>
         Buscar outra cidade de Alagoas
@@ -100,7 +103,7 @@ export function CityChecks({
           label={c}
           checked={false}
           onChange={() => {
-            toggle(c);
+            onToggle(c);
             setTerm('');
           }}
         />
@@ -110,10 +113,24 @@ export function CityChecks({
   );
 }
 
+/**
+ * O estado oficial vem da URL, que o roteador atualiza de forma assíncrona. Para o visto não "piscar", o marcador
+ * mostra o clique na hora (clickedFrom = estado no momento do clique) até a URL confirmar. Clicar de novo antes
+ * disso desfaz a previsão.
+ */
 function Check({ label, checked, onChange }: { label: string; checked: boolean; onChange: () => void }) {
+  const [clickedFrom, setClickedFrom] = useState<boolean | null>(null);
+  const shown = clickedFrom === checked ? !checked : checked;
   return (
-    <label className={`fchk${checked ? ' on' : ''}`}>
-      <input type="checkbox" checked={checked} onChange={onChange} />
+    <label className={`fchk${shown ? ' on' : ''}`}>
+      <input
+        type="checkbox"
+        checked={shown}
+        onChange={() => {
+          setClickedFrom(shown === checked ? checked : null);
+          onChange();
+        }}
+      />
       <span>{label}</span>
     </label>
   );
