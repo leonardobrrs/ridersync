@@ -124,3 +124,15 @@ export const pagination = {
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(48).default(24),
 };
+
+/**
+ * Filtros com vários valores na query string: aceita "a,b" (formato usado pelo frontend) ou o parâmetro repetido
+ * (?a=1&a=2). Vazio = sem filtro. Dentro de um filtro os valores se combinam por OU.
+ */
+const splitList = (v: unknown) => {
+  if (v === undefined || v === null || v === '') return undefined;
+  const items = (Array.isArray(v) ? v : String(v).split(',')).map((s) => String(s).trim()).filter(Boolean);
+  return items.length ? [...new Set(items)] : undefined;
+};
+export const multiEnum = <T extends readonly [string, ...string[]]>(values: T) => z.preprocess(splitList, z.array(z.enum(values)).max(values.length).optional());
+export const multiText = (maxItems = 30) => z.preprocess(splitList, z.array(z.string().max(80)).max(maxItems).optional());

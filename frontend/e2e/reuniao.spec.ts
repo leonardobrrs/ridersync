@@ -77,3 +77,28 @@ test('telefone com máscara automática e casa de show acessível pelo menu do p
   await expect(page).toHaveURL(venueUrl);
   await u.context.close();
 });
+
+test('filtros laterais com marcadores: vários estilos e cidades ao mesmo tempo', async ({ page }) => {
+  await page.goto('/?kind=SOLO');
+  const aside = page.getByRole('complementary', { name: 'Filtros' });
+  // O estado vem da URL (atualizada de forma assíncrona): clicar e esperar marcado, em vez de check().
+  const style = aside.getByRole('group', { name: /^Estilo/ });
+  await style.getByRole('checkbox', { name: 'MPB' }).click();
+  await expect(style.getByRole('checkbox', { name: 'MPB' })).toBeChecked();
+  await style.getByRole('checkbox', { name: 'Forró' }).click();
+  await expect(style.getByRole('checkbox', { name: 'Forró' })).toBeChecked();
+  await expect(page).toHaveURL(/genre=MPB%2CForr%C3%B3/);
+  const cities = aside.getByRole('group', { name: /^Cidade/ });
+  await cities.getByLabel('Buscar outra cidade de Alagoas').fill('pirAnh');
+  await cities.getByRole('checkbox', { name: 'Piranhas' }).click();
+  await expect(cities.getByRole('checkbox', { name: 'Piranhas' })).toBeChecked();
+  await expect(page).toHaveURL(/city=Piranhas/);
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Músicos em Piranhas');
+  // Recarregar mantém tudo marcado (estado na URL)
+  await page.reload();
+  await expect(aside.getByRole('checkbox', { name: 'MPB' })).toBeChecked();
+  await expect(aside.getByRole('checkbox', { name: 'Forró' })).toBeChecked();
+  await expect(aside.getByRole('checkbox', { name: 'Piranhas' })).toBeChecked();
+  await aside.getByRole('button', { name: 'Limpar estilo' }).click();
+  await expect(page).not.toHaveURL(/genre=/);
+});
