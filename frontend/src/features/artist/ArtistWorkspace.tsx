@@ -21,15 +21,18 @@ export function RiderTab({ artistId, canManage }: { artistId: string; canManage:
   return (
     <div className="stack">
       <div className="notice">
-        Liste aqui os equipamentos que você <strong>já possui</strong> e leva para os shows. O que a casa precisa fornecer você informa em cada candidatura. Riders de bandas e de integrantes são independentes.
-        {canManage && (
-          <>
-            {' '}
-            <Link className="link" to={`/painel/comparar?artist=${artistId}`}>
-              Comparar com uma casa
-            </Link>
-          </>
-        )}
+        <p style={{ margin: 0 }}>
+          Liste aqui os equipamentos que você <strong>já possui</strong> e leva para os shows. O que a casa precisa fornecer você informa
+          em cada candidatura. Riders de bandas e de integrantes são independentes.
+          {canManage && (
+            <>
+              {' '}
+              <Link className="link" to={`/painel/comparar?artist=${artistId}`}>
+                Comparar com uma casa
+              </Link>
+            </>
+          )}
+        </p>
       </div>
       <EquipmentEditor
         key={q.data!.updatedAt}

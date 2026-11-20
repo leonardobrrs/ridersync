@@ -151,15 +151,15 @@ function Header() {
           <NavLink to="/" end className="hlink hide-m">
             <span className="t">Início</span>
           </NavLink>
-          {/* Oportunidades são vagas para artistas: contratantes veem os eventos encerrados (histórico do circuito).
+          {/* Oportunidades são vagas para artistas; contratantes vão direto aos próprios eventos.
               Casas de show: pelo filtro da própria página inicial (reunião 19/11). */}
           {me?.user.accountType !== 'CONTRACTOR' ? (
             <NavLink to="/oportunidades" className="hlink hide-m">
               <span className="t">Oportunidades</span>
             </NavLink>
           ) : (
-            <NavLink to="/oportunidades?status=encerrados" className="hlink hide-m">
-              <span className="t">Eventos encerrados</span>
+            <NavLink to="/painel/eventos" className="hlink hide-m">
+              <span className="t">Meus eventos</span>
             </NavLink>
           )}
           {me ? (

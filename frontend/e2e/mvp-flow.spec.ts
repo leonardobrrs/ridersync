@@ -159,6 +159,9 @@ test('MVP: perfil, banda, convite e transferência, casa, evento, vagas, negocia
   const card = ana.page.locator('article.opp-card', { hasText: eventTitle });
   await expect(card.locator('img')).toHaveAttribute('src', /^\/api\/media\/.+\?v=thumb$/);
   await ana.page.getByRole('link', { name: eventTitle }).click();
+  // Candidatura em modal: identidade, necessidades técnicas e mensagem
+  await ana.page.getByRole('button', { name: 'Candidatar-se', exact: true }).click();
+  await expect(ana.page.getByRole('dialog', { name: `Candidatura — ${eventTitle}` })).toBeVisible();
   await ana.page.getByLabel('Candidatar-se como').selectOption({ label: `${artistName} (Perfil individual)` });
   // O que a artista precisa que a casa disponibilize: preenchido a partir do perfil (rider) e ajustável.
   const needs = ana.page.getByRole('group', { name: 'O que você precisa que a casa disponibilize' });

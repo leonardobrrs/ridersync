@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { NeedsPicker } from './NeedsPicker';
 import { FormError } from '../../components/Fields';
+import { Dialog } from '../../components/Dialog';
 import { Poster } from '../../components/Poster';
 import { OpportunityCard } from '../marketplace/MarketplacePage';
 import { Empty, ErrorState, Loading, Status } from '../../components/States';
@@ -114,6 +115,7 @@ export function OpportunityPage() {
   const navigate = useNavigate();
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [applyOpen, setApplyOpen] = useState(false);
 
   if (q.isLoading) return <Loading />;
   if (q.error) return <div className="wrap page"><ErrorState error={q.error} retry={q.refetch} /></div>;
@@ -133,6 +135,7 @@ export function OpportunityPage() {
       await api.post(`/events/${e.id}/applications`, { artistId: selected, message, needs });
       setMessage('');
       setNeeds([]);
+      setApplyOpen(false);
       await refresh();
       toast('Candidatura enviada! Acompanhe o andamento aqui.');
       navigate('/painel/candidaturas');
@@ -315,6 +318,14 @@ export function OpportunityPage() {
               </p>
             )}
             {me && e.acceptingApplications && identities.length > 0 && (
+              <>
+                <button className="btn cue block" type="button" onClick={() => { setErr(null); setApplyOpen(true); }}>
+                  Candidatar-se
+                </button>
+                <p className="hint">Somente perfis públicos podem se candidatar. A seleção não confirma a contratação.</p>
+              </>
+            )}
+            <Dialog open={applyOpen} onClose={() => !busy && setApplyOpen(false)} title={`Candidatura — ${e.title}`} wide>
               <div className="form">
                 <FormError message={err} />
                 <label className="field">
@@ -338,12 +349,16 @@ export function OpportunityPage() {
                   <span>Mensagem para a casa</span>
                   <textarea className="input" maxLength={1500} value={message} onChange={(x) => setMessage(x.target.value)} style={{ minHeight: 90 }} />
                 </label>
-                <button className="btn cue block" type="button" onClick={apply} disabled={busy}>
-                  {busy ? 'Enviando…' : 'Enviar candidatura'}
-                </button>
-                <p className="hint">Somente perfis públicos podem se candidatar. A seleção não confirma a contratação.</p>
+                <div className="actions">
+                  <button className="btn ghost" type="button" onClick={() => setApplyOpen(false)} disabled={busy}>
+                    Cancelar
+                  </button>
+                  <button className="btn cue" type="button" onClick={apply} disabled={busy}>
+                    {busy ? 'Enviando…' : 'Enviar candidatura'}
+                  </button>
+                </div>
               </div>
-            )}
+            </Dialog>
           </section>
         </aside>
       </div>
