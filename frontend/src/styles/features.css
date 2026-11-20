@@ -6,7 +6,7 @@
 .narrow{max-width:640px}
 .small{font-size:13px}
 .sec-title{font-size:20px;font-weight:800}
-.handle{font-size:13px;font-weight:700;color:var(--teal);text-decoration:none;justify-self:start;overflow-wrap:anywhere}
+.handle{font-size:13px;font-weight:700;color:var(--teal);text-decoration:none;justify-self:start;overflow-wrap:break-word}
 a.handle:hover{text-decoration:underline}
 .chip.sm{height:22px;font-size:12px;justify-self:start}
 .lbl-like{font-size:14px;font-weight:600}
@@ -58,13 +58,13 @@ a.handle:hover{text-decoration:underline}
 .bell-list button{width:100%;text-align:left;display:grid;gap:2px;padding:10px;border-radius:10px;border:0;background:none;cursor:pointer;font-size:14px}
 .bell-list button:hover{background:var(--sunk)}
 .bell-list button.unread{background:color-mix(in oklab,var(--cue) 14%,var(--surface))}
-.bell-list span{color:var(--muted);font-size:13px;overflow-wrap:anywhere}
+.bell-list span{color:var(--muted);font-size:13px;overflow-wrap:break-word}
 .bell-list small{color:var(--muted);font-size:12px}
 .bell-empty{padding:16px 14px}
 .notif-list{list-style:none;margin:0;padding:0;display:grid;gap:8px}
 .notif-list li{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;background:var(--surface);border-radius:12px;padding:12px 14px;border-left:4px solid transparent}
 .notif-list li.unread{border-left-color:var(--cue)}
-.notif-list li>div:first-child{flex:1 1 280px;min-width:0;overflow-wrap:anywhere}
+.notif-list li>div:first-child{flex:1 1 280px;min-width:0;overflow-wrap:break-word}
 .switch{display:flex;gap:12px;align-items:flex-start;cursor:pointer;padding:6px 0}
 .switch input{width:20px;height:20px;margin-top:2px;accent-color:var(--ink);flex:none}
 .switch span{display:grid;gap:2px}
@@ -95,7 +95,7 @@ a.handle:hover{text-decoration:underline}
 .pf-thumb{position:relative;aspect-ratio:16/9;background:var(--sunk);display:grid;place-items:center;color:var(--muted)}
 .pf-thumb img{width:100%;height:100%;object-fit:cover}
 .pf-play{position:absolute;inset:auto auto 8px 8px;background:rgb(0 0 0 / .65);color:#fff;border-radius:999px;width:34px;height:34px;display:grid;place-items:center}
-.pf-b{display:grid;gap:2px;padding:10px 12px;min-width:0;overflow-wrap:anywhere}
+.pf-b{display:grid;gap:2px;padding:10px 12px;min-width:0;overflow-wrap:break-word}
 .pf-b small{color:var(--muted);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
 .pf-mini{width:72px;aspect-ratio:16/9;border-radius:8px;overflow:hidden;background:var(--sunk);display:grid;place-items:center}
 .pf-mini img{width:100%;height:100%;object-fit:cover}
@@ -113,14 +113,14 @@ a.handle:hover{text-decoration:underline}
 .show-d b{font-family:var(--stencil);font-size:28px;font-weight:900}
 .show-d small{text-transform:uppercase;font-size:12px;font-weight:700;color:var(--case-ink)}
 .show-b{display:grid;gap:3px;min-width:0}
-.show-a{font-weight:800;color:var(--ink);text-decoration:none;overflow-wrap:anywhere}
+.show-a{font-weight:800;color:var(--ink);text-decoration:none;overflow-wrap:break-word}
 .show-a:hover{text-decoration:underline}
-.show-t{font-size:13px;color:var(--muted);overflow-wrap:anywhere}
-.show-m{display:flex;gap:5px;align-items:center;font-size:13px;color:var(--muted);min-width:0;overflow-wrap:anywhere}
+.show-t{font-size:13px;color:var(--muted);overflow-wrap:break-word}
+.show-m{display:flex;gap:5px;align-items:center;font-size:13px;color:var(--muted);min-width:0;overflow-wrap:break-word}
 .show-m svg{flex:none}
 .opp-tile{display:grid;gap:4px;background:var(--surface);border-radius:14px;padding:14px;text-decoration:none;color:inherit;border:1px solid transparent;min-width:0}
 .opp-tile:hover{border-color:var(--ink)}
-.opp-tile strong{overflow-wrap:anywhere}
+.opp-tile strong{overflow-wrap:break-word}
 .opp-tile span,.opp-tile small{color:var(--muted);font-size:13px}
 
 /* ── Formulários e busca ── */
@@ -134,10 +134,10 @@ a.handle:hover{text-decoration:underline}
 .foot-links{display:flex;gap:16px;flex-wrap:wrap}
 
 /* ── Responsividade: textos não estouram, grids não forçam largura, toque confortável ── */
-.ad h3,.prow h3,.box h2,.adh h1,.pagehead h1,.dates strong,.mlist strong{overflow-wrap:anywhere}
+.ad h3,.prow h3,.box h2,.adh h1,.pagehead h1,.dates strong,.mlist strong{overflow-wrap:break-word}
 .adp>*,.mk>*,.panel>*,.prow>*,.mlist li>*{min-width:0}
-.attrs dd{overflow-wrap:anywhere}
-.dl dd{overflow-wrap:anywhere}
+.attrs dd{overflow-wrap:break-word}
+.dl dd{overflow-wrap:break-word}
 .tscroll table{min-width:560px}
 @media (max-width:900px){
   .promo-wide{grid-template-columns:1fr}
@@ -178,7 +178,7 @@ a.handle:hover{text-decoration:underline}
 .signup-kind:hover{border-color:var(--ink);box-shadow:var(--shadow)}
 .signup-kind:active{transform:translateY(1px)}
 .signup-kind strong{font-size:17px}
-.signup-kind span:last-child{font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+.signup-kind span:last-child{font-size:13px;color:var(--muted);overflow-wrap:break-word}
 .signup-kind-ico{display:grid;place-items:center;width:48px;height:48px;border-radius:50%;background:var(--cue);color:var(--cue-ink)}
 @media (max-width:520px){.signup-kinds{grid-template-columns:1fr}}
 /* Modais longos: rolagem interna, cabeçalho visível */
@@ -187,9 +187,9 @@ dialog .dlg-h{position:sticky;top:0;z-index:1;background:var(--surface);margin:-
 
 /* ───────── Texto informado pelo usuário: nunca estoura o layout ─────────
    Nomes, descrições, links e títulos podem conter palavras/URLs enormes sem espaço.
-   `overflow-wrap:anywhere` só quebra uma palavra quando ela não cabe na linha e também reduz o
+   `overflow-wrap:break-word` só quebra uma palavra quando ela não cabe na linha e também reduz o
    tamanho mínimo do conteúdo — assim itens de grid/flex não alargam o contêiner. */
-main{overflow-wrap:anywhere}
+main{overflow-wrap:break-word}
 main :where(.btn,.chip,.st,.role,.tape,.seg button,.tabs button,.qty,.mono,time){overflow-wrap:normal}
 .stack,.stack-sm,.form,.sec,.adh,.ad-b,.card,.box,.prow>*,.prop>*,.kpi,.dates li>*,.offer,.bubble{min-width:0}
 .stack{grid-template-columns:minmax(0,1fr)}
@@ -206,7 +206,7 @@ main :where(.btn,.chip,.st,.role,.tape,.seg button,.tabs button,.qty,.mono,time)
 .kpi b{font-size:clamp(28px,8vw,38px)}
 .ad .handle{justify-self:stretch;max-width:100%}
 /* Chips que são links (ex.: bandas do artista) podem ter nomes longos: quebram em vez de vazar. */
-a.chip{height:auto;min-height:26px;max-width:100%;flex-wrap:wrap;column-gap:4px;padding:3px 10px;line-height:1.35;overflow-wrap:anywhere}
+a.chip{height:auto;min-height:26px;max-width:100%;flex-wrap:wrap;column-gap:4px;padding:3px 10px;line-height:1.35;overflow-wrap:break-word}
 /* Botões com rótulo longo nunca ultrapassam o contêiner; em telas estreitas quebram a linha (altura mínima de toque mantida). */
 .btn{max-width:100%}
 @media (max-width:420px){
@@ -219,7 +219,7 @@ a.chip{height:auto;min-height:26px;max-width:100%;flex-wrap:wrap;column-gap:4px;
 .show-m{display:block}
 .show-m svg{display:inline-block;vertical-align:-2px;margin-right:5px}
 /* Instrumento/função com ícone */
-.inst{display:inline-flex;align-items:center;gap:5px;min-width:0;vertical-align:middle;overflow-wrap:anywhere}
+.inst{display:inline-flex;align-items:center;gap:5px;min-width:0;vertical-align:middle;overflow-wrap:break-word}
 .inst svg,.tape svg{flex:none}
 .tape{display:inline-flex;align-items:center;gap:4px}
 .tape-start{justify-self:start}
@@ -338,8 +338,43 @@ body:has(.chat-dock) #root{padding-bottom:calc(var(--tabbar-h) + env(safe-area-i
 .fchk:hover{background:var(--sunk)}
 .fchk input{width:18px;height:18px;flex:none;margin:0;accent-color:var(--ink);cursor:pointer}
 .fchk.on{font-weight:700}
-.fchk span{min-width:0;overflow-wrap:anywhere}
+.fchk span{min-width:0;overflow-wrap:break-word}
 .fmore{justify-self:start;margin:4px 8px 0;font-size:13px}
 .fsearch{margin-top:6px;min-height:38px}
 .filters .fchecks+.fchecks,dialog .fchecks+.fchecks{margin-top:14px}
 .filters{max-height:calc(100vh - 110px);overflow-y:auto;overscroll-behavior:contain;padding-right:4px}
+/* Reunião 19/11: sem quebra de palavra no meio (tela "Negociando" e demais) — break-word só quebra uma palavra que
+   sozinha não cabe na linha; selos, botões e datas ficam inteiros. */
+.st,.chip,.btn,.tape,.role,time{overflow-wrap:normal;word-break:keep-all}
+.prop,.prow,.box,.offer,.attrs dd,.meta,.bubble{overflow-wrap:break-word;word-break:normal;hyphens:manual}
+/* Estrelas de avaliação */
+.stars{display:inline-flex;gap:2px;vertical-align:-3px}
+.star path{fill:var(--line);stroke:none}
+.star.on path{fill:#f2b600}
+.star-input{border:0;padding:0;margin:0;display:grid;gap:6px}
+.star-input legend{font-weight:700;margin-bottom:4px}
+.star-row{display:flex;align-items:center;gap:4px}
+.star-opt{display:grid;place-items:center;min-width:40px;min-height:40px;border-radius:10px;cursor:pointer}
+.star-opt:hover,.star-opt:focus-within{background:var(--sunk)}
+.star-opt:focus-within{outline:2px solid var(--ink);outline-offset:1px}
+.star-opt.zero .zero-label{font-weight:800;font-size:15px;width:30px;height:30px;display:grid;place-items:center;border:2px solid var(--line);border-radius:50%}
+.star-opt.zero:has(input:checked) .zero-label{border-color:var(--ink);background:var(--cue)}
+.reviews .review-list{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:10px}
+.reviews .review-list li{border-top:1px solid var(--line);padding-top:10px}
+.review-box{display:grid;gap:8px;margin-top:12px}
+/* Necessidades técnicas, convites e abas de eventos */
+.needs{border:0;margin:0;padding:0;display:grid;gap:8px}
+.needs legend{font-weight:700;margin-bottom:2px}
+.needs-list{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.needs-list li{display:grid;grid-template-columns:minmax(0,1fr) 80px auto;gap:8px;align-items:center}
+.needs-list .qty{min-height:38px}
+.needs-add{display:grid;gap:8px}
+.needs-add .row{flex-wrap:nowrap}
+.needs-view{margin-top:8px;display:grid;gap:4px}
+.invite{display:grid;gap:6px}
+.invite-results{list-style:none;margin:0;padding:4px;display:grid;gap:2px;border:1px solid var(--line);border-radius:12px;max-height:280px;overflow-y:auto}
+.chip-x{border:0;background:none;padding:0 0 0 4px;cursor:pointer;display:inline-grid;place-items:center;color:inherit}
+.ev-tabs{margin-bottom:14px;max-width:420px}
+.ev-tabs button{flex:1}
+.lineup{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.lineup li{display:grid;gap:2px}

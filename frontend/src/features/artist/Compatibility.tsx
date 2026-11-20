@@ -7,11 +7,17 @@ import { COMPAT_STATUS } from '../../lib/format';
 import { useMe } from '../../lib/hooks';
 import type { CompatibilityResult, VenueCard } from '../../lib/types';
 
-/** Resultado da comparação determinística feita no backend, item a item, com justificativa. */
-export function CompatibilityView({ artistId, organizationId }: { artistId: string; organizationId: string }) {
+/**
+ * Resultado da comparação determinística feita no backend, item a item, com justificativa.
+ * Com applicationId: compara o que o artista disse precisar da casa na candidatura (reunião 19/11 — o rider do
+ * perfil representa o que ele já possui). Sem: compara o rider do perfil com a casa.
+ */
+export function CompatibilityView({ artistId, organizationId, applicationId }: { artistId?: string; organizationId?: string; applicationId?: string | null }) {
+  const byApplication = !!applicationId;
   const q = useQuery({
-    queryKey: ['compat', artistId, organizationId],
-    queryFn: () => api.get<CompatibilityResult>(`/artists/${artistId}/compatibility/${organizationId}`),
+    queryKey: ['compat', applicationId ?? artistId, organizationId],
+    queryFn: () =>
+      api.get<CompatibilityResult>(byApplication ? `/applications/${applicationId}/compatibility` : `/artists/${artistId}/compatibility/${organizationId}`),
   });
   if (q.isLoading) return <Loading label="Comparando rider e inventário…" />;
   if (q.error) return <ErrorState error={q.error} retry={q.refetch} />;
@@ -19,7 +25,7 @@ export function CompatibilityView({ artistId, organizationId }: { artistId: stri
   return (
     <section className="box" aria-label="Resultado da comparação">
       <div className="row between">
-        <h2 style={{ fontSize: 18, fontWeight: 800 }}>Rider × {r.organization.name}</h2>
+        <h2 style={{ fontSize: 18, fontWeight: 800 }}>{byApplication ? 'Necessidades do artista' : 'Rider'} × {r.organization.name}</h2>
         <div className="sum">
           {(['COMPATIBLE', 'PARTIALLY_AVAILABLE', 'UNAVAILABLE', 'NEEDS_CHECK'] as const).map((s) => (
             <span key={s} className={`st ${COMPAT_STATUS[s][1]}`}>
@@ -30,7 +36,7 @@ export function CompatibilityView({ artistId, organizationId }: { artistId: stri
       </div>
       {!r.inventoryRegistered && <div className="inline-msg info">Esta casa ainda não cadastrou inventário: os itens aparecem como indisponíveis até confirmação.</div>}
       {r.items.length === 0 ? (
-        <Empty title="Rider vazio">Cadastre itens no rider para comparar.</Empty>
+        <Empty title={byApplication ? 'Nada pedido à casa' : 'Rider vazio'}>{byApplication ? 'O artista não pediu equipamentos à casa nesta candidatura.' : 'Cadastre itens no rider para comparar.'}</Empty>
       ) : (
         <div className="tscroll">
           <table>

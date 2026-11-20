@@ -9,8 +9,9 @@ test('celular: navegação inferior, filtros em diálogo, cadastro e menu do pai
   await expect(page.getByRole('dialog', { name: 'Filtros' })).toBeVisible();
   await page.getByRole('button', { name: 'Ver resultados' }).click();
 
-  await tabbar.getByRole('link', { name: 'Casas' }).click();
-  await expect(page.getByRole('heading', { name: 'Casas de show' })).toBeVisible();
+  await tabbar.getByRole('button', { name: 'Explorar' }).click();
+  await page.getByRole('dialog', { name: 'Explorar' }).getByRole('link', { name: /Casas de show/ }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Casas de show');
   await tabbar.getByRole('link', { name: 'Vagas' }).click();
   await expect(page.getByRole('heading', { name: 'Oportunidades de apresentação' })).toBeVisible();
 

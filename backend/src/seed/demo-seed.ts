@@ -334,14 +334,14 @@ export async function runDemoSeed(prisma: PrismaClient) {
     genres: ['MPB', 'Forró'],
     description: 'Evento FICTÍCIO de demonstração.',
     conditions: 'Som e luz do local. Passagem de som 2 horas antes.',
-    requirements: '',
+    notes: '',
     ...extra,
   });
 
   const sextaAutoral = await event(galpao.id, rafael.id, {
     ...base('Sexta Autoral — vagas para abertura (demo)', 'OPEN', 'PUBLIC', 21, 2, {
       description: 'Oportunidade FICTÍCIA de demonstração. Buscamos atrações de MPB/forró para abrir a noite.',
-      requirements: 'Repertório com ao menos 40% autoral.',
+      notes: 'Repertório com ao menos 40% autoral.',
     }),
     venueId: galpao.id,
   });

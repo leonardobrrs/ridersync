@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
+import { NeedsPicker } from './NeedsPicker';
 import { FormError } from '../../components/Fields';
 import { Poster } from '../../components/Poster';
 import { OpportunityCard } from '../marketplace/MarketplacePage';
@@ -9,15 +10,17 @@ import { useToast } from '../../components/Toast';
 import { api, errorMessage, qs } from '../../lib/api';
 import { APPLICATION_STATUS, dateTime, duration, EVENT_STATUS, money } from '../../lib/format';
 import { useMe, useMeta } from '../../lib/hooks';
-import type { ApplicationStatus, EventPublic } from '../../lib/types';
+import type { ApplicationStatus, EventPublic, Need } from '../../lib/types';
 
 /** Área do artista: "Oportunidades de apresentação" (o mesmo Event que a casa chama de publicação). */
 export function OpportunitiesPage() {
   const [params, setParams] = useSearchParams();
   const { data: meta } = useMeta();
   const { data: me } = useMe();
+  const closed = params.get('status') === 'encerrados';
   const f = { q: params.get('q') ?? '', genre: params.get('genre') ?? '', city: params.get('city') ?? '' };
-  const q = useQuery({ queryKey: ['events', f], queryFn: () => api.get<EventPublic[]>(`/public/events${qs(f)}`) });
+  const query = closed ? { ...f, state: 'closed' } : f;
+  const q = useQuery({ queryKey: ['events', query], queryFn: () => api.get<EventPublic[]>(`/public/events${qs(query)}`) });
   const set = (k: string, v: string) => {
     const n = new URLSearchParams(params);
     if (v) n.set(k, v);
@@ -28,9 +31,21 @@ export function OpportunitiesPage() {
     <div className="wrap page">
       <div className="pagehead">
         <div>
-          <h1 tabIndex={-1}>Oportunidades de apresentação</h1>
-          <p>Vagas abertas por casas de show e contratantes. Candidate-se com seu perfil individual ou com sua banda.</p>
+          <h1 tabIndex={-1}>{closed ? 'Eventos encerrados' : 'Oportunidades de apresentação'}</h1>
+          <p>
+            {closed
+              ? 'Eventos com vagas preenchidas, inscrições encerradas ou já realizados — com as atrações confirmadas.'
+              : 'Vagas abertas por casas de show e contratantes. Candidate-se com seu perfil individual ou com sua banda.'}
+          </p>
         </div>
+      </div>
+      <div className="seg ev-tabs" role="tablist" aria-label="Situação dos eventos">
+        <button type="button" role="tab" aria-selected={!closed} className={closed ? '' : 'on'} onClick={() => set('status', '')}>
+          Inscrições abertas
+        </button>
+        <button type="button" role="tab" aria-selected={closed} className={closed ? 'on' : ''} onClick={() => set('status', 'encerrados')}>
+          Encerrados
+        </button>
       </div>
       <div className="box cmp-f" style={{ marginBottom: 16 }}>
         <label className="field">
@@ -59,7 +74,7 @@ export function OpportunitiesPage() {
       )}
       {q.isLoading && <Loading />}
       {q.error && <ErrorState error={q.error} retry={q.refetch} />}
-      {q.data?.length === 0 && <Empty title="Nenhuma oportunidade aberta">Volte em breve ou ajuste os filtros.</Empty>}
+      {q.data?.length === 0 && <Empty title={closed ? 'Nenhum evento encerrado' : 'Nenhuma oportunidade aberta'}>Volte em breve ou ajuste os filtros.</Empty>}
       {!!q.data?.length && (
         <div className="ads">
           {q.data.map((e) => (
@@ -95,6 +110,8 @@ export function OpportunityPage() {
   ];
   const [artistId, setArtistId] = useState('');
   const [message, setMessage] = useState('');
+  const [needs, setNeeds] = useState<Need[]>([]);
+  const navigate = useNavigate();
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -113,10 +130,12 @@ export function OpportunityPage() {
     if (!selected) return setErr('Escolha com qual identidade artística deseja se candidatar.');
     setBusy(true);
     try {
-      await api.post(`/events/${e.id}/applications`, { artistId: selected, message });
+      await api.post(`/events/${e.id}/applications`, { artistId: selected, message, needs });
       setMessage('');
+      setNeeds([]);
       await refresh();
-      toast('Candidatura enviada! Acompanhe em Candidaturas.');
+      toast('Candidatura enviada! Acompanhe o andamento aqui.');
+      navigate('/painel/candidaturas');
     } catch (x) {
       setErr(errorMessage(x));
     } finally {
@@ -149,6 +168,7 @@ export function OpportunityPage() {
               <div className="row">
                 <Status value={e.status} map={EVENT_STATUS} />
                 {e.visibility === 'PRIVATE' && <span className="st draft">Evento privado</span>}
+                {e.visibility === 'HIDDEN' && <span className="st draft">Evento oculto (só convidados)</span>}
               </div>
               <h1 tabIndex={-1}>{e.title}</h1>
               <p className="muted">
@@ -163,6 +183,18 @@ export function OpportunityPage() {
                 {e.venue && e.venue.id !== e.organizer.id && <> · local: {e.venue.name}</>}
               </p>
               {e.status === 'POSTPONED' && <div className="inline-msg warn">Evento adiado: o organizador vai informar a nova data.</div>}
+              {['FILLED', 'CLOSED', 'COMPLETED', 'CANCELLED'].includes(e.status) && (
+                <div className={`inline-msg ${e.status === 'CANCELLED' ? 'warn' : 'info'}`} role="status">
+                  {e.status === 'COMPLETED'
+                    ? 'Evento realizado.'
+                    : e.status === 'CANCELLED'
+                      ? 'Evento cancelado pelo organizador.'
+                      : e.status === 'FILLED'
+                        ? 'Evento fechado: todas as vagas têm contratação confirmada.'
+                        : 'Evento fechado: as inscrições foram encerradas.'}{' '}
+                  As informações continuam disponíveis abaixo.
+                </div>
+              )}
             </div>
             <dl className="attrs">
               <div>
@@ -215,10 +247,25 @@ export function OpportunityPage() {
                 <p className="prose">{e.conditions}</p>
               </div>
             )}
-            {e.requirements && (
+            {e.notes && (
               <div className="sec">
-                <h2>Requisitos</h2>
-                <p className="prose">{e.requirements}</p>
+                <h2>Observações</h2>
+                <p className="prose">{e.notes}</p>
+              </div>
+            )}
+            {!!e.lineup?.length && (
+              <div className="sec">
+                <h2>Atrações confirmadas</h2>
+                <ul className="lineup">
+                  {e.lineup.map((a) => (
+                    <li key={a.id}>
+                      <Link className="link" to={`/artistas/${a.slug}`}>
+                        {a.name}
+                      </Link>
+                      <small className="muted">{a.kind === 'BAND' ? 'Banda' : (a.mainInstrument ?? 'Artista')}</small>
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
           </section>
@@ -286,6 +333,7 @@ export function OpportunityPage() {
                     })}
                   </select>
                 </label>
+                {selected && <NeedsPicker artistId={selected} value={needs} onChange={setNeeds} />}
                 <label className="field">
                   <span>Mensagem para a casa</span>
                   <textarea className="input" maxLength={1500} value={message} onChange={(x) => setMessage(x.target.value)} style={{ minHeight: 90 }} />

@@ -432,7 +432,7 @@ export async function runShowcaseSeed(prisma: PrismaClient, imageDir: string) {
           paymentType: e.payment ?? (e.fee == null ? 'A combinar' : 'Cachê fixo'),
           feeCents: e.fee,
           conditions: 'Som e luz do local. Passagem de som 2 horas antes. Pagamento combinado diretamente com o contratante.',
-          requirements: e.requirements ?? '',
+          notes: e.requirements ?? '',
           status: e.status,
           publishedAt: e.status === 'DRAFT' ? null : now,
           ...(e.status === 'FILLED' ? { filledAt: now } : {}),

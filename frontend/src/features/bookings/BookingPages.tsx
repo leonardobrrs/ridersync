@@ -8,6 +8,8 @@ import { useToast } from '../../components/Toast';
 import { api, errorMessage } from '../../lib/api';
 import { BOOKING_STATUS, dateTime, duration, money, OFFER_STATUS, SIDE_LABEL } from '../../lib/format';
 import { BookingChat } from './BookingChat';
+import { ReviewDialog } from './ReviewDialog';
+import { Stars } from '../../components/Stars';
 import type { BookingDetail, BookingRow } from '../../lib/types';
 import { CompatibilityView } from '../artist/Compatibility';
 import { OfferForm } from './OfferForm';
@@ -74,6 +76,8 @@ export function BookingPage() {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
   const [perfNotes, setPerfNotes] = useState('');
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewDismissed, setReviewDismissed] = useState(false);
 
   if (q.isLoading) return <Loading />;
   if (q.error) return <ErrorState error={q.error} retry={q.refetch} />;
@@ -148,7 +152,10 @@ export function BookingPage() {
                 <div>
                   <dt>Evento</dt>
                   <dd>
-                    {b.event.title} {b.event.visibility === 'PRIVATE' && <span className="st draft">Privado</span>}
+                    <Link className="link" to={`/oportunidades/${b.event.id}`}>
+                      {b.event.title}
+                    </Link>{' '}
+                    {b.event.visibility !== 'PUBLIC' && <span className="st draft">{b.event.visibility === 'HIDDEN' ? 'Oculto' : 'Privado'}</span>}
                   </dd>
                 </div>
               )}
@@ -160,12 +167,6 @@ export function BookingPage() {
                   </Link>
                 </dd>
               </div>
-              {b.event && (
-                <div>
-                  <dt>Oportunidade</dt>
-                  <dd>{b.event.title}</dd>
-                </div>
-              )}
               {b.confirmedAt && (
                 <div>
                   <dt>Confirmada em</dt>
@@ -294,6 +295,26 @@ export function BookingPage() {
                   Contratação confirmada para {dateTime(b.agreedOffer?.performanceAt)}. Após a data, qualquer uma das partes pode registrar a apresentação como realizada.
                 </p>
               )}
+              {(b.review.mine || b.review.received || b.review.canReview) && (
+                <div className="review-box">
+                  <h3 className="lbl">Avaliação</h3>
+                  {b.review.mine && (
+                    <p>
+                      Sua avaliação: <Stars value={b.review.mine.rating} size={16} /> {b.review.mine.comment && <em>“{b.review.mine.comment}”</em>}
+                    </p>
+                  )}
+                  {b.review.received && (
+                    <p>
+                      Avaliação recebida: <Stars value={b.review.received.rating} size={16} /> {b.review.received.comment && <em>“{b.review.received.comment}”</em>}
+                    </p>
+                  )}
+                  {b.review.canReview && (
+                    <button className="btn cue" type="button" onClick={() => setReviewOpen(true)}>
+                      {b.mySide === 'ARTIST' ? 'Avaliar o contratante' : 'Avaliar o artista'}
+                    </button>
+                  )}
+                </div>
+              )}
             </section>
           )}
 
@@ -344,7 +365,7 @@ export function BookingPage() {
               </div>
             )}
             <Dialog open={compareOpen} onClose={() => setCompareOpen(false)} title="Compatibilidade técnica" wide>
-              {compareOpen && <CompatibilityView artistId={b.artistId} organizationId={b.organizationId} />}
+              {compareOpen && <CompatibilityView applicationId={b.applicationId} artistId={b.artistId} organizationId={b.organizationId} />}
             </Dialog>
           </section>
         </div>
@@ -354,6 +375,22 @@ export function BookingPage() {
         </aside>
       </div>
 
+      <ReviewDialog
+        open={reviewOpen || (!reviewDismissed && !!b.performance && b.review.canReview)}
+        onClose={() => {
+          setReviewOpen(false);
+          setReviewDismissed(true);
+        }}
+        bookingId={b.id}
+        side={b.mySide}
+        targetName={b.mySide === 'ARTIST' ? b.organization.name : b.artist.name}
+        onDone={async () => {
+          setReviewOpen(false);
+          setReviewDismissed(true);
+          await q.refetch();
+          toast('Avaliação enviada. Obrigado!');
+        }}
+      />
       <Dialog open={counter} onClose={() => setCounter(false)} title="Contraproposta">
         {counter && p && (
           <OfferForm

@@ -18,6 +18,7 @@ import { MaintenanceModule } from './modules/maintenance/maintenance.module';
 import { MarketplaceModule } from './modules/marketplace/marketplace.module';
 import { MediaModule } from './modules/media/media.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { ReviewsModule } from './modules/reviews/reviews.module';
 import { OrganizationsModule } from './modules/organizations/organizations.module';
 import { RidersModule } from './modules/riders/riders.module';
 import { PrismaModule, PrismaService } from './prisma/prisma.service';
@@ -43,6 +44,7 @@ class HealthController {
     AccessModule,
     MailModule,
     NotificationsModule,
+    ReviewsModule,
     MediaModule,
     AuthModule,
     AccountModule,

@@ -39,7 +39,7 @@ test('MVP: perfil, banda, convite e transferência, casa, evento, vagas, negocia
 
   // ── Perfil individual público + rider sem exigências do local ──
   await createPublicMusicianProfile(ana.page, artistName);
-  await ana.page.getByRole('tab', { name: 'Rider técnico' }).click();
+  await ana.page.getByRole('tab', { name: 'Rider (equipamentos)' }).click();
   await expect(ana.page.getByRole('checkbox', { name: 'Incluir Ponto de energia 220V' })).toHaveCount(0);
   await expect(ana.page.getByRole('checkbox', { name: 'Incluir Área de palco' })).toHaveCount(0);
   await ana.page.getByRole('checkbox', { name: 'Incluir Microfone dinâmico' }).check();
@@ -160,14 +160,21 @@ test('MVP: perfil, banda, convite e transferência, casa, evento, vagas, negocia
   await expect(card.locator('img')).toHaveAttribute('src', /^\/api\/media\/.+\?v=thumb$/);
   await ana.page.getByRole('link', { name: eventTitle }).click();
   await ana.page.getByLabel('Candidatar-se como').selectOption({ label: `${artistName} (Perfil individual)` });
+  // O que a artista precisa que a casa disponibilize: preenchido a partir do perfil (rider) e ajustável.
+  const needs = ana.page.getByRole('group', { name: 'O que você precisa que a casa disponibilize' });
+  await needs.getByRole('button', { name: 'Preencher a partir do meu perfil' }).click();
+  await expect(needs.getByText('Pedal looper')).toBeVisible();
   await ana.page.getByLabel('Mensagem para a casa').fill('Tenho repertório autoral para a noite.');
   await ana.page.getByRole('button', { name: 'Enviar candidatura' }).click();
   await toast(ana.page, 'Candidatura enviada');
-  await expect(ana.page.getByText('Em análise')).toBeVisible();
+  // Redireciona para as candidaturas
+  await expect(ana.page).toHaveURL(/\/painel\/candidaturas$/);
+  await expect(ana.page.getByText('Em análise').first()).toBeVisible();
 
   // ── Casa compara rider (contexto autorizado), seleciona e a vaga única fecha o evento ──
   await vera.page.goto(eventManageUrl);
-  await vera.page.getByRole('button', { name: 'Comparar rider' }).click();
+  await expect(vera.page.getByText('Precisa que a casa disponibilize')).toBeVisible();
+  await vera.page.getByRole('button', { name: 'Comparar necessidades' }).click();
   const cmp = vera.page.getByRole('dialog', { name: 'Compatibilidade técnica' });
   await expect(cmp.getByRole('row', { name: /Microfone dinâmico.*Compatível/ })).toBeVisible();
   await expect(cmp.getByRole('row', { name: /Caixa direta.*Parcialmente disponível/ })).toBeVisible();
@@ -236,8 +243,13 @@ test('MVP: perfil, banda, convite e transferência, casa, evento, vagas, negocia
 
   const visitor = await browser.newPage();
   forbidNativeDialogs(visitor);
+  // Show confirmado na agenda pública da casa (a home lista só os 8 mais próximos; o banco de teste acumula shows).
+  await visitor.goto(`/?kind=VENUE&q=${encodeURIComponent(venueName)}`);
+  await visitor.getByRole('link', { name: new RegExp(`${venueName} — ver casa de show`) }).click();
+  await expect(visitor.getByRole('link', { name: artistName })).toBeVisible();
+  await expect(visitor.getByRole('link', { name: eventTitle })).toBeVisible(); // o evento é clicável
   await visitor.goto('/');
-  await expect(visitor.getByRole('region', { name: 'Próximos shows confirmados' }).getByRole('link', { name: artistName })).toBeVisible();
+  await expect(visitor.getByRole('region', { name: 'Próximos shows confirmados' })).toBeVisible();
   await visitor.goto(`/?q=${encodeURIComponent(artistName)}`);
   await visitor.getByRole('link', { name: new RegExp(`${artistName} — ver perfil`) }).click();
   await expect(visitor.getByRole('heading', { name: 'Próximos eventos' })).toBeVisible();

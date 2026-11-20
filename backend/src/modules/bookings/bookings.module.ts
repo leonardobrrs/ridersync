@@ -37,6 +37,12 @@ export class BookingsController {
     return this.bookings.createFromApplication(user.id, applicationId, body);
   }
 
+  /** Contrata direto nas condições publicadas do evento (sem negociação). */
+  @Post('applications/:applicationId/hire')
+  hire(@CurrentUser() user: AuthUser, @Param('applicationId', ParseUUIDPipe) applicationId: string) {
+    return this.bookings.hireFromApplication(user.id, applicationId);
+  }
+
   @Get('bookings')
   list(@CurrentUser() user: AuthUser) {
     return this.bookings.list(user.id);

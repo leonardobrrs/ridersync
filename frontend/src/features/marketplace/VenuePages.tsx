@@ -7,6 +7,7 @@ import { Empty, ErrorState, Loading } from '../../components/States';
 import { api, qs } from '../../lib/api';
 import { dateTime, dayMonth } from '../../lib/format';
 import { formatPhone, phoneDigits } from '../../lib/phone';
+import { ReviewsSummary } from '../../components/Stars';
 import { useMeta } from '../../lib/hooks';
 import type { PublicVenue, VenueCard } from '../../lib/types';
 import { RiderList } from './ArtistPublicPage';
@@ -152,7 +153,8 @@ export function VenuePublicPage() {
                             <Link to={`/artistas/${s.artist.slug}`}>{s.artist.name}</Link>
                           </strong>
                           <small>
-                            {s.title} · {new Date(s.startsAt).toLocaleTimeString('pt-BR', { timeZone: 'America/Maceio', hour: '2-digit', minute: '2-digit' })}
+                            {s.eventId ? <Link to={`/oportunidades/${s.eventId}`}>{s.title}</Link> : s.title} ·{' '}
+                            {new Date(s.startsAt).toLocaleTimeString('pt-BR', { timeZone: 'America/Maceio', hour: '2-digit', minute: '2-digit' })}
                           </small>
                         </span>
                       </span>
@@ -161,6 +163,10 @@ export function VenuePublicPage() {
                 })}
               </ul>
             )}
+          </section>
+          <section className="box sec">
+            <h2>Avaliações de artistas</h2>
+            <ReviewsSummary r={v.reviews} empty="Ainda sem avaliações." />
           </section>
           <section className="box sec">
             <h2>Estrutura técnica</h2>

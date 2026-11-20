@@ -12,6 +12,7 @@ import { PublicAgendaService } from '../events/public-agenda.service';
 import { mediaThumbUrl, mediaUrl } from '../media/media.service';
 import { orgManageSelect } from '../organizations/organizations.service';
 import { RidersService } from '../riders/riders.service';
+import { ReviewsService } from '../reviews/reviews.module';
 
 const emptyToUndef = (v: unknown) => (v === '' ? undefined : v);
 
@@ -60,6 +61,7 @@ export class MarketplaceService {
     private readonly agenda: PublicAgendaService,
     private readonly events: EventsService,
     private readonly lifecycle: EventLifecycleService,
+    private readonly reviews: ReviewsService,
   ) {}
 
   /** Página inicial (modelo de classificados): shows confirmados, oportunidades públicas, artistas e casas. */
@@ -67,7 +69,7 @@ export class MarketplaceService {
     await this.lifecycle.sweepIfStale();
     const [shows, opportunities, artists, venues, totals] = await Promise.all([
       this.agenda.upcomingPublicShows(8),
-      this.events.search({}, null).then((rows) => rows.slice(0, 6)),
+      this.events.search({ state: 'open' }, null).then((rows) => rows.slice(0, 6)),
       this.prisma.artist.findMany({ where: { visibility: 'PUBLIC' }, select: publicArtistCardSelect, orderBy: [{ publishedAt: 'desc' }, { id: 'asc' }], take: 8 }),
       this.prisma.organization.findMany({ where: { type: 'VENUE' }, select: venueCardSelect, orderBy: [{ createdAt: 'desc' }, { id: 'asc' }], take: 6 }),
       Promise.all([
@@ -164,7 +166,7 @@ export class MarketplaceService {
       },
     });
     if (!a) throw notFound('Perfil não encontrado ou não está público.');
-    const [rider, upcoming] = await Promise.all([this.riders.getRider(a.id), this.agenda.artistUpcoming(a.id)]);
+    const [rider, upcoming, reviews] = await Promise.all([this.riders.getRider(a.id), this.agenda.artistUpcoming(a.id), this.reviews.forArtist(a.id)]);
     const { band, musicianProfile, portfolioItems, bio, contactEmail, contactPhone, instagram, website, publishedAt } = a;
     const members = band?.members ?? [];
     return {
@@ -175,6 +177,7 @@ export class MarketplaceService {
       portfolio: portfolioItems.map(toPortfolioItem),
       rider: { notes: rider.notes, items: rider.items },
       upcomingEvents: upcoming,
+      reviews,
       // Banda: só integrantes com perfil individual público aparecem nominalmente.
       members: band
         ? {
@@ -233,6 +236,7 @@ export class MarketplaceService {
       this.agenda.venueUpcoming(org.id),
     ]);
     const { photoId, createdAt: _c, updatedAt: _u, type: _t, ...rest } = org;
-    return { ...rest, photoUrl: mediaUrl(photoId), photoThumbUrl: mediaThumbUrl(photoId), equipment: equipment.items, openEvents: events, upcomingShows };
+    const reviews = await this.reviews.forOrganization(org.id);
+    return { ...rest, photoUrl: mediaUrl(photoId), photoThumbUrl: mediaThumbUrl(photoId), equipment: equipment.items, openEvents: events, upcomingShows, reviews };
   }
 }

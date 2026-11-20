@@ -79,7 +79,13 @@ export function ShowCard({ s }: { s: PublicShow }) {
         <Link className="show-a" to={`/artistas/${s.artist.slug}`} title={s.artist.name}>
           {s.artist.name}
         </Link>
-        <span className="show-t" title={s.title}>{s.title}</span>
+        {s.eventId ? (
+          <Link className="show-t" to={`/oportunidades/${s.eventId}`} title={s.title}>
+            {s.title}
+          </Link>
+        ) : (
+          <span className="show-t" title={s.title}>{s.title}</span>
+        )}
         <span className="show-m">
           <Icon name="pin" size={14} />
           {s.place.venueSlug ? <Link to={`/casas/${s.place.venueSlug}`}>{s.place.name}</Link> : (s.place.name ?? 'Local a confirmar')}

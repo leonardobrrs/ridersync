@@ -46,8 +46,9 @@ export function ExploreSheet({ open, onClose, accountType }: { open: boolean; on
     { to: '/?kind=VENUE', label: 'Casas de show', icon: 'venue', hint: 'Espaços com música ao vivo', match: home('VENUE') },
   ];
   if (accountType !== 'CONTRACTOR') {
-    items.push({ to: '/oportunidades', label: 'Oportunidades', icon: 'ticket', hint: 'Vagas abertas para tocar', match: (p) => p.startsWith('/oportunidades') });
+    items.push({ to: '/oportunidades', label: 'Oportunidades', icon: 'ticket', hint: 'Vagas abertas para tocar', match: (p) => p.startsWith('/oportunidades') && !search.includes('encerrados') });
   }
+  items.push({ to: '/oportunidades?status=encerrados', label: 'Eventos encerrados', icon: 'calendar', hint: 'Shows fechados e realizados, com as atrações', match: (p) => p.startsWith('/oportunidades') && search.includes('encerrados') });
 
   // Portal: fora da barra inferior (que é um contexto de empilhamento e estiliza os próprios links).
   return createPortal(

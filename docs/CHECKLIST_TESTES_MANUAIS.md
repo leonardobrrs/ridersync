@@ -84,3 +84,16 @@ Marque ✔/✘ e anote o problema.
 - [ ] Chat: a barra "Mensagens" mostra número só quando há mensagens NÃO lidas da outra parte; abrir o pop-up (ou ver a conversa no desktop) zera o número e marca o aviso "Nova mensagem" do sino como lido.
 - [ ] Evento antigo que aparecia "Inscrições abertas" com todas as vagas confirmadas passa a "Vagas preenchidas" sozinho (e o contrário: "preenchido" sem contratação confirmada reabre).
 - [ ] Filtros laterais (desktop) e painel "Filtros" (celular) com marcadores: marcar 2 estilos mostra artistas de qualquer um deles; 2 cidades idem; estilo + cidade combinam (os dois). "Outra cidade…" encontra municípios sem acento (ex.: "pao" → Pão de Açúcar); "limpar" zera o grupo; recarregar a página mantém as marcações.
+
+## Reunião com o professor (19/11)
+- [ ] Rider do perfil descrito como "equipamentos que você já possui".
+- [ ] Candidatura: "O que você precisa que a casa disponibilize" — adicionar do catálogo, item livre, quantidade, "Preencher a partir do meu perfil"; após enviar, vai para "Minhas candidaturas".
+- [ ] Casa: candidatura mostra as necessidades e "Comparar necessidades" com o inventário.
+- [ ] Topo sem "Casas de show"; digitar na busca da página inicial filtra sem apertar Enter.
+- [ ] Eventos clicáveis: card de show na home, "Próximos shows" da casa, "Próximos eventos" do artista, agenda e negociação.
+- [ ] Oportunidades → aba "Encerrados"; evento fechado mostra aviso, todas as informações e as atrações confirmadas.
+- [ ] "Novo evento" (pela casa ou por "Meus eventos") é a mesma tela: escolher casa ou outro local; Público/Privado/Oculto; "Observações" no lugar de "Requisitos".
+- [ ] Evento oculto: some das oportunidades e da home; convidados (na criação ou em "Convidar artistas") recebem a proposta e veem o evento.
+- [ ] "Contratar nas condições": confirma na hora com data/duração/cachê do evento; sem cachê definido fica indisponível.
+- [ ] Registrar apresentação como realizada abre a avaliação (0 a 5 estrelas + comentário); o outro lado recebe o pedido; notas aparecem no perfil do artista e na página da casa.
+- [ ] Celular: textos da tela de negociação não quebram palavras no meio.

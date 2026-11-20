@@ -6,7 +6,7 @@ export type BandRole = 'OWNER' | 'ADMIN' | 'MEMBER';
 export type OrgRole = 'OWNER' | 'ADMIN';
 export type MembershipStatus = 'INVITED' | 'ACTIVE' | 'DECLINED' | 'CANCELLED' | 'REMOVED' | 'LEFT';
 export type EventStatus = 'DRAFT' | 'OPEN' | 'FILLED' | 'CLOSED' | 'POSTPONED' | 'COMPLETED' | 'CANCELLED';
-export type EventVisibility = 'PUBLIC' | 'PRIVATE';
+export type EventVisibility = 'PUBLIC' | 'PRIVATE' | 'HIDDEN';
 export type ApplicationStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'WITHDRAWN' | 'CANCELLED';
 export type AccountType = 'ARTIST' | 'CONTRACTOR';
 export type OrgType = 'VENUE' | 'INDIVIDUAL';
@@ -176,6 +176,7 @@ export interface PublicArtist extends ArtistCard {
   portfolio: PortfolioItem[];
   rider: Rider;
   upcomingEvents: UpcomingEvent[];
+  reviews: ReviewSummary;
   members: { total: number; public: { slug: string; name: string; instrument: string | null; photoUrl: string | null }[] } | null;
   bands: { slug: string; name: string }[];
 }
@@ -302,7 +303,8 @@ export interface PublicVenue extends Omit<Organization, 'type'> {
   photoThumbUrl: string | null;
   equipment: RiderItem[];
   openEvents: { id: string; title: string; startsAt: string; applicationDeadline: string; slots: number; genres: string[] }[];
-  upcomingShows: { id: string; title: string; startsAt: string; artist: { name: string; slug: string; photoUrl: string | null } }[];
+  upcomingShows: { id: string; title: string; startsAt: string; eventId?: string | null; artist: { name: string; slug: string; photoUrl: string | null } }[];
+  reviews: ReviewSummary;
 }
 
 export interface EventPublic {
@@ -325,12 +327,15 @@ export interface EventPublic {
   paymentType: string | null;
   feeCents: number | null;
   conditions: string;
-  requirements: string;
+  /** Observações livres do organizador. */
+  notes: string;
   status: EventStatus;
   publishedAt: string | null;
   organizer: OrgPublicRef;
   venue: OrgPublicRef | null;
   acceptingApplications: boolean;
+  /** Atrações confirmadas (só no detalhe). */
+  lineup?: ArtistCard[];
 }
 
 export interface EventManage extends EventPublic {
@@ -343,6 +348,7 @@ export interface EventManage extends EventPublic {
     id: string;
     status: ApplicationStatus;
     message: string;
+    needs: Need[];
     createdAt: string;
     decidedAt: string | null;
     decisionNote: string | null;
@@ -435,6 +441,7 @@ export interface BookingDetail {
   pendingOffer: Offer | null;
   agreedOffer: Offer | null;
   allowed: { respond: boolean; confirm: boolean; cancel: boolean; message: boolean; registerPerformance: boolean };
+  review: { canReview: boolean; reason: string | null; mine: ReviewEntry | null; received: ReviewEntry | null };
 }
 
 export interface CompatibilityResult {
@@ -494,4 +501,26 @@ export interface Dashboard {
   hasMusicianProfile: boolean;
   managesBands: boolean;
   managesVenues: boolean;
+}
+
+/** Item que o artista precisa que a casa disponibilize (informado na candidatura). */
+export interface Need {
+  catalogItemId: string | null;
+  customName: string | null;
+  quantity: number;
+  notes?: string;
+}
+
+export interface ReviewEntry {
+  id: string;
+  authorSide: Side;
+  rating: number;
+  comment: string;
+  createdAt: string;
+}
+
+export interface ReviewSummary {
+  average: number | null;
+  count: number;
+  recent: { id: string; rating: number; comment: string; createdAt: string; authorName: string }[];
 }
