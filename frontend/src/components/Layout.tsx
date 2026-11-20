@@ -114,6 +114,9 @@ function Header() {
   useEffect(() => {
     if (!onHome) return;
     const t = window.setTimeout(() => {
+      // O roteador muda a URL antes de o React limpar este timer: se o usuário já saiu da home (ex.: clicou num
+      // resultado), não navega de volta.
+      if (window.location.pathname !== '/') return;
       const current = new URLSearchParams(window.location.search);
       const term = q.trim();
       if ((current.get('q') ?? '') === term) return;

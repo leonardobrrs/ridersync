@@ -344,7 +344,7 @@ export function OpportunityPage() {
                     })}
                   </select>
                 </label>
-                {selected && <NeedsPicker artistId={selected} value={needs} onChange={setNeeds} />}
+                {selected && <NeedsPicker artistId={selected} venueSlug={e.location.venueSlug} value={needs} onChange={setNeeds} />}
                 <label className="field">
                   <span>Mensagem para a casa</span>
                   <textarea className="input" maxLength={1500} value={message} onChange={(x) => setMessage(x.target.value)} style={{ minHeight: 90 }} />
