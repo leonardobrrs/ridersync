@@ -125,3 +125,18 @@ Cada push em `feat/evolucao-ridersync` gera deployments de Preview nos dois proj
 sozinhos: depois que ficarem *Ready*, rode `vercel alias set <url-api> ridersync-api-staging.vercel.app` e
 `vercel alias set <url-front> ridersync-front-staging.vercel.app` (escopo `projetao2`). Se mudar variáveis da API, faça
 `vercel redeploy <url-api>` antes de mover o alias (as variáveis são fixadas no deploy).
+
+## Production publicada (2026-11-20)
+
+`main` recebeu a branch `feat/evolucao-ridersync` (merge `9d0f6b7`, com o README do Herberty). Decisão do responsável:
+**Production usa o mesmo banco do staging** (`ridersync-staging` no Neon; o branch `production` do Neon segue sem uso).
+
+| Item | Production |
+|---|---|
+| Site público | `ridersync-front.vercel.app` (deploy de produção do `ridersync-front`, a partir da `main`) |
+| API | `ridersync-mu.vercel.app` (deploy de produção do projeto `ridersync`) |
+| Regra de rota 2 do front | renomeada `API RiderSync (site publico, producao)`: `missing host = ridersync-front-staging.vercel.app` → `https://ridersync-mu.vercel.app/api/:path` (a API legada deixou de ser usada) |
+| Variáveis da API | as do Preview passaram a valer também em Production (banco, Blob, e-mail Brevo, Google, `APP_SECRET`, `CRON_SECRET`, `COOKIE_SECURE`, `STORAGE_DRIVER`); próprias de Production: `PUBLIC_APP_URL` e `CORS_ORIGINS` = `https://ridersync-front.vercel.app`, `GOOGLE_REDIRECT_URI` = `https://ridersync-front.vercel.app/api/auth/google/callback` |
+
+`APP_SECRET` é o mesmo do Preview porque assina os links de descadastro gravados em e-mails e o banco é compartilhado.
+Pendente: autorizar o callback de Production no cliente OAuth do Google Cloud Console.
