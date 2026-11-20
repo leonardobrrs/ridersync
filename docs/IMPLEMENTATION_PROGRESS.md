@@ -155,3 +155,11 @@ Migration aplicada só nos bancos locais.
 | Contador do chat só com não lidas | Feito (migration `20261118210000_leitura_de_mensagens`) |
 
 Verificação: backend 237 testes; frontend 28; Playwright 24 (desktop, tablet, celular); lint e typecheck ok.
+
+## Reunião com o professor (19/11) — concluída
+- Rider = equipamentos que o artista possui; necessidades por candidatura (`needs`) e comparação por candidatura.
+- Evento oculto, criação única de evento com convites, "Observações", aba e página de eventos encerrados, eventos clicáveis.
+- Contratar nas condições do evento; avaliações 0–5 estrelas pós-show (dois lados), médias nos perfis públicos.
+- Home sem "Casas de show" no topo, busca ao digitar, redirecionamento após candidatura, sem quebra de palavras no meio.
+- Migration `20261119120000_reuniao_professor` (aditiva), aplicada no staging Neon após branch de restauração `staging-pre-reuniao-professor`.
+- Validação: backend 246, frontend 31, Playwright 28, lint/typecheck/build ok; smoke remoto no Preview.
