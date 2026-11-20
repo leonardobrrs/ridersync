@@ -31,7 +31,7 @@ export class MediaAccessPolicy {
         artistPhoto: { select: { id: true, visibility: true } },
         orgPhoto: { select: { id: true, type: true } },
         portfolioItem: { select: { artist: { select: { id: true, visibility: true } } } },
-        eventImage: { select: { visibility: true, status: true, organizerId: true } },
+        eventImage: { select: { id: true, visibility: true, status: true, organizerId: true } },
       },
     });
     if (!asset) return null;
@@ -49,12 +49,16 @@ export class MediaAccessPolicy {
     return null;
   }
 
-  /** Mesma visibilidade do evento: público → todos; privado → contas de artista; rascunho → só o organizador. */
-  private async canSeeEventImage(e: { visibility: string; status: string; organizerId: string }, userId: string | null) {
+  /** Mesma visibilidade do evento: público → todos; privado → contas de artista; oculto → convidados; rascunho → só o organizador. */
+  private async canSeeEventImage(e: { id: string; visibility: string; status: string; organizerId: string }, userId: string | null) {
     if (e.status !== 'DRAFT' && e.visibility === 'PUBLIC') return true;
     if (!userId) return false;
     if (await this.access.orgRole(userId, e.organizerId)) return true;
     if (e.status === 'DRAFT') return false;
+    if (e.visibility === 'HIDDEN') {
+      const artistIds = await this.access.managedArtistIds(userId);
+      return (await this.prisma.booking.count({ where: { eventId: e.id, artistId: { in: artistIds } } })) > 0;
+    }
     const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { accountType: true } });
     return user?.accountType === 'ARTIST';
   }

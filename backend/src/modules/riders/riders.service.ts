@@ -233,6 +233,59 @@ export class RidersService {
       ...result,
     };
   }
+
+  /**
+   * Comparação técnica de uma candidatura: o que o artista disse precisar da casa (necessidades informadas na
+   * candidatura) × inventário da casa de show do evento. O rider do perfil representa o que o artista já possui.
+   * Acesso: artista que se candidatou ou responsáveis do organizador.
+   */
+  async compareApplication(userId: string, applicationId: string) {
+    const app = await this.prisma.eventApplication.findUnique({
+      where: { id: applicationId },
+      select: { artistId: true, needs: true, event: { select: { organizerId: true, venueId: true, organizer: { select: { type: true } } } } },
+    });
+    if (!app) throw notFound('Candidatura não encontrada.');
+    const [artistAccess, role] = await Promise.all([this.access.artistAccess(userId, app.artistId), this.access.orgRole(userId, app.event.organizerId)]);
+    if (!artistAccess?.canView && !role) throw notFound('Candidatura não encontrada.');
+    const venueId = app.event.venueId ?? (app.event.organizer.type === 'VENUE' ? app.event.organizerId : null);
+    if (!venueId) throw unprocessable('NO_VENUE_INVENTORY', 'Evento sem casa de show: não há inventário para comparar. Combine os equipamentos na negociação.');
+    const org = await this.prisma.organization.findUniqueOrThrow({ where: { id: venueId }, select: { id: true, name: true, slug: true } });
+    const needs = (Array.isArray(app.needs) ? app.needs : []) as { catalogItemId: string | null; customName: string | null; quantity: number; notes?: string }[];
+    const catalog = await this.prisma.equipmentCatalogItem.findMany({
+      where: { id: { in: needs.map((n) => n.catalogItemId).filter((x): x is string => !!x) } },
+      select: { id: true, name: true, unit: true, category: true },
+    });
+    const byId = new Map(catalog.map((c) => [c.id, c]));
+    const inventory = await this.prisma.venueEquipmentItem.findMany({
+      where: { organizationId: venueId },
+      select: { catalogItemId: true, customName: true, customUnit: true, quantity: true, notes: true },
+    });
+    const result = compareRider(
+      needs.map((n, idx) => {
+        const c = n.catalogItemId ? byId.get(n.catalogItemId) : undefined;
+        return {
+          riderItemId: `need-${idx}`,
+          catalogItemId: c ? c.id : null,
+          name: c?.name ?? n.customName ?? 'Item',
+          category: c?.category ?? null,
+          unit: c?.unit ?? 'un',
+          quantity: n.quantity,
+          notes: n.notes ?? '',
+        };
+      }),
+      inventory.filter((i) => i.catalogItemId).map((i) => ({ catalogItemId: i.catalogItemId!, quantity: i.quantity, notes: i.notes })),
+    );
+    return {
+      organization: org,
+      riderNotes: '',
+      source: 'APPLICATION' as const,
+      inventoryRegistered: inventory.length > 0,
+      venueCustomItems: inventory
+        .filter((i) => !i.catalogItemId)
+        .map((i) => ({ name: i.customName, unit: i.customUnit ?? 'un', quantity: i.quantity, notes: i.notes })),
+      ...result,
+    };
+  }
 }
 
 const CATEGORY_ORDER = ['Áudio', 'Instrumentos e amplificação', 'Palco e energia'];

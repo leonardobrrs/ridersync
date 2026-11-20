@@ -1,3 +1,4 @@
+import { ReviewsModule } from '../reviews/reviews.module';
 import { Controller, Get, Module, Param } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
@@ -57,5 +58,5 @@ export class MarketplaceController {
   }
 }
 
-@Module({ imports: [EventsModule, RidersModule], controllers: [MarketplaceController], providers: [MarketplaceService] })
+@Module({ imports: [EventsModule, RidersModule, ReviewsModule], controllers: [MarketplaceController], providers: [MarketplaceService] })
 export class MarketplaceModule {}

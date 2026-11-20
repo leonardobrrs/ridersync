@@ -13,6 +13,7 @@ import { NotificationInput } from '../notifications/notification.types';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AgendaService } from './agenda.service';
 import { assertBookingTransition, assertCanConfirm, assertCanRespondToOffer, MESSAGE_ALLOWED, resolveSide, unreadCount } from './booking.rules';
+import { reviewEligibility } from '../reviews/review.rules';
 
 const futureDate = z.iso
   .datetime({ offset: true, error: 'Data/hora inválida.' })
@@ -220,6 +221,82 @@ export class BookingsService {
     return this.detail(userId, id);
   }
 
+  /**
+   * Contratação direta nas condições publicadas do evento (data, duração, cachê e condições), que o artista aceitou
+   * ao se candidatar: cria a negociação já com os termos aceitos e confirmada, numa única transação auditável
+   * (NEGOTIATING → AGREED → CONFIRMED). Mantém todas as travas da confirmação normal: vagas, agenda e estado do evento.
+   * Para negociar outros termos, use "Selecionar e negociar" (fluxo normal).
+   */
+  async hireFromApplication(userId: string, applicationId: string) {
+    const app = await this.prisma.eventApplication.findUnique({
+      where: { id: applicationId },
+      select: { id: true, status: true, artistId: true, artist: { select: { name: true } }, event: { select: { id: true, title: true, organizerId: true } }, booking: { select: { id: true } } },
+    });
+    if (!app) throw notFound('Candidatura não encontrada.');
+    await this.access.assertOrgMember(userId, app.event.organizerId);
+    if (!['PENDING', 'ACCEPTED'].includes(app.status)) throw conflict('APPLICATION_NOT_ACCEPTED', 'Esta candidatura não está mais em análise.');
+    if (app.booking) throw conflict('BOOKING_EXISTS', 'Já existe uma negociação para esta candidatura.');
+    const sides = await this.sidesFor(userId, { organizationId: app.event.organizerId, artistId: app.artistId });
+    if (sides.has('ARTIST')) throw conflict('BOTH_SIDES', 'Você administra este perfil artístico; outra pessoa deve conduzir a contratação.');
+    const id = await this.prisma.$transaction(async (tx) => {
+      const event = await this.lifecycle.lock(tx, app.event.id);
+      if (!ACTIVE_EVENT_STATUSES.includes(event.status)) throw conflict('EVENT_NOT_ACTIVE', 'Este evento não está mais ativo.');
+      await this.lifecycle.assertNotFullyBooked(tx, event);
+      if (event.feeCents == null) {
+        throw unprocessable('EVENT_TERMS_INCOMPLETE', 'O evento não tem cachê definido. Use "Selecionar e negociar" para combinar os termos.');
+      }
+      const fresh = await tx.eventApplication.findUniqueOrThrow({ where: { id: app.id }, select: { status: true } });
+      if (fresh.status === 'PENDING') {
+        assertApplicationTransition('PENDING', 'ACCEPTED');
+        await tx.eventApplication.update({ where: { id: app.id }, data: { status: 'ACCEPTED', decidedAt: new Date(), decidedById: userId } });
+      } else if (fresh.status !== 'ACCEPTED') {
+        throw conflict('APPLICATION_NOT_ACCEPTED', 'Esta candidatura não está mais em análise.');
+      }
+      const now = new Date();
+      const booking = await tx.booking.create({
+        data: {
+          origin: 'APPLICATION',
+          organizationId: app.event.organizerId,
+          artistId: app.artistId,
+          eventId: event.id,
+          applicationId: app.id,
+          title: `${event.title} — ${app.artist.name}`,
+          createdById: userId,
+          status: 'AGREED',
+        },
+      });
+      await tx.bookingOffer.create({
+        data: {
+          bookingId: booking.id,
+          authorId: userId,
+          authorSide: 'VENUE',
+          performanceAt: event.startsAt,
+          durationMinutes: event.durationMinutes ?? 60,
+          feeCents: event.feeCents,
+          terms: event.conditions,
+          status: 'ACCEPTED',
+          respondedAt: now,
+          respondedById: userId,
+        },
+      });
+      await this.logStatus(tx, booking.id, null, 'NEGOTIATING', userId, 'VENUE', 'Contratação direta a partir da candidatura');
+      await this.logStatus(tx, booking.id, 'NEGOTIATING', 'AGREED', userId, 'VENUE', 'Condições publicadas do evento, aceitas pelo artista na candidatura');
+      await this.agenda.assertNoConflicts(tx, booking);
+      await tx.booking.update({ where: { id: booking.id }, data: { status: 'CONFIRMED', confirmedAt: now, confirmedById: userId } });
+      await this.logStatus(tx, booking.id, 'AGREED', 'CONFIRMED', userId, 'VENUE', 'Contratação confirmada (pagamento é externo à plataforma)');
+      await this.lifecycle.applySlotChange(tx, await tx.event.findUniqueOrThrow({ where: { id: event.id } }), now);
+      await this.notifySide(tx, booking, 'ARTIST', userId, {
+        type: 'BOOKING_CONFIRMED',
+        title: 'Você foi contratado!',
+        body: `O contratante aceitou sua candidatura em "${event.title}" nas condições publicadas. O show já está na sua agenda.`,
+        dedupeKey: `booking-confirmed:${booking.id}`,
+      });
+      return booking.id;
+    });
+    await this.notifications.flush();
+    return this.detail(userId, id);
+  }
+
   // ─────────── Consulta ───────────
 
   async list(userId: string) {
@@ -299,6 +376,7 @@ export class BookingsService {
           select: { id: true, fromStatus: true, toStatus: true, actorSide: true, note: true, createdAt: true, actor: { select: { name: true } } },
         },
         performance: { select: { id: true, performedAt: true, notes: true, createdAt: true, registeredBy: { select: { name: true } } } },
+        reviews: { orderBy: { createdAt: 'asc' }, select: { id: true, authorSide: true, rating: true, comment: true, createdAt: true } },
       },
     });
     if (!b) throw notFound('Negociação não encontrada.');
@@ -315,6 +393,18 @@ export class BookingsService {
       organization: { ...org, slug: org.type === 'VENUE' ? slug : null, photoUrl: mediaThumbUrl(photoId) },
       artist: toArtistCard(b.artist),
       messages: b.messages.map((m) => ({ ...m, author: m.author ? { name: m.author.name, isMe: m.author.id === userId } : null })),
+      /** Avaliação pós-show: cada lado avalia uma vez (contratante → artista; artista → contratante). */
+      review: (() => {
+        const check = reviewEligibility({
+          bookingStatus: b.status,
+          performanceAt: agreed?.performanceAt ?? null,
+          performanceRegistered: !!b.performance,
+          side: sides.size === 1 ? side : null,
+          existingSides: b.reviews.map((r) => r.authorSide),
+          now: new Date(now),
+        });
+        return { canReview: check.canReview, reason: check.reason, mine: b.reviews.find((r) => r.authorSide === side) ?? null, received: b.reviews.find((r) => side && r.authorSide !== side) ?? null };
+      })(),
       /** Mensagens da outra parte recebidas depois da última leitura desta pessoa. */
       unreadMessages: unreadCount(b.messages, userId, read?.lastReadAt ?? null),
       mySide: side,
@@ -496,6 +586,15 @@ export class BookingsService {
       await tx.performance.create({
         data: { bookingId: booking.id, artistId: booking.artistId, organizationId: booking.organizationId, performedAt: agreed.performanceAt, notes, registeredById: userId },
       });
+      // Show concluído: pede avaliação aos dois lados (quem registrou vê o formulário na hora).
+      for (const target of ['VENUE', 'ARTIST'] as const) {
+        await this.notifySide(tx, booking, target, userId, {
+          type: 'REVIEW_REQUEST',
+          title: target === 'VENUE' ? 'Avalie o artista' : 'Avalie o contratante',
+          body: `A apresentação "${booking.title}" foi registrada como realizada. Deixe sua nota (0 a 5 estrelas) e um comentário.`,
+          dedupeKey: `review-request:${booking.id}:${target}`,
+        });
+      }
     });
   }
 }

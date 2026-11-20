@@ -10,6 +10,7 @@ Fonte de verdade: `backend/prisma/schema.prisma`. CHECKs que o Prisma não expre
 | `20261118120000_evolucao_contas_eventos_notificacoes` | Tipo de conta, verificação de e-mail, Google, avatar, consentimento, bloqueio de login, anonimização; tokens; notificações, preferências e outbox; eventos públicos/privados, local livre, estados `FILLED`/`POSTPONED`; candidatura `CANCELLED`; organização `INDIVIDUAL`; catálogo `artistRequirement`; miniatura de portfólio; variantes de mídia. Recuperação em `ROLLBACK.md` na pasta da migration. |
 | `20261118200000_imagem_do_evento` | `Event.imageId` (opcional, único, FK para `MediaAsset` com `SET NULL`): imagem exibida no card do evento. Aditiva. |
 | `20261118210000_leitura_de_mensagens` | Tabela `BookingRead` (negociação × pessoa → última leitura) para o contador de mensagens não lidas. Aditiva. |
+| `20261119120000_reuniao_professor` | `EventVisibility.HIDDEN` (evento oculto), `EventApplication.needs` (JSON: o que o artista precisa da casa, CHECK de array), tabela `Review` (0–5 estrelas, uma por lado, CHECK de faixa). `Event.notes` usa a coluna existente `requirements` (`@map`). Aditiva. |
 
 ## Entidades
 

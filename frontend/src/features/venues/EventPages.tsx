@@ -1,8 +1,8 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
-import { Link, useNavigate, useParams } from 'react-router';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { z } from 'zod';
 import { CityField } from '../../components/CityField';
 import { ConfirmButton, Dialog, TextPromptDialog } from '../../components/Dialog';
@@ -14,17 +14,19 @@ import { Empty, ErrorState, Loading, Status } from '../../components/States';
 import { useToast } from '../../components/Toast';
 import { api, errorMessage } from '../../lib/api';
 import { APPLICATION_STATUS, BOOKING_STATUS, centsFromReais, date, dateTime, duration, EVENT_STATUS, fromLocalInput, money, reaisFromCents, toLocalInput } from '../../lib/format';
-import { useMe, useMeta } from '../../lib/hooks';
+import { useCatalog, useMe, useMeta } from '../../lib/hooks';
 import type { BookingDetail, EventManage, EventVisibility, OrgEventRow } from '../../lib/types';
 import { CompatibilityView } from '../artist/Compatibility';
 import { OfferForm, type OfferPayload } from '../bookings/OfferForm';
+import { needLabel } from '../opportunities/NeedsPicker';
+import { InviteArtists, sendInvites, type InvitedArtist } from './InviteArtists';
 
 const EventFormSchema = (independent: boolean) =>
   z
     .object({
       title: z.string().trim().min(3, 'Título com ao menos 3 caracteres.').max(120),
       description: z.string().trim().max(4000),
-      visibility: z.enum(['PUBLIC', 'PRIVATE']),
+      visibility: z.enum(['PUBLIC', 'PRIVATE', 'HIDDEN']),
       locationName: z.string().trim().max(120),
       locationAddress: z.string().trim().max(160),
       locationCity: independent ? z.string().trim().min(2, 'Informe a cidade do evento.') : z.string().trim(),
@@ -36,7 +38,7 @@ const EventFormSchema = (independent: boolean) =>
       paymentType: z.string(),
       fee: z.string().trim().refine((v) => v === '' || /^\d+([.,]\d{1,2})?$/.test(v), 'Valor inválido.'),
       conditions: z.string().trim().max(2000),
-      requirements: z.string().trim().max(2000),
+      notes: z.string().trim().max(2000),
     })
     .refine((v) => !v.startsAt || !v.applicationDeadline || v.applicationDeadline <= v.startsAt, {
       path: ['applicationDeadline'],
@@ -59,7 +61,7 @@ const toValues = (e?: Partial<EventManage>): EventValues => ({
   paymentType: e?.paymentType ?? '',
   fee: reaisFromCents(e?.feeCents),
   conditions: e?.conditions ?? '',
-  requirements: e?.requirements ?? '',
+  notes: e?.notes ?? '',
 });
 const toPayload = (v: EventValues, independent: boolean) => ({
   title: v.title,
@@ -74,7 +76,7 @@ const toPayload = (v: EventValues, independent: boolean) => ({
   paymentType: v.paymentType || null,
   feeCents: centsFromReais(v.fee),
   conditions: v.conditions,
-  requirements: v.requirements,
+  notes: v.notes,
 });
 
 /** Alteração da imagem pedida no formulário: novo arquivo, remoção da atual ou nada. */
@@ -95,30 +97,40 @@ async function applyImageChange(eventId: string, change: ImageChange, toast: (m:
 const VISIBILITY_HELP: Record<EventVisibility, string> = {
   PUBLIC: 'Aparece para todos: página inicial, oportunidades e agenda pública dos artistas.',
   PRIVATE: 'Aparece só para contas de artista (para se candidatarem). Não vai para a página inicial e, na agenda do artista, aparece apenas como “Evento privado”.',
+  HIDDEN: 'Só você e os artistas que você convidar veem o evento. Não aparece em nenhuma listagem e não recebe candidaturas: os convidados respondem pela negociação.',
 };
+const VISIBILITY_LABEL: Record<EventVisibility, string> = { PUBLIC: 'Público', PRIVATE: 'Privado', HIDDEN: 'Oculto' };
 
 function EventForm({
   initial,
   independent,
   submitLabel,
+  withInvites = false,
   onSubmit,
 }: {
   initial?: Partial<EventManage>;
   independent: boolean;
   submitLabel: string;
-  onSubmit: (p: ReturnType<typeof toPayload>, image: ImageChange) => Promise<unknown>;
+  /** Criação: permite escolher artistas e enviar os convites junto. */
+  withInvites?: boolean;
+  onSubmit: (p: ReturnType<typeof toPayload>, image: ImageChange, invites: InvitedArtist[]) => Promise<unknown>;
 }) {
   const { data: meta } = useMeta();
   const [formError, setFormError] = useState<string | null>(null);
   const [image, setImage] = useState<File | null>(null);
   const [removeImage, setRemoveImage] = useState(false);
+  const [invites, setInvites] = useState<InvitedArtist[]>([]);
   const form = useForm<EventValues>({ resolver: zodResolver(EventFormSchema(independent)), defaultValues: toValues(initial) });
   const e = form.formState.errors;
   const visibility = useWatch({ control: form.control, name: 'visibility' });
   const submit = form.handleSubmit(async (v) => {
     setFormError(null);
+    if (invites.length && !v.fee) {
+      form.setError('fee', { message: 'Informe o cachê: ele vai na proposta enviada aos convidados.' });
+      return;
+    }
     try {
-      await onSubmit(toPayload(v, independent), image ? { file: image } : removeImage ? 'remove' : null);
+      await onSubmit(toPayload(v, independent), image ? { file: image } : removeImage ? 'remove' : null, invites);
     } catch (err) {
       setFormError(applyServerErrors(err, form.setError));
     }
@@ -143,14 +155,12 @@ function EventForm({
       <fieldset className="stack-sm">
         <legend>Visibilidade do evento</legend>
         <div className="seg" role="radiogroup">
-          <label className={visibility === 'PUBLIC' ? 'on' : ''}>
-            <input type="radio" value="PUBLIC" {...form.register('visibility')} />
-            Público
-          </label>
-          <label className={visibility === 'PRIVATE' ? 'on' : ''}>
-            <input type="radio" value="PRIVATE" {...form.register('visibility')} />
-            Privado
-          </label>
+          {(['PUBLIC', 'PRIVATE', 'HIDDEN'] as const).map((v) => (
+            <label key={v} className={visibility === v ? 'on' : ''}>
+              <input type="radio" value={v} {...form.register('visibility')} />
+              {VISIBILITY_LABEL[v]}
+            </label>
+          ))}
         </div>
         <small className="hint">{VISIBILITY_HELP[visibility]}</small>
       </fieldset>
@@ -162,7 +172,7 @@ function EventForm({
             <TextField label="Endereço (opcional)" {...form.register('locationAddress')} error={e.locationAddress} />
           </div>
           <CityField {...form.register('locationCity')} error={e.locationCity} />
-          <small className="hint">Em eventos privados, o endereço só é exibido para artistas autenticados e para quem negociar com você.</small>
+          <small className="hint">Em eventos privados ou ocultos, o endereço só é exibido para quem pode ver o evento.</small>
         </fieldset>
       )}
       <div className="row3">
@@ -171,43 +181,94 @@ function EventForm({
         <TextField label="Prazo de candidatura" type="datetime-local" {...form.register('applicationDeadline')} error={e.applicationDeadline} />
       </div>
       <div className="row3">
-        <TextField label="Vagas" type="number" min={1} max={50} {...form.register('slots')} error={e.slots} hint="Uma vaga é ocupada quando a contratação é confirmada. Com todas confirmadas, o evento muda sozinho para “Vagas preenchidas”." />
+        <TextField
+          label="Vagas"
+          type="number"
+          min={1}
+          max={50}
+          {...form.register('slots')}
+          error={e.slots}
+          hint="Uma vaga é ocupada quando a contratação é confirmada. Com todas confirmadas, o evento muda sozinho para “Vagas preenchidas”."
+        />
         <SelectField label="Forma de pagamento" {...form.register('paymentType')}>
           <option value="">—</option>
           {meta?.paymentTypes.map((p) => <option key={p}>{p}</option>)}
         </SelectField>
-        <TextField label="Cachê oferecido (R$)" inputMode="decimal" {...form.register('fee')} error={e.fee} />
+        <TextField label="Cachê oferecido (R$)" inputMode="decimal" {...form.register('fee')} error={e.fee} hint="Com cachê definido, você pode contratar direto nas condições do evento." />
       </div>
       <Controller control={form.control} name="genres" render={({ field }) => <ChipPicker legend="Estilos procurados" options={meta?.genres ?? []} value={field.value} onChange={field.onChange} max={6} />} />
       <div className="row2">
         <TextArea label="Condições da apresentação" {...form.register('conditions')} error={e.conditions} style={{ minHeight: 90 }} />
-        <TextArea label="Requisitos" {...form.register('requirements')} error={e.requirements} style={{ minHeight: 90 }} />
+        <TextArea label="Observações" placeholder="Informações extras para os artistas (ex.: chegar 1h antes, estacionamento…)" {...form.register('notes')} error={e.notes} style={{ minHeight: 90 }} />
       </div>
+      {withInvites && (
+        <fieldset className="stack-sm">
+          <legend>Convites (opcional{visibility === 'HIDDEN' ? ' — recomendados em evento oculto' : ''})</legend>
+          <InviteArtists value={invites} onChange={setInvites} />
+          {invites.length > 0 && <small className="hint">Ao salvar, o evento é publicado e cada artista recebe uma proposta com a data, a duração e o cachê do evento.</small>}
+        </fieldset>
+      )}
       <div className="actions">
         <button className="btn cue" type="submit" disabled={form.formState.isSubmitting}>
-          {form.formState.isSubmitting ? 'Salvando…' : submitLabel}
+          {form.formState.isSubmitting ? 'Salvando…' : invites.length ? 'Publicar e enviar convites' : submitLabel}
         </button>
       </div>
     </form>
   );
 }
 
+/**
+ * Criação de evento única (reunião 19/11): pela casa de show ou pelos "Meus eventos", a mesma tela. O contratante
+ * escolhe onde será (uma de suas casas ou outro local) e a visibilidade (público, privado ou oculto).
+ */
 export function NewEventPage() {
   const { orgId } = useParams();
+  const [sp] = useSearchParams();
+  const { data: me } = useMe();
   const navigate = useNavigate();
   const qc = useQueryClient();
   const toast = useToast();
+  const venues = me?.organizations.filter((o) => o.type === 'VENUE') ?? [];
+  const [choice, setChoice] = useState<string | null>(orgId ?? sp.get('casa'));
+  const target = choice ?? venues[0]?.id ?? 'INDIVIDUAL';
+  const independent = target === 'INDIVIDUAL';
+  const back = orgId ? `/painel/casas/${orgId}` : '/painel/eventos';
   return (
     <>
-      <PageHead title="Novo evento" back={`/painel/casas/${orgId}`} subtitle="O evento é criado como rascunho (não visível). Publique quando estiver pronto." />
+      <PageHead title="Novo evento" back={back} subtitle="Criado como rascunho. Publique para receber candidaturas ou envie convites a artistas." />
+      <section className="box form" aria-label="Onde será o evento">
+        <SelectField label="Onde será o evento?" value={target} onChange={(e) => setChoice(e.target.value)}>
+          {venues.map((v) => (
+            <option key={v.id} value={v.id}>
+              {v.name} (minha casa de show)
+            </option>
+          ))}
+          <option value="INDIVIDUAL">Outro local (sem casa de show)</option>
+        </SelectField>
+        <small className="hint">
+          {independent ? 'Você informa o local (ex.: aniversário, casamento, festa de condomínio).' : 'O evento usa o endereço e o inventário técnico da casa.'}
+        </small>
+      </section>
       <EventForm
-        independent={false}
+        key={target}
+        independent={independent}
+        withInvites
         submitLabel="Salvar rascunho"
-        onSubmit={async (p, image) => {
-          const ev = await api.post<EventManage>(`/organizations/${orgId}/events`, p);
+        onSubmit={async (p, image, invites) => {
+          const ev = independent ? await api.post<EventManage>('/me/independent-events', p) : await api.post<EventManage>(`/organizations/${target}/events`, p);
           await applyImageChange(ev.id, image, toast);
-          await qc.invalidateQueries({ queryKey: ['org-events', orgId] });
-          toast('Rascunho criado.');
+          if (invites.length) {
+            const published = await api.post<EventManage>(`/events/${ev.id}/transition`, { action: 'publish' });
+            const { failed } = await sendInvites(published, invites);
+            toast(
+              failed.length ? `Evento publicado. ${invites.length - failed.length} convite(s) enviado(s); falharam: ${failed.map((f) => f.name).join(', ')}.` : `Evento publicado e ${invites.length} convite(s) enviado(s).`,
+              failed.length ? 'error' : undefined,
+            );
+          } else {
+            toast('Rascunho criado.');
+          }
+          await qc.invalidateQueries({ queryKey: ['me'] });
+          await qc.invalidateQueries({ queryKey: ['org-events'] });
           navigate(`/painel/eventos/${ev.id}`);
         }}
       />
@@ -215,32 +276,37 @@ export function NewEventPage() {
   );
 }
 
-/** Eventos de contratante independente (sem casa de show), ex.: aniversário, casamento, arraiá de condomínio. */
+/** Mesmo formulário: a rota de "evento particular" usa a tela única de criação. */
+export const NewIndependentEventPage = NewEventPage;
+
+/** Meus eventos: todos os eventos das casas e dos eventos particulares do contratante, em uma lista. */
 export function IndependentEventsPage() {
   const { data: me } = useMe();
-  const org = me?.organizations.find((o) => o.type === 'INDIVIDUAL');
-  const q = useQuery({
-    queryKey: ['org-events', org?.id],
-    queryFn: () => api.get<OrgEventRow[]>(`/organizations/${org!.id}/events`),
-    enabled: !!org,
+  const orgs = me?.organizations ?? [];
+  const results = useQueries({
+    queries: orgs.map((o) => ({ queryKey: ['org-events', o.id], queryFn: () => api.get<OrgEventRow[]>(`/organizations/${o.id}/events`) })),
   });
+  const loading = results.some((r) => r.isLoading);
+  const error = results.find((r) => r.error)?.error;
+  const rows = results
+    .flatMap((r, i) => (r.data ?? []).map((e) => ({ ...e, orgName: orgs[i].type === 'VENUE' ? orgs[i].name : 'Outro local' })))
+    .sort((a, b) => b.startsAt.localeCompare(a.startsAt));
   return (
     <>
       <PageHead
-        title="Eventos particulares"
-        subtitle="Contrate música para eventos sem casa de show (aniversários, casamentos, festas). Você define o local e se o evento é público ou privado."
+        title="Meus eventos"
+        subtitle="Eventos das suas casas de show e em outros locais. Abertos, fechados e realizados ficam todos aqui."
         actions={
           <Link className="btn cue" to="/painel/eventos/novo">
             Novo evento
           </Link>
         }
       />
-      {!org && <Empty title="Nenhum evento particular ainda">Crie seu primeiro evento para receber candidaturas ou convidar artistas.</Empty>}
-      {q.isLoading && <Loading />}
-      {q.error && <ErrorState error={q.error} retry={q.refetch} />}
-      {q.data?.length === 0 && <Empty title="Nenhum evento particular ainda" />}
+      {loading && <Loading />}
+      {error && <ErrorState error={error} />}
+      {!loading && rows.length === 0 && <Empty title="Nenhum evento ainda">Crie seu primeiro evento para receber candidaturas ou convidar artistas.</Empty>}
       <div className="stack-sm">
-        {q.data?.map((e) => (
+        {rows.map((e) => (
           <article className="prow" key={e.id}>
             <Poster name={e.title} photoUrl={e.imageThumbUrl} top={[date(e.startsAt), '']} bottom={[e.statusLabel, '']} />
             <div>
@@ -251,7 +317,8 @@ export function IndependentEventsPage() {
               </h3>
               <div className="meta">
                 <Status value={e.status} map={EVENT_STATUS} />
-                {e.visibility === 'PRIVATE' && <span className="st draft">Privado</span>}
+                {e.visibility !== 'PUBLIC' && <span className="st draft">{VISIBILITY_LABEL[e.visibility]}</span>}
+                <span>{e.orgName}</span>
                 <span>{dateTime(e.startsAt)}</span>
                 <span>
                   {e.filledSlots}/{e.slots} vaga(s)
@@ -266,29 +333,6 @@ export function IndependentEventsPage() {
           </article>
         ))}
       </div>
-    </>
-  );
-}
-
-export function NewIndependentEventPage() {
-  const navigate = useNavigate();
-  const qc = useQueryClient();
-  const toast = useToast();
-  return (
-    <>
-      <PageHead title="Novo evento particular" back="/painel/eventos" subtitle="Criado como rascunho. Publique para receber candidaturas ou envie convites diretos a artistas." />
-      <EventForm
-        independent
-        submitLabel="Salvar rascunho"
-        onSubmit={async (p, image) => {
-          const ev = await api.post<EventManage>('/me/independent-events', p);
-          await applyImageChange(ev.id, image, toast);
-          await qc.invalidateQueries({ queryKey: ['me'] });
-          await qc.invalidateQueries({ queryKey: ['org-events'] });
-          toast('Rascunho criado.');
-          navigate(`/painel/eventos/${ev.id}`);
-        }}
-      />
     </>
   );
 }
@@ -375,12 +419,33 @@ export function EventManagePage() {
   const [compare, setCompare] = useState<string | null>(null);
   const [prompt, setPrompt] = useState<'cancel' | 'postpone' | null>(null);
   const [reschedule, setReschedule] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [invites, setInvites] = useState<InvitedArtist[]>([]);
+  const [inviting, setInviting] = useState(false);
+  const { data: catalog } = useCatalog();
 
   if (q.isLoading) return <Loading />;
   if (q.error) return <ErrorState error={q.error} retry={q.refetch} />;
   const ev = q.data!;
   const independent = ev.organizer.type === 'INDIVIDUAL';
   const back = independent ? '/painel/eventos' : `/painel/casas/${ev.organizerId}`;
+  const canInvite = ['DRAFT', 'OPEN', 'CLOSED', 'POSTPONED'].includes(ev.status);
+  const invite = async () => {
+    if (!invites.length) return;
+    setInviting(true);
+    try {
+      const current = ev.status === 'DRAFT' ? await api.post<EventManage>(`/events/${ev.id}/transition`, { action: 'publish' }) : ev;
+      const { failed } = await sendInvites(current, invites);
+      qc.setQueryData(key, await api.get<EventManage>(`/events/${ev.id}/manage`));
+      setInvites([]);
+      setInviteOpen(false);
+      toast(failed.length ? `Falharam: ${failed.map((x) => `${x.name} (${x.reason})`).join('; ')}` : 'Convite(s) enviado(s).', failed.length ? 'error' : undefined);
+    } catch (e) {
+      toast(errorMessage(e), 'error');
+    } finally {
+      setInviting(false);
+    }
+  };
 
   const run = async (fn: () => Promise<unknown>, ok: string) => {
     try {
@@ -401,7 +466,7 @@ export function EventManagePage() {
         back={back}
         subtitle={
           <>
-            <Status value={ev.status} map={EVENT_STATUS} /> {ev.visibility === 'PRIVATE' && <span className="st draft">Privado</span>} · {dateTime(ev.startsAt)} · prazo{' '}
+            <Status value={ev.status} map={EVENT_STATUS} /> {ev.visibility !== 'PUBLIC' && <span className="st draft">{VISIBILITY_LABEL[ev.visibility]}</span>} · {dateTime(ev.startsAt)} · prazo{' '}
             {dateTime(ev.applicationDeadline)}
           </>
         }
@@ -425,6 +490,11 @@ export function EventManagePage() {
             {['OPEN', 'FILLED', 'CLOSED', 'POSTPONED'].includes(ev.status) && (
               <button type="button" className="btn" onClick={() => setReschedule(true)}>
                 {ev.status === 'POSTPONED' ? 'Definir nova data' : 'Remarcar'}
+              </button>
+            )}
+            {canInvite && (
+              <button type="button" className="btn" onClick={() => setInviteOpen(true)}>
+                Convidar artistas
               </button>
             )}
             {['DRAFT', 'OPEN', 'FILLED', 'CLOSED'].includes(ev.status) && (
@@ -491,6 +561,11 @@ export function EventManagePage() {
             </div>
           </dl>
           {ev.description && <p className="prose">{ev.description}</p>}
+          {ev.notes && (
+            <p className="prose">
+              <strong>Observações:</strong> {ev.notes}
+            </p>
+          )}
         </section>
       )}
 
@@ -538,17 +613,50 @@ export function EventManagePage() {
                     {a.booking && <Status value={a.booking.status} map={BOOKING_STATUS} />}
                   </div>
                   {a.message && <p style={{ marginTop: 6, fontSize: 14 }}>“{a.message}”</p>}
+                  {a.needs.length > 0 ? (
+                    <div className="needs-view">
+                      <small className="lbl">Precisa que a casa disponibilize</small>
+                      <ul className="chips">
+                        {a.needs.map((n, i) => (
+                          <li className="chip" key={i}>
+                            {needLabel(n, catalog)}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : (
+                    <small className="hint">Não pediu equipamentos à casa.</small>
+                  )}
                 </div>
                 <div className="acts">
                   {!independent && (
-                    <button className="btn sm ghost" type="button" onClick={() => setCompare(a.artist.id)}>
-                      Comparar rider
+                    <button className="btn sm ghost" type="button" onClick={() => setCompare(a.id)} disabled={a.needs.length === 0}>
+                      Comparar necessidades
                     </button>
                   )}
                   {a.status === 'PENDING' && (
                     <>
+                      <ConfirmButton
+                        className="btn sm cue"
+                        disabled={ev.filledSlots >= ev.slots || ev.feeCents == null}
+                        title={ev.feeCents == null ? 'Defina o cachê do evento para contratar direto.' : undefined}
+                        confirm={`Contratar ${a.artist.name} nas condições do evento: ${dateTime(ev.startsAt)}, ${duration(ev.durationMinutes ?? 60)}, cachê ${money(ev.feeCents)}${a.needs.length ? `, fornecendo: ${a.needs.map((n) => needLabel(n, catalog)).join('; ')}` : ''}. A contratação é confirmada na hora e ocupa uma vaga.`}
+                        confirmLabel="Contratar agora"
+                        onConfirm={async () => {
+                          try {
+                            const b = await api.post<BookingDetail>(`/applications/${a.id}/hire`);
+                            await qc.invalidateQueries({ queryKey: ['bookings'] });
+                            toast('Contratação confirmada nas condições do evento.');
+                            navigate(`/painel/negociacoes/${b.id}`);
+                          } catch (e) {
+                            toast(errorMessage(e), 'error');
+                          }
+                        }}
+                      >
+                        Contratar nas condições
+                      </ConfirmButton>
                       {/* Selecionar abre a negociação (proposta) direto; não ocupa vaga. */}
-                      <button className="btn sm cue" type="button" disabled={ev.filledSlots >= ev.slots} onClick={() => setNegotiate(a.id)}>
+                      <button className="btn sm" type="button" disabled={ev.filledSlots >= ev.slots} onClick={() => setNegotiate(a.id)}>
                         Selecionar e negociar
                       </button>
                       <ConfirmButton
@@ -598,8 +706,23 @@ export function EventManagePage() {
           />
         )}
       </Dialog>
+      <Dialog open={inviteOpen} onClose={() => setInviteOpen(false)} title="Convidar artistas">
+        <div className="stack">
+          <InviteArtists value={invites} onChange={setInvites} />
+          <p className="hint">
+            Cada artista recebe uma proposta com a data ({dateTime(ev.startsAt)}), a duração ({duration(ev.durationMinutes ?? 60)}) e o cachê ({money(ev.feeCents ?? 0)}) do
+            evento.{ev.status === 'DRAFT' ? ' O evento será publicado ao enviar.' : ''}
+            {ev.feeCents == null ? ' Defina o cachê do evento antes de convidar.' : ''}
+          </p>
+          <div className="actions">
+            <button className="btn cue" type="button" onClick={invite} disabled={inviting || !invites.length || ev.feeCents == null}>
+              {inviting ? 'Enviando…' : `Enviar ${invites.length || ''} convite(s)`}
+            </button>
+          </div>
+        </div>
+      </Dialog>
       <Dialog open={!!compare} onClose={() => setCompare(null)} title="Compatibilidade técnica" wide>
-        {compare && <CompatibilityView artistId={compare} organizationId={ev.organizerId} />}
+        {compare && <CompatibilityView applicationId={compare} />}
       </Dialog>
       <TextPromptDialog
         open={prompt === 'cancel'}

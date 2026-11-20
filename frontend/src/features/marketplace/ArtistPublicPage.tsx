@@ -11,6 +11,7 @@ import { useToast } from '../../components/Toast';
 import { api } from '../../lib/api';
 import { dayMonth, money, PORTFOLIO_KIND } from '../../lib/format';
 import { formatPhone, phoneDigits } from '../../lib/phone';
+import { ReviewsSummary } from '../../components/Stars';
 import { useMe } from '../../lib/hooks';
 import type { BookingDetail, OrgEventRow, PortfolioItem, PublicArtist, Rider, UpcomingEvent } from '../../lib/types';
 import { OfferForm } from '../bookings/OfferForm';
@@ -93,7 +94,7 @@ export function UpcomingEvents({ items }: { items: UpcomingEvent[] }) {
               </span>
             ) : (
               <span>
-                <strong>{e.title ?? e.place.name ?? 'Show confirmado'}</strong>
+                <strong>{e.eventId ? <Link to={`/oportunidades/${e.eventId}`}>{e.title ?? e.place.name ?? 'Show confirmado'}</Link> : (e.title ?? e.place.name ?? 'Show confirmado')}</strong>
                 <small>
                   {e.place.venueSlug ? <Link to={`/casas/${e.place.venueSlug}`}>{e.place.name}</Link> : e.place.name}
                   {e.place.city ? ` · ${e.place.city}` : ''} · {time}
@@ -322,6 +323,10 @@ export function ArtistPublicPage() {
                   <h2 id="ev-h">Próximos eventos</h2>
                   <UpcomingEvents items={a.upcomingEvents} />
                 </section>
+                <section className="box sec" aria-labelledby="rv-h">
+                  <h2 id="rv-h">Avaliações de contratantes</h2>
+                  <ReviewsSummary r={a.reviews} empty="Ainda sem avaliações." />
+                </section>
                 {a.members && (
                   <section className="box sec" aria-labelledby="mb-h">
                     <h2 id="mb-h">Integrantes</h2>
@@ -367,7 +372,7 @@ export function ArtistPublicPage() {
             {tab === 'rider' && (
               <section className="box sec">
                 <h2>Rider técnico</h2>
-                <p className="hint">Equipamentos que o artista precisa. Exigências do local (palco, energia, camarim) são combinadas com o contratante.</p>
+                <p className="hint">Equipamentos que o artista já possui e leva para os shows. O que a casa precisa fornecer é combinado em cada candidatura ou negociação.</p>
                 <RiderList rider={a.rider} />
               </section>
             )}

@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useCallback, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { api } from '../lib/api';
 import { useMe } from '../lib/hooks';
@@ -75,7 +75,7 @@ function UserMenu({ me }: { me: Me }) {
                 </Link>
               )}
               <Link role="menuitem" to="/painel/eventos">
-                <Icon name="calendar" size={16} /> Eventos particulares
+                <Icon name="calendar" size={16} /> Meus eventos
               </Link>
             </>
           )}
@@ -109,6 +109,23 @@ function Header() {
   const location = useLocation();
   const [q, setQ] = useState(location.pathname === '/' ? (params.get('q') ?? '') : '');
 
+  const onHome = location.pathname === '/';
+  // Na página inicial, a busca filtra enquanto se digita (com pequena espera); em outras páginas, Enter leva à busca.
+  useEffect(() => {
+    if (!onHome) return;
+    const t = window.setTimeout(() => {
+      const current = new URLSearchParams(window.location.search);
+      const term = q.trim();
+      if ((current.get('q') ?? '') === term) return;
+      if (term) current.set('q', term);
+      else current.delete('q');
+      current.delete('page');
+      const search = current.toString();
+      navigate(search ? `/?${search}` : '/', { replace: true });
+    }, 300);
+    return () => window.clearTimeout(t);
+  }, [q, onHome, navigate]);
+
   const submit = (e: FormEvent) => {
     e.preventDefault();
     const term = q.trim();
@@ -134,15 +151,17 @@ function Header() {
           <NavLink to="/" end className="hlink hide-m">
             <span className="t">Início</span>
           </NavLink>
-          {/* Oportunidades são vagas para artistas: contratantes não as veem no menu principal. */}
-          {me?.user.accountType !== 'CONTRACTOR' && (
+          {/* Oportunidades são vagas para artistas: contratantes veem os eventos encerrados (histórico do circuito).
+              Casas de show: pelo filtro da própria página inicial (reunião 19/11). */}
+          {me?.user.accountType !== 'CONTRACTOR' ? (
             <NavLink to="/oportunidades" className="hlink hide-m">
               <span className="t">Oportunidades</span>
             </NavLink>
+          ) : (
+            <NavLink to="/oportunidades?status=encerrados" className="hlink hide-m">
+              <span className="t">Eventos encerrados</span>
+            </NavLink>
           )}
-          <NavLink to="/casas" className="hlink hide-m">
-            <span className="t">Casas de show</span>
-          </NavLink>
           {me ? (
             <>
               <NotificationBell />
@@ -224,10 +243,6 @@ function MobileTabbar() {
           <Icon name="ticket" />
           Vagas
         </NavLink>
-        <NavLink to="/casas">
-          <Icon name="venue" />
-          Casas
-        </NavLink>
         <NavLink to="/entrar">
           <Icon name="user" />
           Entrar
@@ -308,7 +323,7 @@ const PANEL_LINKS: PanelLink[] = [
   { to: '/painel/bandas', label: 'Minhas bandas', icon: 'users', only: 'ARTIST' },
   { to: '/painel/candidaturas', label: 'Candidaturas', icon: 'ticket', only: 'ARTIST' },
   { to: '/painel/casas', label: 'Casas de show', icon: 'venue', only: 'CONTRACTOR' },
-  { to: '/painel/eventos', label: 'Eventos particulares', icon: 'calendar', only: 'CONTRACTOR' },
+  { to: '/painel/eventos', label: 'Meus eventos', icon: 'calendar', only: 'CONTRACTOR' },
   { to: '/painel/negociacoes', label: 'Negociações', icon: 'chat' },
   { to: '/painel/agenda', label: 'Agenda', icon: 'calendar' },
   { to: '/painel/comparar', label: 'Comparar rider', icon: 'compare', only: 'ARTIST' },

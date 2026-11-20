@@ -21,7 +21,7 @@ export function RiderTab({ artistId, canManage }: { artistId: string; canManage:
   return (
     <div className="stack">
       <div className="notice">
-        Este rider pertence somente a esta identidade artística. Riders de bandas e de integrantes são independentes.
+        Liste aqui os equipamentos que você <strong>já possui</strong> e leva para os shows. O que a casa precisa fornecer você informa em cada candidatura. Riders de bandas e de integrantes são independentes.
         {canManage && (
           <>
             {' '}
@@ -50,7 +50,7 @@ export function ArtistWorkspace({ artist, queryKey, extraTabs = [] }: { artist: 
     { id: 'perfil', label: 'Perfil' },
     ...extraTabs.map(({ id, label }) => ({ id, label })),
     { id: 'portfolio', label: `Portfólio (${artist.portfolio.length})` },
-    { id: 'rider', label: 'Rider técnico' },
+    { id: 'rider', label: 'Rider (equipamentos)' },
   ];
   const [tab, setTab] = useState('perfil');
   return (

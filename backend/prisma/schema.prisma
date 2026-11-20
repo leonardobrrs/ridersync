@@ -60,6 +60,7 @@ model User {
   offersResponded        BookingOffer[]          @relation("OfferResponder")
   messages               BookingMessage[]
   bookingReads           BookingRead[]
+  reviewsWritten         Review[]
   bookingChanges         BookingStatusChange[]
   performances           Performance[]
 }
@@ -495,6 +496,8 @@ enum EventStatus {
 enum EventVisibility {
   PUBLIC
   PRIVATE
+  /// Só o organizador e os artistas convidados veem.
+  HIDDEN
 }
 
 /// Oportunidade de apresentação. organizerId (responsável) ≠ venueId (local físico, opcional).
@@ -524,7 +527,8 @@ model Event {
   paymentType         String? /// Cachê fixo, Bilheteria, Couvert artístico, A combinar
   feeCents            Int?
   conditions          String          @default("")
-  requirements        String          @default("")
+  /// Observações livres do organizador (coluna histórica "requirements").
+  notes               String          @default("") @map("requirements")
   status              EventStatus     @default(DRAFT)
   publishedAt         DateTime?
   closedAt            DateTime?
@@ -564,6 +568,8 @@ model EventApplication {
   submittedById String?           @db.Uuid
   submittedBy   User?             @relation("ApplicationSubmitter", fields: [submittedById], references: [id], onDelete: SetNull)
   message       String            @default("")
+  /// O que o artista precisa que a casa disponibilize: [{ catalogItemId, customName, quantity, notes }].
+  needs         Json              @default("[]")
   status        ApplicationStatus @default(PENDING)
   decidedAt     DateTime?
   decidedById   String?           @db.Uuid
@@ -624,6 +630,7 @@ model Booking {
 
   offers        BookingOffer[]
   messages      BookingMessage[]
+  reviews       Review[]
   reads         BookingRead[]
   statusChanges BookingStatusChange[]
   performance   Performance?
@@ -726,4 +733,19 @@ model Performance {
 
   @@index([artistId, performedAt])
   @@index([organizationId, performedAt])
+}
+
+/// Avaliação pós-show (0 a 5 estrelas): uma por lado da contratação. VENUE avalia o artista; ARTIST avalia o contratante.
+model Review {
+  id         String      @id @default(uuid()) @db.Uuid
+  bookingId  String      @db.Uuid
+  booking    Booking     @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  authorSide BookingSide
+  authorId   String?     @db.Uuid
+  author     User?       @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  rating     Int
+  comment    String      @default("")
+  createdAt  DateTime    @default(now())
+
+  @@unique([bookingId, authorSide])
 }

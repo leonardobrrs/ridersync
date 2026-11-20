@@ -286,3 +286,28 @@ Decisões do responsável que **substituem** regras anteriores (ordem de autorid
 - **Filtros com vários valores** (18/11): estilo, cidade, instrumento, formação e tipo de espaço viraram marcadores.
   Na URL ficam como `genre=MPB,Forró` (a API também aceita o parâmetro repetido). Dentro do mesmo filtro os valores
   se combinam por OU; entre filtros diferentes, por E. Cidades: sugestões em destaque + busca entre os 102 municípios.
+
+## Reunião com o professor (19/11) — `docs/reuniao_com_o_professor_19_11.md`
+
+- **Rider = o que o artista possui.** As necessidades (o que a casa deve disponibilizar) são informadas em cada
+  candidatura (`EventApplication.needs`), manualmente ou com "Preencher a partir do meu perfil" (copia os itens do rider
+  como ponto de partida). A comparação técnica na análise da candidatura e na negociação usa essas necessidades
+  (`GET /applications/:id/compatibility`); sem casa de show (evento particular) não há inventário para comparar.
+- **Evento oculto** (`HIDDEN`): fora de todas as listagens, da página inicial e da agenda pública (aparece só como
+  "Evento privado" no perfil do artista); detalhe e imagem só para o organizador e artistas com convite/candidatura;
+  não aceita candidaturas (`INVITE_ONLY`). Convites na criação: o evento é publicado e cada artista recebe uma proposta
+  com data, duração e cachê do evento (por isso o cachê é exigido para convidar).
+- **Criação única de evento**: mesma tela pela casa ou por "Meus eventos", escolhendo uma das casas ou "outro local".
+  "Requisitos" virou "Observações" (`Event.notes`, coluna histórica mantida).
+- **Eventos encerrados**: aba "Encerrados" em Oportunidades (`state=closed`: vagas preenchidas, encerrados e realizados)
+  e página do evento fechado com aviso de situação e atrações confirmadas (perfis públicos). Eventos clicáveis na home,
+  nas casas, nos perfis, na agenda e na negociação.
+- **Contratar nas condições do evento** (`POST /applications/:id/hire`): o artista aceitou as condições publicadas ao
+  se candidatar; o contratante confirma na hora (NEGOTIATING → AGREED → CONFIRMED auditado), com as mesmas travas de
+  vagas e agenda. Exige cachê definido; "Selecionar e negociar" continua para outros termos.
+- **Avaliações** (`Review`, 0–5 estrelas + comentário): uma por lado, só após a apresentação (data acordada passada ou
+  registrada). Registrar a apresentação notifica os dois lados e abre o formulário para quem registrou. Médias e
+  comentários recentes no perfil do artista e na página da casa.
+- **Home**: sem botão "Casas de show" no topo (o filtro da página faz isso); a busca filtra enquanto se digita.
+- **Quebra de palavras**: `overflow-wrap:anywhere` (quebrava palavras no meio em colunas estreitas) trocado por
+  `break-word`; selos, botões e datas não quebram.

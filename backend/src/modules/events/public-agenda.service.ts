@@ -98,6 +98,7 @@ export class PublicAgendaService {
         title: r.event?.title ?? r.title,
         startsAt: r.offers[0].performanceAt,
         artist: { name: r.artist.name, slug: r.artist.slug, photoUrl: mediaThumbUrl(r.artist.photoId) },
+        eventId: r.event?.id ?? null,
       }));
   }
 }

@@ -33,8 +33,8 @@ const EventFields = {
   paymentType: z.enum(PAYMENT_TYPES).nullable(),
   feeCents: moneyCents.nullable(),
   conditions: z.string().trim().max(2000),
-  requirements: z.string().trim().max(2000),
-  visibility: z.enum(['PUBLIC', 'PRIVATE']),
+  notes: z.string().trim().max(2000),
+  visibility: z.enum(['PUBLIC', 'PRIVATE', 'HIDDEN']),
   venueId: z.uuid().nullable(),
   locationName: optionalText(120, 'Nome do local'),
   locationAddress: optionalText(160, 'Endereço'),
@@ -88,7 +88,20 @@ export const RescheduleSchema = z
   .refine(deadlineBeforeStart, deadlineMsg)
   .refine((v) => v.startsAt.getTime() > Date.now(), { path: ['startsAt'], message: 'A nova data deve estar no futuro.' });
 
-export const ApplySchema = z.object({ artistId: z.uuid(), message: z.string().trim().max(1500).default('') }).strict();
+/** Item que o artista precisa que a casa disponibilize (catálogo ou item livre). */
+export const NeedSchema = z
+  .object({
+    catalogItemId: z.string().trim().min(1).max(40).nullable().default(null),
+    customName: z.string().trim().max(80).nullable().default(null),
+    quantity: z.number().int().min(1).max(999),
+    notes: z.string().trim().max(200).default(''),
+  })
+  .strict()
+  .refine((n) => !!n.catalogItemId !== !!n.customName, { message: 'Informe um item do catálogo ou um item personalizado.' });
+export type Need = z.infer<typeof NeedSchema>;
+export const ApplySchema = z
+  .object({ artistId: z.uuid(), message: z.string().trim().max(1500).default(''), needs: z.array(NeedSchema).max(60).default([]) })
+  .strict();
 export const DecisionSchema = z.object({ note: z.string().trim().max(500).optional() }).strict();
 
 const emptyToUndef = (v: unknown) => (v === '' ? undefined : v);
@@ -97,6 +110,8 @@ export const EventSearchSchema = z.object({
   genre: multiEnum(GENRES),
   city: multiText(),
   visibility: z.preprocess(emptyToUndef, z.enum(['PUBLIC', 'PRIVATE']).optional()),
+  /** open = inscrições abertas (padrão); closed = encerrados (vagas preenchidas, encerrados e realizados). */
+  state: z.preprocess(emptyToUndef, z.enum(['open', 'closed']).default('open')),
 });
 
 const orgPublicSelect = { id: true, slug: true, name: true, type: true, city: true, state: true, neighborhood: true, venueKind: true, photoId: true } as const;
@@ -113,7 +128,7 @@ const eventPublicSelect = {
   paymentType: true,
   feeCents: true,
   conditions: true,
-  requirements: true,
+  notes: true,
   status: true,
   visibility: true,
   publishedAt: true,
@@ -272,7 +287,7 @@ export class EventsService {
       paymentType: input.paymentType ?? null,
       feeCents: input.feeCents ?? null,
       conditions: input.conditions ?? '',
-      requirements: input.requirements ?? '',
+      notes: input.notes ?? '',
       visibility: input.visibility ?? 'PUBLIC',
       locationName: venueId ? null : (input.locationName ?? null),
       locationAddress: venueId ? null : (input.locationAddress ?? null),
@@ -337,6 +352,7 @@ export class EventsService {
             id: true,
             status: true,
             message: true,
+            needs: true,
             createdAt: true,
             decidedAt: true,
             decisionNote: true,
@@ -497,10 +513,11 @@ export class EventsService {
   // ─────────── Consulta (pública e de artistas) ───────────
 
   /** Visitantes e contratantes veem só eventos públicos; contas de artista também veem os privados. */
+  /** Listagens: públicos para todos; privados só para contas de artista; ocultos nunca (só por convite). */
   private visibilityFilter(viewer: Viewer | null, requested?: 'PUBLIC' | 'PRIVATE'): Prisma.EventWhereInput {
     const canSeePrivate = viewer?.accountType === 'ARTIST';
     if (!canSeePrivate || requested === 'PUBLIC') return { visibility: 'PUBLIC' };
-    return requested === 'PRIVATE' ? { visibility: 'PRIVATE' } : {};
+    return requested === 'PRIVATE' ? { visibility: 'PRIVATE' } : { visibility: { in: ['PUBLIC', 'PRIVATE'] } };
   }
 
   async search(f: z.infer<typeof EventSearchSchema>, userId: string | null) {
@@ -509,8 +526,7 @@ export class EventsService {
     const now = new Date();
     const rows = await this.prisma.event.findMany({
       where: {
-        status: 'OPEN',
-        applicationDeadline: { gte: now },
+        ...(f.state === 'closed' ? { status: { in: ['FILLED', 'CLOSED', 'COMPLETED'] as EventStatus[] } } : { status: 'OPEN' as EventStatus, applicationDeadline: { gte: now } }),
         ...this.visibilityFilter(viewer, f.visibility),
         ...(f.genre?.length ? { genres: { hasSome: f.genre } } : {}),
         // Cidade: qualquer uma das escolhidas (da casa de show ou, sem casa, do local informado).
@@ -536,7 +552,7 @@ export class EventsService {
             }
           : {}),
       },
-      orderBy: { applicationDeadline: 'asc' },
+      orderBy: f.state === 'closed' ? { startsAt: 'desc' } : { applicationDeadline: 'asc' },
       take: 100,
       select: eventPublicSelect,
     });
@@ -552,8 +568,28 @@ export class EventsService {
     const e = await this.prisma.event.findFirst({ where: { id: eventId, status: { not: 'DRAFT' } }, select: { ...eventPublicSelect, organizerId: true } });
     if (!e) throw notFound('Oportunidade não encontrada.');
     if (e.visibility === 'PRIVATE' && !(await this.canSeePrivate(e, userId))) throw notFound('Oportunidade não encontrada.');
+    if (e.visibility === 'HIDDEN' && !(await this.canSeeHidden(e, userId))) throw notFound('Oportunidade não encontrada.');
     const { organizerId: _o, ...rest } = e;
-    return eventOut(rest, await this.lifecycle.filledSlots(this.prisma, eventId));
+    // Atrações confirmadas (perfis públicos) — o evento fechado continua mostrando quem toca.
+    const lineup = await this.prisma.booking.findMany({
+      where: { eventId, status: 'CONFIRMED', artist: { visibility: 'PUBLIC' } },
+      orderBy: { confirmedAt: 'asc' },
+      select: { artist: { select: publicArtistCardSelect } },
+    });
+    return { ...eventOut(rest, await this.lifecycle.filledSlots(this.prisma, eventId)), lineup: lineup.map((b) => toArtistCard(b.artist)) };
+  }
+
+  /** Evento oculto: só responsáveis do organizador e artistas convidados (com negociação ou candidatura no evento). */
+  private async canSeeHidden(e: { id: string; organizerId: string }, userId: string | null) {
+    if (!userId) return false;
+    if (await this.access.orgRole(userId, e.organizerId)) return true;
+    const artistIds = await this.access.managedArtistIds(userId);
+    if (!artistIds.length) return false;
+    const [bookings, apps] = await Promise.all([
+      this.prisma.booking.count({ where: { eventId: e.id, artistId: { in: artistIds } } }),
+      this.prisma.eventApplication.count({ where: { eventId: e.id, artistId: { in: artistIds } } }),
+    ]);
+    return bookings + apps > 0;
   }
 
   private async canSeePrivate(e: { id: string; organizerId: string }, userId: string | null) {
@@ -573,9 +609,17 @@ export class EventsService {
     ]);
     if (!event || event.status === 'DRAFT') throw notFound('Oportunidade não encontrada.');
     if (event.visibility === 'PRIVATE' && !(await this.canSeePrivate(event, userId))) throw notFound('Oportunidade não encontrada.');
+    if (event.visibility === 'HIDDEN') {
+      if (!(await this.canSeeHidden(event, userId))) throw notFound('Oportunidade não encontrada.');
+      throw conflict('INVITE_ONLY', 'Este evento é só por convite: responda ao convite recebido na negociação.');
+    }
     if (!acceptsApplications(event, new Date())) throw conflict('APPLICATIONS_CLOSED', 'As inscrições desta oportunidade estão encerradas.');
     if (artist.visibility !== 'PUBLIC') {
       throw unprocessable('PROFILE_NOT_PUBLIC', 'Publique o perfil artístico antes de se candidatar — o contratante precisa conseguir vê-lo.');
+    }
+    const needIds = [...new Set(input.needs.map((n) => n.catalogItemId).filter((x): x is string => !!x))];
+    if (needIds.length && (await this.prisma.equipmentCatalogItem.count({ where: { id: { in: needIds }, active: true } })) !== needIds.length) {
+      throw unprocessable('UNKNOWN_CATALOG_ITEM', 'Há um equipamento inválido na lista do que você precisa.');
     }
     const id = await this.prisma.$transaction(async (tx) => {
       // Revalida com o evento bloqueado: uma confirmação concorrente pode ter esgotado o evento.
@@ -589,14 +633,14 @@ export class EventsService {
         assertApplicationTransition('WITHDRAWN', 'PENDING');
         const res = await tx.eventApplication.updateMany({
           where: { id: existing.id, status: 'WITHDRAWN' },
-          data: { status: 'PENDING', message: input.message, submittedById: userId, withdrawnAt: null, decidedAt: null, decidedById: null, decisionNote: null },
+          data: { status: 'PENDING', message: input.message, needs: input.needs, submittedById: userId, withdrawnAt: null, decidedAt: null, decidedById: null, decisionNote: null },
         });
         if (res.count !== 1) throw conflict('DUPLICATE_APPLICATION', 'Esta identidade artística já se candidatou a esta oportunidade.');
         applicationId = existing.id;
       } else {
         // Unicidade (eventId, artistId) garantida pelo banco; P2002 vira 409.
         const created = await tx.eventApplication.create({
-          data: { eventId, artistId: input.artistId, submittedById: userId, message: input.message },
+          data: { eventId, artistId: input.artistId, submittedById: userId, message: input.message, needs: input.needs },
           select: { id: true },
         });
         applicationId = created.id;

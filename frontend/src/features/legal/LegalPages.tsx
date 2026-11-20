@@ -191,7 +191,7 @@ export function HelpPage() {
         <h2>Para artistas</h2>
         <ol>
           <li>Crie uma conta de artista e confirme o e-mail.</li>
-          <li>Em “Meu perfil”, preencha os dados, a foto, o portfólio e o rider técnico (somente equipamentos que você precisa — palco e energia são do local).</li>
+          <li>Em “Meu perfil”, preencha os dados, a foto, o portfólio e o rider (os equipamentos que você já possui). Ao se candidatar, informe o que a casa precisa disponibilizar.</li>
           <li>Publique o perfil para aparecer no marketplace e poder se candidatar.</li>
           <li>Crie ou entre em bandas pelos convites. Cada banda tem perfil, portfólio e rider próprios.</li>
           <li>Em “Oportunidades”, candidate-se a eventos. Eventos privados aparecem só para contas de artista.</li>

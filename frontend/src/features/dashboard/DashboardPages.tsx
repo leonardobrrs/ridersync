@@ -26,6 +26,11 @@ function ScheduleList({ items, empty }: { items: ScheduleItem[]; empty: string }
                 {i.artist.name} — {i.event?.title ?? i.organization.name}
               </Link>{' '}
               {i.event?.visibility === 'PRIVATE' && <span className="st draft">Evento privado</span>}
+              {i.event && (
+                <Link className="link" to={`/oportunidades/${i.event.id}`} style={{ fontSize: 13 }}>
+                  ver evento
+                </Link>
+              )}
               <small className="hint" style={{ display: 'block' }}>
                 {dateTime(i.performanceAt)} · {duration(i.durationMinutes)} · {money(i.feeCents)}
                 {i.event?.locationName ? ` · ${i.event.locationName}` : ` · ${i.organization.name}`}

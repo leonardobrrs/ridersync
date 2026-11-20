@@ -59,6 +59,13 @@ export class RidersController {
   ) {
     return this.riders.compare(user.id, artistId, orgId);
   }
+
+  /** Necessidades informadas na candidatura × inventário da casa do evento. */
+  @ApiCookieAuth()
+  @Get('applications/:applicationId/compatibility')
+  compareApplication(@CurrentUser() user: AuthUser, @Param('applicationId', ParseUUIDPipe) applicationId: string) {
+    return this.riders.compareApplication(user.id, applicationId);
+  }
 }
 
 @Module({ controllers: [RidersController], providers: [RidersService], exports: [RidersService] })
