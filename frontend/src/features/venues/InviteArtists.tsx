@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Icon } from '../../components/Icon';
 import { api, qs } from '../../lib/api';
 import type { ArtistCard, Paged } from '../../lib/types';
@@ -21,10 +21,18 @@ export function InviteArtists({ value, onChange }: { value: InvitedArtist[]; onC
     enabled: q.length >= 2,
   });
   const chosen = new Set(value.map((a) => a.id));
+  const input = useRef<HTMLInputElement>(null);
+  // Ao escolher, a busca é limpa para procurar o próximo artista.
+  const pick = (a: ArtistCard) => {
+    onChange([...value, { id: a.id, name: a.name, slug: a.slug, kind: a.kind }]);
+    setTerm('');
+    setQ('');
+    input.current?.focus();
+  };
   return (
     <div className="invite">
       <label htmlFor={id}>Convidar artistas</label>
-      <input id={id} className="input" type="search" placeholder="Buscar músico ou banda pelo nome ou @perfil" value={term} onChange={(e) => setTerm(e.target.value)} />
+      <input ref={input} id={id} className="input" type="search" placeholder="Buscar músico ou banda pelo nome ou @perfil" value={term} onChange={(e) => setTerm(e.target.value)} />
       {q.length >= 2 && (
         <ul className="invite-results" aria-label="Resultados da busca">
           {results.isLoading && <li className="hint">Buscando…</li>}
@@ -35,7 +43,7 @@ export function InviteArtists({ value, onChange }: { value: InvitedArtist[]; onC
                 <input
                   type="checkbox"
                   checked={chosen.has(a.id)}
-                  onChange={() => onChange(chosen.has(a.id) ? value.filter((v) => v.id !== a.id) : [...value, { id: a.id, name: a.name, slug: a.slug, kind: a.kind }])}
+                  onChange={() => (chosen.has(a.id) ? onChange(value.filter((v) => v.id !== a.id)) : pick(a))}
                 />
                 <span>
                   {a.name} <small className="muted">@{a.slug} · {a.kind === 'BAND' ? 'Banda' : 'Músico'}</small>

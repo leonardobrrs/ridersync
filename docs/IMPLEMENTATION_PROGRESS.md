@@ -163,3 +163,4 @@ Verificação: backend 237 testes; frontend 28; Playwright 24 (desktop, tablet, 
 - Home sem "Casas de show" no topo, busca ao digitar, redirecionamento após candidatura, sem quebra de palavras no meio.
 - Migration `20261119120000_reuniao_professor` (aditiva), aplicada no staging Neon após branch de restauração `staging-pre-reuniao-professor`.
 - Validação: backend 246, frontend 31, Playwright 28, lint/typecheck/build ok; smoke remoto no Preview.
+- Ajustes pós-revisão: aviso do rider sem quebra de layout; candidatura em modal (identidade, necessidades e mensagem); busca de convite limpa após escolher o artista; contratante tem "Meus eventos" no topo e no Explorar em vez de "Eventos encerrados".

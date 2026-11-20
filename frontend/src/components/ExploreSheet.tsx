@@ -48,7 +48,9 @@ export function ExploreSheet({ open, onClose, accountType }: { open: boolean; on
   if (accountType !== 'CONTRACTOR') {
     items.push({ to: '/oportunidades', label: 'Oportunidades', icon: 'ticket', hint: 'Vagas abertas para tocar', match: (p) => p.startsWith('/oportunidades') && !search.includes('encerrados') });
   }
-  items.push({ to: '/oportunidades?status=encerrados', label: 'Eventos encerrados', icon: 'calendar', hint: 'Shows fechados e realizados, com as atrações', match: (p) => p.startsWith('/oportunidades') && search.includes('encerrados') });
+  if (accountType === 'CONTRACTOR') {
+    items.push({ to: '/painel/eventos', label: 'Meus eventos', icon: 'calendar', hint: 'Eventos que você publicou', match: (p) => p.startsWith('/painel/eventos') });
+  } else items.push({ to: '/oportunidades?status=encerrados', label: 'Eventos encerrados', icon: 'calendar', hint: 'Shows fechados e realizados, com as atrações', match: (p) => p.startsWith('/oportunidades') && search.includes('encerrados') });
 
   // Portal: fora da barra inferior (que é um contexto de empilhamento e estiliza os próprios links).
   return createPortal(

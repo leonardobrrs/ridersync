@@ -20,7 +20,9 @@ test('evento oculto na tela única de criação, com convite já na criação', 
   const page = contractor.page;
   const title = `Festa oculta ${stamp()}`;
 
-  await page.goto('/painel/eventos');
+  // Contratante: "Meus eventos" no topo (no lugar de "Eventos encerrados")
+  await page.goto('/');
+  await page.getByRole('navigation', { name: 'Principal' }).getByRole('link', { name: 'Meus eventos' }).click();
   await expect(page.getByRole('heading', { name: 'Meus eventos' })).toBeVisible();
   await page.getByRole('link', { name: 'Novo evento' }).click();
   await expect(page.getByLabel('Onde será o evento?')).toHaveValue('INDIVIDUAL');
@@ -34,7 +36,10 @@ test('evento oculto na tela única de criação, com convite já na criação', 
   await page.getByLabel('Cachê oferecido (R$)').fill('700');
   await page.getByLabel('Observações').fill('Entrada pelos fundos.');
   await page.getByLabel('Convidar artistas').fill(artistName.split(' ').slice(0, 3).join(' '));
-  await page.getByRole('checkbox', { name: new RegExp(artistName) }).check();
+  await page.getByRole('checkbox', { name: new RegExp(artistName) }).click();
+  // escolhido: a busca se limpa para procurar outro artista
+  await expect(page.getByLabel('Convidar artistas')).toHaveValue('');
+  await expect(page.getByRole('list', { name: 'Artistas convidados' })).toContainText(artistName);
   await page.getByRole('button', { name: 'Publicar e enviar convites' }).click();
 
   await expect(page).toHaveURL(/\/painel\/eventos\/[0-9a-f-]+$/);
