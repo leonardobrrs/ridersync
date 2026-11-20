@@ -165,6 +165,10 @@ test('MVP: perfil, banda, convite e transferência, casa, evento, vagas, negocia
   await ana.page.getByLabel('Candidatar-se como').selectOption({ label: `${artistName} (Perfil individual)` });
   // O que a artista precisa que a casa disponibilize: preenchido a partir do perfil (rider) e ajustável.
   const needs = ana.page.getByRole('group', { name: 'O que você precisa que a casa disponibilize' });
+  // O inventário da casa já vem marcado; a artista ajusta a quantidade e completa com o perfil.
+  await expect(needs.getByRole('checkbox', { name: /Microfone dinâmico/ })).toBeChecked();
+  await expect(needs.getByRole('checkbox', { name: /Caixa direta/ })).toBeChecked();
+  await needs.getByLabel('Quantidade de Caixa direta (DI)').fill('3');
   await needs.getByRole('button', { name: 'Preencher a partir do meu perfil' }).click();
   await expect(needs.getByText('Pedal looper')).toBeVisible();
   await ana.page.getByLabel('Mensagem para a casa').fill('Tenho repertório autoral para a noite.');

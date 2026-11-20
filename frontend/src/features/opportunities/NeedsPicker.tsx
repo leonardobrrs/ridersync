@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Icon } from '../../components/Icon';
 import { api } from '../../lib/api';
 import { useCatalog } from '../../lib/hooks';
-import type { Need, Rider } from '../../lib/types';
+import type { Need, PublicVenue, Rider, RiderItem } from '../../lib/types';
 
 /** Nome exibido de uma necessidade (item do catálogo ou personalizado). */
 export function needLabel(n: Need, catalog: { id: string; name: string; unit: string }[] | undefined) {
@@ -17,11 +17,38 @@ export function needLabel(n: Need, catalog: { id: string; name: string; unit: st
 /**
  * Candidatura: o que o artista precisa que a casa disponibilize. O rider do perfil representa o que ele já possui;
  * aqui ele informa o que falta para este evento — escolhendo manualmente ou preenchendo a partir do perfil.
+ * Em evento numa casa de show, o inventário da casa já vem marcado (o artista desmarca o que não vai usar).
  */
-export function NeedsPicker({ artistId, value, onChange }: { artistId: string; value: Need[]; onChange: (v: Need[]) => void }) {
+export function NeedsPicker({
+  artistId,
+  venueSlug,
+  value,
+  onChange,
+}: {
+  artistId: string;
+  venueSlug?: string | null;
+  value: Need[];
+  onChange: (v: Need[]) => void;
+}) {
   const id = useId();
   const { data: catalog } = useCatalog();
   const rider = useQuery({ queryKey: ['rider', artistId], queryFn: () => api.get<Rider>(`/artists/${artistId}/rider`), enabled: !!artistId });
+  const venue = useQuery({ queryKey: ['venue', venueSlug], queryFn: () => api.get<PublicVenue>(`/public/venues/${venueSlug}`), enabled: !!venueSlug });
+  const offered = venue.data?.equipment ?? [];
+  const sameItem = (n: Need, i: RiderItem) => (i.catalogItemId ? n.catalogItemId === i.catalogItemId : !n.catalogItemId && n.customName === (i.customName ?? i.name));
+  const isOffered = (n: Need) => offered.some((i) => sameItem(n, i));
+  const toNeed = (i: RiderItem): Need => ({ catalogItemId: i.catalogItemId, customName: i.catalogItemId ? null : (i.customName ?? i.name), quantity: Math.min(999, Math.max(1, i.quantity)) });
+  // Marca de saída o que a casa oferece (uma vez por casa), sem apagar o que o artista já escolheu.
+  const prefilled = useRef<string | null>(null);
+  useEffect(() => {
+    if (!venueSlug || !venue.data || prefilled.current === venueSlug) return;
+    prefilled.current = venueSlug;
+    const missing = venue.data.equipment.filter((i) => !value.some((n) => sameItem(n, i)));
+    if (missing.length) onChange([...value, ...missing.map(toNeed)]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [venueSlug, venue.data]);
+  const setQty = (n: Need, quantity: number) => onChange(value.map((x) => (x === n ? { ...x, quantity: Math.max(1, Math.min(999, quantity || 1)) } : x)));
+  const others = value.filter((n) => !isOffered(n));
   const [pick, setPick] = useState('');
   const [custom, setCustom] = useState('');
   const has = (catalogItemId: string) => value.some((n) => n.catalogItemId === catalogItemId);
@@ -40,9 +67,42 @@ export function NeedsPicker({ artistId, value, onChange }: { artistId: string; v
     <fieldset className="needs">
       <legend>O que você precisa que a casa disponibilize</legend>
       <small className="hint">Seu rider (no perfil) mostra o que você já tem. Marque aqui o que a casa precisa fornecer para este show.</small>
-      {value.length > 0 ? (
+      {offered.length > 0 && (
+        <div className="needs-offered">
+          <strong className="needs-sub">Já oferecido pela casa</strong>
+          <small className="hint">Vem marcado o que {venue.data!.name} tem. Desmarque o que você não vai usar.</small>
+          <ul className="needs-list">
+            {offered.map((i) => {
+              const n = value.find((x) => sameItem(x, i));
+              return (
+                <li key={i.id}>
+                  <label className="fchk needs-name">
+                    <input type="checkbox" checked={!!n} onChange={() => onChange(n ? value.filter((x) => x !== n) : [...value, toNeed(i)])} />
+                    <span>
+                      {i.name} <small className="muted">(a casa tem {i.quantity})</small>
+                    </span>
+                  </label>
+                  {n ? (
+                    <>
+                      <label className="sr-only" htmlFor={`${id}-o${i.id}`}>
+                        Quantidade de {i.name}
+                      </label>
+                      <input id={`${id}-o${i.id}`} className="input qty" type="number" min={1} max={999} value={n.quantity} onChange={(e) => setQty(n, Number(e.target.value))} />
+                    </>
+                  ) : (
+                    <span />
+                  )}
+                  <span />
+                </li>
+              );
+            })}
+          </ul>
+          <strong className="needs-sub">Outros itens</strong>
+        </div>
+      )}
+      {others.length > 0 ? (
         <ul className="needs-list">
-          {value.map((n, i) => (
+          {others.map((n, i) => (
             <li key={`${n.catalogItemId ?? n.customName}-${i}`}>
               <span className="needs-name">{n.catalogItemId ? (catalog?.find((c) => c.id === n.catalogItemId)?.name ?? n.catalogItemId) : n.customName}</span>
               <label className="sr-only" htmlFor={`${id}-q${i}`}>
@@ -55,16 +115,16 @@ export function NeedsPicker({ artistId, value, onChange }: { artistId: string; v
                 min={1}
                 max={999}
                 value={n.quantity}
-                onChange={(e) => onChange(value.map((x, j) => (j === i ? { ...x, quantity: Math.max(1, Math.min(999, Number(e.target.value) || 1)) } : x)))}
+                onChange={(e) => setQty(n, Number(e.target.value))}
               />
-              <button type="button" className="btn sm ghost" aria-label="Remover item" onClick={() => onChange(value.filter((_, j) => j !== i))}>
+              <button type="button" className="btn sm ghost" aria-label="Remover item" onClick={() => onChange(value.filter((x) => x !== n))}>
                 <Icon name="x" size={16} />
               </button>
             </li>
           ))}
         </ul>
       ) : (
-        <p className="hint">Nenhum item marcado: você leva tudo o que precisa.</p>
+        <p className="hint">{offered.length ? 'Nenhum item além do que a casa oferece.' : 'Nenhum item marcado: você leva tudo o que precisa.'}</p>
       )}
       <div className="needs-add">
         <label className="sr-only" htmlFor={`${id}-pick`}>
