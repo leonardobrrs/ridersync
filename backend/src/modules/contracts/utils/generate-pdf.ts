@@ -8,9 +8,65 @@ const FONT_SIZE = 11;
 const LINE_H = 15;
 const PARA_GAP = 8;
 const FOOTER_Y = 36;
+/** Linha só é justificada se já ocupa ao menos esta fração da largura (evita buracos enormes entre palavras). */
+const MIN_FILL_TO_JUSTIFY = 0.7;
 
 /** Linhas que recebem destaque (negrito): título, cláusulas e cabeçalhos das partes. */
 const isHeading = (line: string, index: number) => index === 0 || /^(CLÁUSULA \d|CONTRATANTE$|CONTRATADO$)/.test(line.trim());
+
+export type Block =
+  | { kind: 'blank' }
+  | { kind: 'heading'; text: string; title: boolean }
+  /** `marker` ("a)" ou "-") gera recuo deslocado nas linhas seguintes do item. */
+  | { kind: 'text'; text: string; marker: string | null };
+
+const LIST_MARKER = /^\s*([a-z]\)|-)\s/;
+
+/**
+ * Reagrupa as linhas do template em parágrafos. O template vem quebrado em ~70 colunas; para justificar é preciso
+ * juntar as linhas de continuação. Continuação = linha recuada ou começando em minúscula (que não seja "a) ").
+ * A partir da primeira linha de assinatura (____) nada é reagrupado: ali o texto é de dados do usuário (nomes) e
+ * cada linha precisa permanecer sozinha.
+ */
+export function reflowParagraphs(content: string): Block[] {
+  const blocks: Block[] = [];
+  let reflow = true;
+  content
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .forEach((raw, index) => {
+      if (!raw.trim()) {
+        blocks.push({ kind: 'blank' });
+        return;
+      }
+      if (/^_{5,}$/.test(raw.trim())) reflow = false;
+      if (isHeading(raw, index)) {
+        blocks.push({ kind: 'heading', text: raw.trim(), title: index === 0 });
+        return;
+      }
+      const prev = blocks[blocks.length - 1];
+      const continuation = reflow && prev?.kind === 'text' && (/^\s/.test(raw) || (/^\p{Ll}/u.test(raw) && !/^[a-z]\)/.test(raw)));
+      if (continuation) {
+        prev.text += ` ${raw.trim()}`;
+        return;
+      }
+      blocks.push({ kind: 'text', text: raw.trim(), marker: LIST_MARKER.exec(raw)?.[1] ?? null });
+    });
+  return blocks;
+}
+
+/** Posições x (relativas ao início da linha) de cada palavra distribuindo a sobra igualmente entre as palavras. */
+export function justifyPositions(wordWidths: number[], available: number): number[] {
+  const total = wordWidths.reduce((a, b) => a + b, 0);
+  const gap = wordWidths.length > 1 ? (available - total) / (wordWidths.length - 1) : 0;
+  const xs: number[] = [];
+  let x = 0;
+  for (const w of wordWidths) {
+    xs.push(x);
+    x += w + gap;
+  }
+  return xs;
+}
 
 /** Fontes padrão do PDF só codificam WinAnsi: o que não couber (ex.: emoji em nome) vira "?" em vez de quebrar a geração. */
 function sanitize(text: string, font: PDFFont): string {
@@ -20,38 +76,44 @@ function sanitize(text: string, font: PDFFont): string {
     .join('');
 }
 
-/** Quebra uma linha em várias respeitando a largura; palavras maiores que a linha são partidas por caractere. */
-function wrap(line: string, font: PDFFont, size: number, maxWidth: number): string[] {
-  const indent = /^\s*/.exec(line)![0];
-  const words = line.trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return [''];
-  const lines: string[] = [];
-  let current = indent;
-  const fits = (s: string) => font.widthOfTextAtSize(s, size) <= maxWidth;
+/** Quebra palavras em linhas respeitando a largura; palavras maiores que a linha são partidas por caractere. */
+function wrapWords(words: string[], font: PDFFont, size: number, widthFirst: number, widthRest: number): string[][] {
+  const lines: string[][] = [];
+  const space = font.widthOfTextAtSize(' ', size);
+  const avail = () => (lines.length === 0 ? widthFirst : widthRest);
+  const w = (s: string) => font.widthOfTextAtSize(s, size);
+  let current: string[] = [];
+  let currentW = 0;
+  const flush = () => {
+    if (current.length) lines.push(current);
+    current = [];
+    currentW = 0;
+  };
   for (const word of words) {
-    const candidate = current.trim() ? `${current} ${word}` : `${current}${word}`;
-    if (fits(candidate)) {
-      current = candidate;
+    const add = (current.length ? space : 0) + w(word);
+    if (currentW + add <= avail()) {
+      current.push(word);
+      currentW += add;
       continue;
     }
-    if (current.trim()) lines.push(current);
-    current = '';
+    flush();
     let rest = word;
-    while (!fits(rest)) {
+    while (w(rest) > avail()) {
       let cut = rest.length - 1;
-      while (cut > 1 && !fits(rest.slice(0, cut))) cut--;
-      lines.push(rest.slice(0, cut));
+      while (cut > 1 && w(rest.slice(0, cut)) > avail()) cut--;
+      lines.push([rest.slice(0, cut)]);
       rest = rest.slice(cut);
     }
-    current = rest;
+    current = [rest];
+    currentW = w(rest);
   }
-  if (current.trim()) lines.push(current);
-  return lines;
+  flush();
+  return lines.length ? lines : [[]];
 }
 
 /**
- * Renderiza o texto do contrato em PDF (A4, fonte serifada, margem de 2,5 cm, quebra automática de linha e
- * paginação com rodapé). Mantém as quebras de linha do template. Determinístico para o mesmo texto e data.
+ * Renderiza o texto do contrato em PDF (A4, fonte serifada, margem de 2,5 cm, parágrafos justificados, quebra
+ * automática de linha e paginação com rodapé). Determinístico para o mesmo texto e data.
  */
 export async function generateContractPdf(content: string, opts: { title?: string; createdAt?: Date } = {}): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
@@ -68,30 +130,50 @@ export async function generateContractPdf(content: string, opts: { title?: strin
   const maxWidth = PAGE_W - MARGIN * 2;
   let page = doc.addPage([PAGE_W, PAGE_H]);
   let y = PAGE_H - MARGIN;
-  const newPage = () => {
-    page = doc.addPage([PAGE_W, PAGE_H]);
-    y = PAGE_H - MARGIN;
+  const ensureRoom = () => {
+    if (y - LINE_H < MARGIN) {
+      page = doc.addPage([PAGE_W, PAGE_H]);
+      y = PAGE_H - MARGIN;
+    }
   };
+  const draw = (text: string, x: number, font: PDFFont) => page.drawText(text, { x, y: y - FONT_SIZE, size: FONT_SIZE, font, color: rgb(0, 0, 0) });
 
-  content
-    .replace(/\r\n?/g, '\n')
-    .split('\n')
-    .forEach((raw, index) => {
-      const heading = isHeading(raw, index);
-      const font = heading ? bold : regular;
-      const text = sanitize(raw, font);
-      if (!text.trim()) {
-        y -= PARA_GAP;
-        return;
-      }
-      if (heading && index > 0) y -= 4;
-      for (const l of wrap(text, font, FONT_SIZE, maxWidth)) {
-        if (y - LINE_H < MARGIN) newPage();
-        const x = index === 0 ? MARGIN + (maxWidth - font.widthOfTextAtSize(l, FONT_SIZE)) / 2 : MARGIN;
-        page.drawText(l, { x: Math.max(MARGIN, x), y: y - FONT_SIZE, size: FONT_SIZE, font, color: rgb(0, 0, 0) });
+  reflowParagraphs(content).forEach((block) => {
+    if (block.kind === 'blank') {
+      y -= PARA_GAP;
+      return;
+    }
+    if (block.kind === 'heading') {
+      const text = sanitize(block.text, bold);
+      if (!block.title) y -= 4;
+      for (const words of wrapWords(text.split(/\s+/), bold, FONT_SIZE, maxWidth, maxWidth)) {
+        ensureRoom();
+        const line = words.join(' ');
+        const x = block.title ? MARGIN + (maxWidth - bold.widthOfTextAtSize(line, FONT_SIZE)) / 2 : MARGIN;
+        draw(line, Math.max(MARGIN, x), bold);
         y -= LINE_H;
       }
+      return;
+    }
+    const words = sanitize(block.text, regular).split(/\s+/).filter(Boolean);
+    const hang = block.marker ? regular.widthOfTextAtSize(`${block.marker} `, FONT_SIZE) : 0;
+    const lines = wrapWords(words, regular, FONT_SIZE, maxWidth, maxWidth - hang);
+    lines.forEach((lineWords, idx) => {
+      ensureRoom();
+      const indent = idx === 0 ? 0 : hang;
+      const available = maxWidth - indent;
+      const widths = lineWords.map((w) => regular.widthOfTextAtSize(w, FONT_SIZE));
+      const natural = widths.reduce((a, b) => a + b, 0) + regular.widthOfTextAtSize(' ', FONT_SIZE) * (lineWords.length - 1);
+      const justify = idx < lines.length - 1 && lineWords.length > 1 && natural >= available * MIN_FILL_TO_JUSTIFY;
+      if (justify) {
+        const xs = justifyPositions(widths, available);
+        lineWords.forEach((w, k) => draw(w, MARGIN + indent + xs[k], regular));
+      } else {
+        draw(lineWords.join(' '), MARGIN + indent, regular);
+      }
+      y -= LINE_H;
     });
+  });
 
   const pages = doc.getPages();
   pages.forEach((p, i) => {
