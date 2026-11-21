@@ -1,4 +1,4 @@
-import { buildContractFields, ContractSource, formatDateBR, formatDateOnly, formatMoney, formatTimeBR, resolveLocation, templateFileFor } from './contract-data.rules';
+import { buildContractFields, ContractSource, missingPartyData, formatDateBR, formatDateOnly, formatMoney, formatTimeBR, resolveLocation, templateFileFor } from './contract-data.rules';
 import { loadTemplate } from './templates';
 import { fillTemplate, PLACEHOLDER } from './utils/fill-template';
 
@@ -229,5 +229,63 @@ describe('templates × campos', () => {
     const out = fillTemplate(loadTemplate('VENUE'), buildContractFields(source({ organization: { ...venue, legalName: null, cnpj: null, contactPhone: null }, soloPerson: null })));
     expect(out).toContain(`CNPJ: ${PLACEHOLDER}`);
     expect(out).toContain(`CPF/CNPJ: ${PLACEHOLDER}`);
+  });
+});
+
+describe('missingPartyData', () => {
+  const venueSrc = (over: Partial<ContractSource> = {}): ContractSource => ({
+    generatedAt: new Date('2026-11-21T15:00:00-03:00'),
+    contractorType: 'VENUE',
+    organization: { name: 'Casa', legalName: null, cnpj: null, addressLine: null, neighborhood: null, city: 'Maceió', state: 'AL', contactPhone: null },
+    contractorPerson: null,
+    artist: { kind: 'SOLO', name: 'Bia' },
+    soloPerson: { legalName: null, cpf: null },
+    band: null,
+    bandOwner: null,
+    event: null,
+    offer: {
+      performanceAt: new Date('2026-12-12T20:00:00-03:00'),
+      durationMinutes: 90,
+      feeCents: 100000,
+      presentationDesc: null,
+      advanceMinutes: null,
+      signalCents: null,
+      signalDueDate: null,
+      balanceDueDate: null,
+      paymentMethod: null,
+      rescissionDays: null,
+      substitutionDays: null,
+    },
+    ...over,
+  });
+
+  it('casa e artista solo sem dados: aponta CNPJ/endereço da casa e nome/CPF do artista', () => {
+    expect(missingPartyData(venueSrc())).toEqual({
+      contractor: ['CNPJ da casa', 'Endereço da casa'],
+      artist: ['Nome completo do artista', 'CPF do artista'],
+    });
+  });
+
+  it('dados completos: nada a preencher (termos da oferta não entram)', () => {
+    const src = venueSrc({
+      organization: { name: 'Casa', legalName: 'Casa Ltda', cnpj: '11222333000181', addressLine: 'Rua A, 1', neighborhood: null, city: 'Maceió', state: 'AL', contactPhone: null },
+      soloPerson: { legalName: 'Bia Tenório', cpf: '52998224725' },
+    });
+    expect(missingPartyData(src)).toEqual({ contractor: [], artist: [] });
+  });
+
+  it('contratante pessoa física e banda sem CNPJ: dados do responsável', () => {
+    const src = venueSrc({
+      contractorType: 'INDIVIDUAL',
+      contractorPerson: { legalName: 'Ana Lins', cpf: null, rg: null },
+      artist: { kind: 'BAND', name: 'Os Malungos' },
+      soloPerson: null,
+      band: { legalName: null, cnpj: null },
+      bandOwner: { legalName: null, cpf: '52998224725' },
+    });
+    expect(missingPartyData(src)).toEqual({
+      contractor: ['CPF do contratante', 'RG do contratante', 'Endereço do contratante', 'Telefone do contratante'],
+      artist: ['Nome completo do responsável pela banda'],
+    });
   });
 });

@@ -346,3 +346,14 @@ schema genérico; as diferenças abaixo vêm do modelo real do repositório e s�
 - **Pendência (LGPD)**: o texto do contrato retém nome/CPF/RG das duas partes mesmo se uma conta for excluída depois (a anonimização
   limpa `User`, mas o contrato é registro da outra parte). Decidir política de retenção com o responsável.
 - **Fora do escopo (mantido)**: assinatura eletrônica, validade jurídica garantida, pagamentos, uso de IA no preenchimento.
+- **Revisão (21/11)**: o contrato não fica mais congelado enquanto faltam dados. `POST /contracts/booking/:id/refresh` refaz o
+  texto com os dados cadastrais atuais, pelas duas partes, só com a contratação CONFIRMED e antes da apresentação (data
+  acordada no futuro e sem `Performance`); depois disso responde 409 `CONTRACT_LOCKED`. Os termos continuam os da oferta
+  aceita. `GET /contracts/booking/:id/readiness` lista os dados cadastrais faltantes de cada lado (regra pura
+  `missingPartyData`) com o link de onde completar; a tela avisa antes de confirmar e no cartão do contrato. O resumo do
+  contrato expõe só `pendingFields` (quantidade de "[A PREENCHER]"), nunca o texto.
+- **PDF com fonte embutida** (Tinos, SIL OFL 1.1, métricas da Times New Roman; `fonts/` copiada para `dist` pelo nest-cli):
+  com a Times padrão não embutida, cada leitor usava uma fonte substituta e palavras em maiúsculas invadiam o espaço
+  seguinte. Embutida inteira (o subset do pdf-lib + fontkit perde glifos desta fonte); o PDF fica com ~600 KB.
+  Blocos de assinatura nunca são partidos entre páginas. Modelo da casa passou a imprimir o prazo do saldo; a cláusula de
+  substituição usa "da equipe que acompanha <artista>" para artista solo.

@@ -5,7 +5,7 @@ import { conflict, notFound, unprocessable } from '../../common/errors';
 import { moneyCents, optionalText, text } from '../../common/validation';
 import { PrismaService, Tx } from '../../prisma/prisma.service';
 import { AccessService } from '../access/access.service';
-import { ContractsService, toContractSummary } from '../contracts/contracts.service';
+import { ContractsService, contractSummarySelect, toContractSummary } from '../contracts/contracts.service';
 import { publicArtistCardSelect, toArtistCard } from '../artists/artist.presenter';
 import { EventLifecycleService } from '../events/event-lifecycle.service';
 import { ACTIVE_EVENT_STATUSES, assertApplicationTransition } from '../events/event.rules';
@@ -414,7 +414,7 @@ export class BookingsService {
           select: { id: true, fromStatus: true, toStatus: true, actorSide: true, note: true, createdAt: true, actor: { select: { name: true } } },
         },
         performance: { select: { id: true, performedAt: true, notes: true, createdAt: true, registeredBy: { select: { name: true } } } },
-        contract: { select: { id: true, bookingId: true, templateType: true, generatedAt: true } },
+        contract: { select: contractSummarySelect },
         reviews: { orderBy: { createdAt: 'asc' }, select: { id: true, authorSide: true, rating: true, comment: true, createdAt: true } },
       },
     });

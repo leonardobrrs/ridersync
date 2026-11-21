@@ -5,7 +5,7 @@ import { ToastProvider } from '../../components/Toast';
 import type { BookingDetail } from '../../lib/types';
 import { ContractCard } from './ContractCard';
 
-const contract = { id: 'c1', bookingId: 'b1', templateType: 'VENUE' as const, generatedAt: '2026-11-20T15:00:00Z', downloadUrl: '/api/contracts/c1/download' };
+const contract = { id: 'c1', bookingId: 'b1', templateType: 'VENUE' as const, generatedAt: '2026-11-20T15:00:00Z', downloadUrl: '/api/contracts/c1/download', pendingFields: 0 };
 
 const booking = (over: Partial<BookingDetail> = {}) => ({ id: 'b1', status: 'CONFIRMED', mySide: 'ARTIST', contract: null, ...over }) as unknown as BookingDetail;
 
@@ -56,5 +56,28 @@ describe('contrato da negociação', () => {
   ])('não aparece para %s', (_, over) => {
     renderCard(booking(over as Partial<BookingDetail>));
     expect(screen.queryByRole('region', { name: 'Contrato' })).not.toBeInTheDocument();
+  });
+  describe('atualização com dados preenchidos depois', () => {
+    const future = { performanceAt: new Date(Date.now() + 10 * 86400_000).toISOString() };
+    const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+    const readiness = { contractor: { missing: [], link: '/painel/casas/o1' }, artist: { missing: ['CPF do artista'], link: '/painel/conta' } };
+
+    it('mostra os campos em aberto, o que falta do meu lado e atualiza o contrato', async () => {
+      const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) =>
+        String(url).endsWith('/readiness') ? json(readiness) : json({ ...contract, pendingFields: 0 }, 201),
+      );
+      renderCard(booking({ contract: { ...contract, pendingFields: 4 }, agreedOffer: future, performance: null } as Partial<BookingDetail>));
+      expect(screen.getByText(/4 campos ainda estão/)).toBeInTheDocument();
+      expect(await screen.findByText(/Faltam seus dados para o contrato: CPF do artista/)).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Completar dados' })).toHaveAttribute('href', '/painel/conta');
+      fireEvent.click(screen.getByRole('button', { name: 'Atualizar contrato' }));
+      await waitFor(() => expect(fetchMock.mock.calls.some(([u, i]) => String(u).endsWith('/contracts/booking/b1/refresh') && i?.method === 'POST')).toBe(true));
+    });
+
+    it('depois da data do show não oferece atualizar', () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(readiness));
+      renderCard(booking({ contract, agreedOffer: { performanceAt: '2020-01-01T20:00:00Z' }, performance: null } as Partial<BookingDetail>));
+      expect(screen.queryByRole('button', { name: 'Atualizar contrato' })).not.toBeInTheDocument();
+    });
   });
 });
