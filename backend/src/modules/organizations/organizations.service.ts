@@ -8,6 +8,7 @@ import { uniqueSlug } from '../../common/slug';
 import {
   alCity,
   email,
+  optionalCnpj,
   optionalEmail,
   optionalExternalUrl,
   optionalInstagram,
@@ -35,6 +36,9 @@ const OrgFields = {
   contactPhone: optionalPhone,
   instagram: optionalInstagram,
   website: optionalExternalUrl,
+  /** Dados de contrato (privados). */
+  legalName: optionalText(150, 'Razão social'),
+  cnpj: optionalCnpj,
 };
 export const CreateOrganizationSchema = z
   .object(OrgFields)
@@ -66,6 +70,9 @@ export const orgManageSelect = {
   createdAt: true,
   updatedAt: true,
 } satisfies Prisma.OrganizationSelect;
+
+/** Dados de contrato: nunca entram em orgManageSelect (reutilizado na página pública da casa). */
+export const orgLegalSelect = { legalName: true, cnpj: true } satisfies Prisma.OrganizationSelect;
 
 export function toOrg(o: Prisma.OrganizationGetPayload<{ select: typeof orgManageSelect }>) {
   const { photoId, ...rest } = o;
@@ -133,6 +140,7 @@ export class OrganizationsService {
       where: { id: organizationId },
       select: {
         ...orgManageSelect,
+        ...orgLegalSelect,
         members: {
           where: { status: { in: ['ACTIVE', 'INVITED'] } },
           orderBy: [{ status: 'asc' }, { joinedAt: 'asc' }],

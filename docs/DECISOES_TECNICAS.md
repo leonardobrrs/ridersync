@@ -311,3 +311,38 @@ Decisões do responsável que **substituem** regras anteriores (ordem de autorid
 - **Home**: sem botão "Casas de show" no topo (o filtro da página faz isso); a busca filtra enquanto se digita.
 - **Quebra de palavras**: `overflow-wrap:anywhere` (quebrava palavras no meio em colunas estreitas) trocado por
   `break-word`; selos, botões e datas não quebram.
+
+
+## Módulo de contratos (2026-11-20) — branch `feat/contracts-module`
+
+Instrução de origem: `AGENT_CONTRACT_MODULE.md` (templates `venue-artist.md` e `individual-artist.md`). A spec foi escrita para um
+schema genérico; as diferenças abaixo vêm do modelo real do repositório e são **decisões a validar** com o responsável.
+
+- **Quando gera**: ao CONFIRMAR a contratação (`POST /bookings/:id/confirm` e `POST /applications/:id/hire`), **depois do commit**
+  da transação, para que falha de PDF/template nunca desfaça a confirmação (erro registrado em log). Se falhar, qualquer das partes
+  gera pelo botão "Gerar contrato" (`POST /contracts/booking/:id`, idempotente). Um contrato por negociação (`Contract.bookingId`
+  único; corrida entre duas confirmações resolvida pela violação de unicidade).
+- **Template**: `Organization.type` define o modelo (VENUE → `venue-artist.md`; INDIVIDUAL → `individual-artist.md`); não há
+  `Booking.contractorType` (seria dado derivado e redundante). Só substituição de strings (`fillTemplate`); ausente = `[A PREENCHER]`.
+  Testemunhas saem como linhas em branco para assinatura à mão.
+- **Termos acordados ficam na oferta, não no booking**: `BookingOffer` ganhou campos opcionais (`presentationDesc`, `advanceMinutes`,
+  `signalCents`, `signalDueDate`, `balanceDueDate`, `paymentMethod`, `rescissionDays`, `substitutionDays`). Assim sinal/prazos são
+  negociados e preservados no histórico como cachê e data (contraproposta cria nova linha). O contrato usa a oferta **ACEITA**.
+  Saldo = cachê − sinal (derivado, não armazenado). Valores em centavos (`feeCents` da spec "Decimal" não existe aqui).
+  Padrões: rescisão 2 dias, substituição 5 dias, informação de alteração 3 dias.
+- **Dados civis ficam em `User` (`legalName`, `cpf`, `rg`)**, não em `MusicianProfile`: o representante de uma banda sem CNPJ é o
+  OWNER, que pode não ter perfil solo; o contratante pessoa física também precisa. `Band` ganhou `legalName`/`cnpj`; `Organization`,
+  `legalName`/`cnpj` (casa). Endereço/telefone do contratante individual usam as colunas já existentes da organização INDIVIDUAL.
+  CPF/CNPJ são validados (dígitos verificadores), guardados só com dígitos e protegidos por CHECK. Nunca entram em seleções públicas
+  (`orgLegalSelect` é separado de `orgManageSelect`, que alimenta a página pública da casa).
+- **Contratante INDIVIDUAL**: nome/CPF/RG vêm do OWNER ativo da organização INDIVIDUAL; sem dados, "[A PREENCHER]" (o nome da conta
+  não é assumido como nome civil). **Banda sem CNPJ**: OWNER ativo é parte e representante. **Banda com CNPJ**: razão social + CNPJ.
+- **Sem arquivo estático nem `/public/contracts/`**: o contrato tem CPF/RG e a Vercel não tem disco gravável. O texto preenchido é
+  congelado em `Contract.content` e o PDF é renderizado a cada download por `GET /contracts/:id/download` (autenticado, só as duas
+  partes — OWNER/ADMIN da casa/organização ou administradores do artista; demais recebem 404, como em `/bookings/:id`;
+  `Cache-Control: private, no-store`). Por isso não existe `fileUrl`.
+- **Bibliotecas**: `pdf-lib` (fontes padrão Times; `@pdf-lib/fontkit` dispensado — não há fonte customizada) e `numero-por-extenso`
+  (encapsulada: corrige "um mil"→"mil", "milhões reais"→"milhões de reais" e zero vazio; testes em `to-extenso.spec.ts`).
+- **Pendência (LGPD)**: o texto do contrato retém nome/CPF/RG das duas partes mesmo se uma conta for excluída depois (a anonimização
+  limpa `User`, mas o contrato é registro da outra parte). Decidir política de retenção com o responsável.
+- **Fora do escopo (mantido)**: assinatura eletrônica, validade jurídica garantida, pagamentos, uso de IA no preenchimento.

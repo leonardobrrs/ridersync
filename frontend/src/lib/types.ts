@@ -240,6 +240,8 @@ export interface BandDetail {
   bandId: string;
   myRole: BandRole;
   artist: ManagedArtist;
+  /** Dados de contrato da banda (null para integrante MEMBER). Sem CNPJ, o contrato usa os dados civis do proprietário. */
+  legal: { legalName: string | null; cnpj: string | null; ownerHasLegalData: boolean } | null;
   members: BandMemberRow[];
 }
 
@@ -269,6 +271,9 @@ export interface OrgSummary extends Organization {
 }
 
 export interface OrgDetail extends Organization {
+  /** Dados de contrato (privados; o CNPJ vem só com dígitos). */
+  legalName: string | null;
+  cnpj: string | null;
   myRole: OrgRole;
   members: { id: string; role: OrgRole; status: MembershipStatus; name: string; email?: string; isMe: boolean; joinedAt: string | null }[];
 }
@@ -391,12 +396,37 @@ export interface Offer {
   durationMinutes: number;
   feeCents: number;
   terms: string;
+  /** Condições do contrato (opcionais). Datas chegam como ISO à meia-noite UTC. */
+  presentationDesc: string | null;
+  advanceMinutes: number | null;
+  signalCents: number | null;
+  signalDueDate: string | null;
+  balanceDueDate: string | null;
+  paymentMethod: string | null;
+  rescissionDays: number | null;
+  substitutionDays: number | null;
   status: OfferStatus;
   createdAt: string;
   respondedAt: string | null;
   previousOfferId: string | null;
   author: { name: string } | null;
   respondedBy: { name: string } | null;
+}
+
+export interface ContractSummary {
+  id: string;
+  bookingId: string;
+  templateType: OrgType;
+  generatedAt: string;
+  /** Download autenticado (cookie de sessão); só as duas partes da negociação acessam. */
+  downloadUrl: string;
+}
+
+export interface LegalProfile {
+  legalName: string | null;
+  /** Somente dígitos. */
+  cpf: string | null;
+  rg: string | null;
 }
 
 export interface BookingRow {
@@ -441,6 +471,7 @@ export interface BookingDetail {
   pendingOffer: Offer | null;
   agreedOffer: Offer | null;
   allowed: { respond: boolean; confirm: boolean; cancel: boolean; message: boolean; registerPerformance: boolean };
+  contract: ContractSummary | null;
   review: { canReview: boolean; reason: string | null; mine: ReviewEntry | null; received: ReviewEntry | null };
 }
 

@@ -118,6 +118,8 @@ export class AccountDeletionService {
             contactPhone: null,
             instagram: null,
             website: null,
+            legalName: null,
+            cnpj: null,
             ...(org.type === 'INDIVIDUAL' ? { name: 'Contratante removido', description: '', addressLine: null, neighborhood: null } : {}),
           },
         });
@@ -226,6 +228,9 @@ export class AccountDeletionService {
       where: { id: userId },
       data: {
         name: 'Usuário removido',
+        legalName: null,
+        cpf: null,
+        rg: null,
         email: `removido-${userId}@anonimizado.invalid`,
         passwordHash: null,
         googleSub: null,

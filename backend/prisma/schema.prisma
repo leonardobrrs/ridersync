@@ -37,6 +37,11 @@ model User {
   failedLoginCount Int          @default(0)
   lockedUntil      DateTime?
   anonymizedAt     DateTime? /// conta excluída a pedido do titular (LGPD): dados pessoais removidos
+  /// Dados civis para contratos (privados; nunca em seleções públicas). cpf: 11 dígitos; rg: texto livre.
+  /// Usados pelo artista solo, pelo representante de banda sem CNPJ (OWNER) e pelo contratante pessoa física.
+  legalName        String?
+  cpf              String?
+  rg               String?
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
 
@@ -242,6 +247,9 @@ model Band {
   id          String   @id @default(uuid()) @db.Uuid
   createdById String?  @db.Uuid
   createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  /// Razão social e CNPJ (somente dígitos) para contratos. Sem CNPJ, o representante é o OWNER ativo da banda.
+  legalName   String?
+  cnpj        String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -319,6 +327,9 @@ model Organization {
   website      String?
   photoId      String?          @unique @db.Uuid
   photo        MediaAsset?      @relation("OrgPhoto", fields: [photoId], references: [id], onDelete: SetNull)
+  /// Razão social e CNPJ (somente dígitos) para contratos de casas (VENUE). Privados. Contratante INDIVIDUAL usa os dados civis do OWNER (User).
+  legalName    String?
+  cnpj         String?
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
 
@@ -634,6 +645,7 @@ model Booking {
   reads         BookingRead[]
   statusChanges BookingStatusChange[]
   performance   Performance?
+  contract      Contract?
 
   @@index([organizationId, status])
   @@index([artistId, status])
@@ -651,24 +663,34 @@ enum OfferStatus {
 /// Proposta/contraproposta imutável quanto aos termos. Uma contraproposta cria nova linha
 /// e marca a anterior como SUPERSEDED (termos preservados).
 model BookingOffer {
-  id              String        @id @default(uuid()) @db.Uuid
-  bookingId       String        @db.Uuid
-  booking         Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  authorId        String?       @db.Uuid
-  author          User?         @relation("OfferAuthor", fields: [authorId], references: [id], onDelete: SetNull)
-  authorSide      BookingSide
-  previousOfferId String?       @unique @db.Uuid
-  previousOffer   BookingOffer? @relation("OfferChain", fields: [previousOfferId], references: [id], onDelete: SetNull)
-  nextOffer       BookingOffer? @relation("OfferChain")
-  performanceAt   DateTime
-  durationMinutes Int
-  feeCents        Int
-  terms           String        @default("")
-  status          OfferStatus   @default(PENDING)
-  respondedAt     DateTime?
-  respondedById   String?       @db.Uuid
-  respondedBy     User?         @relation("OfferResponder", fields: [respondedById], references: [id], onDelete: SetNull)
-  createdAt       DateTime      @default(now())
+  id               String        @id @default(uuid()) @db.Uuid
+  bookingId        String        @db.Uuid
+  booking          Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  authorId         String?       @db.Uuid
+  author           User?         @relation("OfferAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  authorSide       BookingSide
+  previousOfferId  String?       @unique @db.Uuid
+  previousOffer    BookingOffer? @relation("OfferChain", fields: [previousOfferId], references: [id], onDelete: SetNull)
+  nextOffer        BookingOffer? @relation("OfferChain")
+  performanceAt    DateTime
+  durationMinutes  Int
+  feeCents         Int
+  terms            String        @default("")
+  /// Condições para o contrato (todas opcionais; ausentes aparecem como "[A PREENCHER]"). O saldo é derivado
+  /// (cachê − sinal). Fazem parte dos termos da oferta e, como eles, nunca são sobrescritas.
+  presentationDesc String?
+  advanceMinutes   Int?
+  signalCents      Int?
+  signalDueDate    DateTime?     @db.Date
+  balanceDueDate   DateTime?     @db.Date
+  paymentMethod    String?
+  rescissionDays   Int?
+  substitutionDays Int?
+  status           OfferStatus   @default(PENDING)
+  respondedAt      DateTime?
+  respondedById    String?       @db.Uuid
+  respondedBy      User?         @relation("OfferResponder", fields: [respondedById], references: [id], onDelete: SetNull)
+  createdAt        DateTime      @default(now())
 
   @@index([bookingId, createdAt])
 }
@@ -712,6 +734,20 @@ model BookingStatusChange {
   createdAt  DateTime       @default(now())
 
   @@index([bookingId, createdAt])
+}
+
+// ───────────────────────── Contratos ─────────────────────────
+
+/// Contrato de prestação de serviços gerado (por substituição de campos em template) quando a contratação é
+/// CONFIRMADA. Um por Booking. `content` é o texto preenchido e imutável (retrato dos dados naquele momento);
+/// o PDF é renderizado a partir dele no download. Sem assinatura eletrônica e sem validade jurídica garantida.
+model Contract {
+  id           String           @id @default(uuid()) @db.Uuid
+  bookingId    String           @unique @db.Uuid
+  booking      Booking          @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  templateType OrganizationType /// VENUE → venue-artist; INDIVIDUAL → individual-artist
+  content      String           @db.Text
+  generatedAt  DateTime         @default(now())
 }
 
 // ───────────────────────── Apresentações ─────────────────────────

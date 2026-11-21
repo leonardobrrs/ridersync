@@ -10,9 +10,10 @@ import { BOOKING_STATUS, dateTime, duration, money, OFFER_STATUS, SIDE_LABEL } f
 import { BookingChat } from './BookingChat';
 import { ReviewDialog } from './ReviewDialog';
 import { Stars } from '../../components/Stars';
-import type { BookingDetail, BookingRow } from '../../lib/types';
+import type { BookingDetail, BookingRow, Offer } from '../../lib/types';
 import { CompatibilityView } from '../artist/Compatibility';
 import { OfferForm } from './OfferForm';
+import { ContractCard } from '../contracts/ContractCard';
 
 export function BookingsPage() {
   const q = useQuery({ queryKey: ['bookings'], queryFn: () => api.get<BookingRow[]>('/bookings') });
@@ -65,6 +66,34 @@ export function BookingsPage() {
     </>
   );
 }
+
+/** Condições de contrato da oferta (sinal, saldo, prazos…), quando informadas. */
+function ContractTerms({ o }: { o: Offer }) {
+  const items: [string, string][] = [];
+  if (o.presentationDesc) items.push(['Apresentação', o.presentationDesc]);
+  if (o.signalCents != null) {
+    items.push(['Sinal', `${money(o.signalCents)}${o.signalDueDate ? ` até ${dateOnly(o.signalDueDate)}` : ''}`]);
+    items.push(['Saldo', `${money(o.feeCents - o.signalCents)}${o.balanceDueDate ? ` até ${dateOnly(o.balanceDueDate)}` : ''}`]);
+  }
+  if (o.paymentMethod) items.push(['Forma de pagamento', o.paymentMethod]);
+  if (o.advanceMinutes != null) items.push(['Chegada', `${o.advanceMinutes} min antes`]);
+  if (o.rescissionDays != null) items.push(['Aviso de rescisão', `${o.rescissionDays} dia(s)`]);
+  if (o.substitutionDays != null) items.push(['Aviso de substituição', `${o.substitutionDays} dia(s)`]);
+  if (items.length === 0) return null;
+  return (
+    <dl className="dl" aria-label="Condições do contrato">
+      {items.map(([k, v]) => (
+        <div key={k} style={{ display: 'contents' }}>
+          <dt>{k}</dt>
+          <dd>{v}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/** Data sem hora (coluna DATE, meia-noite UTC) → DD/MM/AAAA, sem deslocar para o dia anterior. */
+const dateOnly = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
 
 export function BookingPage() {
   const { bookingId } = useParams();
@@ -202,6 +231,7 @@ export function BookingPage() {
                     </span>
                   </div>
                   {o.terms && <p style={{ fontSize: 14, whiteSpace: 'pre-wrap' }}>{o.terms}</p>}
+                  <ContractTerms o={o} />
                   <small className="hint">
                     Enviada {dateTime(o.createdAt)}
                     {o.respondedAt && ` · respondida ${dateTime(o.respondedAt)}${o.respondedBy ? ` por ${o.respondedBy.name}` : ''}`}
@@ -268,6 +298,8 @@ export function BookingPage() {
             )}
             {b.status === 'AGREED' && b.mySide === 'ARTIST' && <p className="hint">Termos aceitos. Aguardando a confirmação do contratante.</p>}
           </section>
+
+          <ContractCard b={b} />
 
           {b.status === 'CONFIRMED' && (
             <section className="box" aria-label="Apresentação">

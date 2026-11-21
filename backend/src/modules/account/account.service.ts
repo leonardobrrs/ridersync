@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
 import { conflict, unauthorized } from '../../common/errors';
-import { password, text } from '../../common/validation';
+import { optionalCpf, optionalText, password, text } from '../../common/validation';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuthUser } from '../auth/auth.decorators';
 import { PRIVACY_POLICY_VERSION } from '../auth/auth.service';
@@ -22,6 +22,10 @@ export const ChangePasswordSchema = z
     path: ['newPassword'],
     message: 'A nova senha deve ser diferente da atual.',
   });
+/** Dados civis usados nos contratos (PUT = substituição: campo ausente ou vazio limpa o dado). */
+export const LegalProfileSchema = z
+  .object({ legalName: optionalText(120, 'Nome completo'), cpf: optionalCpf, rg: optionalText(20, 'RG') })
+  .strict();
 export const AccountTypeSchema = z.object({ accountType: z.enum(['ARTIST', 'CONTRACTOR']) }).strict();
 export const AcceptTermsSchema = z.object({ version: z.literal(PRIVACY_POLICY_VERSION, { error: 'Versão da política desatualizada. Recarregue a página.' }) }).strict();
 
@@ -35,6 +39,14 @@ export class AccountService {
 
   async update(userId: string, input: z.infer<typeof UpdateAccountSchema>) {
     await this.prisma.user.update({ where: { id: userId }, data: { name: input.name } });
+  }
+
+  async getLegalProfile(userId: string) {
+    return this.prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { legalName: true, cpf: true, rg: true } });
+  }
+
+  async updateLegalProfile(userId: string, input: z.infer<typeof LegalProfileSchema>) {
+    return this.prisma.user.update({ where: { id: userId }, data: input, select: { legalName: true, cpf: true, rg: true } });
   }
 
   /** Contas com senha exigem a atual; contas criadas só com Google podem definir a primeira senha. */
@@ -87,6 +99,9 @@ export class AccountService {
         name: true,
         email: true,
         accountType: true,
+        legalName: true,
+        cpf: true,
+        rg: true,
         emailVerifiedAt: true,
         googleSub: true,
         termsAcceptedAt: true,

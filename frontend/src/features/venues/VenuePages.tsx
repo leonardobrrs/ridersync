@@ -19,6 +19,8 @@ import { date, dateTime, EVENT_STATUS, ROLE_LABEL } from '../../lib/format';
 import { useAction, useMeta } from '../../lib/hooks';
 import type { OrgDetail, OrgEventRow, OrgSummary, Rider } from '../../lib/types';
 import { EquipmentEditor, type EquipmentInput } from '../artist/EquipmentEditor';
+import { CnpjField, cnpjRule } from '../contracts/LegalDataForms';
+import { maskCnpj } from '../../lib/documents';
 
 const OrgSchema = z.object({
   name: z.string().trim().min(2, 'Nome é obrigatório.').max(100),
@@ -33,6 +35,8 @@ const OrgSchema = z.object({
   contactPhone: z.string().trim().max(20).refine(isValidPhoneBR, 'Telefone incompleto. Use DDD + número, ex.: (82) 99999-9999.'),
   instagram: z.string().trim().max(31),
   website: z.string().trim().refine((v) => v === '' || /^https:\/\/[^\s]+\.[^\s]+/.test(v), 'Use um link começando com https://'),
+  legalName: z.string().trim().max(150, 'No máximo 150 caracteres.'),
+  cnpj: cnpjRule,
 });
 type OrgValues = z.infer<typeof OrgSchema>;
 
@@ -49,6 +53,8 @@ const toOrgValues = (o?: Partial<OrgDetail>): OrgValues => ({
   contactPhone: formatPhone(o?.contactPhone),
   instagram: o?.instagram ?? '',
   website: o?.website ?? '',
+  legalName: o?.legalName ?? '',
+  cnpj: maskCnpj(o?.cnpj),
 });
 const toOrgPayload = (v: OrgValues) => ({
   name: v.name,
@@ -63,6 +69,8 @@ const toOrgPayload = (v: OrgValues) => ({
   contactPhone: v.contactPhone || null,
   instagram: v.instagram || null,
   website: v.website || null,
+  legalName: v.legalName || null,
+  cnpj: v.cnpj || null,
 });
 
 function OrgFields({ form }: { form: ReturnType<typeof useForm<OrgValues>> }) {
@@ -93,6 +101,14 @@ function OrgFields({ form }: { form: ReturnType<typeof useForm<OrgValues>> }) {
           <PhoneField label="Telefone/WhatsApp" {...form.register('contactPhone')} error={e.contactPhone} />
           <TextField label="Instagram" {...form.register('instagram')} error={e.instagram} />
           <TextField label="Site" {...form.register('website')} error={e.website} />
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>Dados para contrato (privados)</legend>
+        <p className="hint">Aparecem somente nos contratos das contratações confirmadas — nunca na página pública da casa.</p>
+        <div className="row2">
+          <TextField label="Razão social" {...form.register('legalName')} error={e.legalName} />
+          <CnpjField label="CNPJ" {...form.register('cnpj')} error={e.cnpj} />
         </div>
       </fieldset>
     </>

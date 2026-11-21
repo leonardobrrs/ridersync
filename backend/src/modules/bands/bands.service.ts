@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { assertBandCanInvite, assertBandCanRemove, assertKeepsAnOwner } from '../../common/membership.rules';
 import { conflict, forbidden, notFound, unprocessable } from '../../common/errors';
 import { BAND_POSITIONS } from '../../common/domain-lists';
-import { email } from '../../common/validation';
+import { email, optionalCnpj, optionalText } from '../../common/validation';
 import { PrismaService, Tx } from '../../prisma/prisma.service';
 import { AccessService } from '../access/access.service';
 import { PasswordConfirmationSchema, ReauthService } from '../auth/reauth.service';
@@ -14,6 +14,8 @@ import { ArtistsService } from '../artists/artists.service';
 import { mediaUrl } from '../media/media.service';
 
 export const CreateBandSchema = CreateArtistSchema;
+/** Razão social e CNPJ da banda para contratos (PUT = substituição). Sem CNPJ, o OWNER representa o grupo. */
+export const BandLegalSchema = z.object({ legalName: optionalText(150, 'Razão social'), cnpj: optionalCnpj }).strict();
 const position = z.enum(BAND_POSITIONS, { error: 'Escolha uma função da lista.' }).nullable();
 export const InviteBandMemberSchema = z
   .object({
@@ -110,6 +112,12 @@ export class BandsService {
       }));
   }
 
+  async updateLegal(userId: string, bandId: string, input: z.infer<typeof BandLegalSchema>) {
+    await this.requireRole(this.prisma, bandId, userId, ['OWNER', 'ADMIN']);
+    await this.prisma.band.update({ where: { id: bandId }, data: input });
+    return this.detail(userId, bandId);
+  }
+
   /** Detalhe para integrantes ativos. Convites pendentes (e e-mails convidados) só para OWNER/ADMIN. */
   async detail(userId: string, bandId: string) {
     const role = await this.requireRole(this.prisma, bandId, userId, ['OWNER', 'ADMIN', 'MEMBER']);
@@ -119,6 +127,8 @@ export class BandsService {
       select: {
         id: true,
         createdAt: true,
+        legalName: isManager,
+        cnpj: isManager,
         artist: { select: { id: true } },
         members: {
           where: { status: { in: isManager ? ['ACTIVE', 'INVITED'] : ['ACTIVE'] } },
@@ -143,10 +153,15 @@ export class BandsService {
       },
     });
     const artist = await this.artists.getManaged(userId, band.artist!.id);
+    const owner = isManager
+      ? await this.prisma.bandMember.findFirst({ where: { bandId, role: 'OWNER', status: 'ACTIVE' }, select: { user: { select: { legalName: true, cpf: true } } } })
+      : null;
     return {
       bandId: band.id,
       myRole: role,
       artist,
+      /** Dados de contrato (só OWNER/ADMIN). Sem CNPJ, o contrato usa nome civil e CPF do proprietário. */
+      legal: isManager ? { legalName: band.legalName ?? null, cnpj: band.cnpj ?? null, ownerHasLegalData: !!owner?.user.legalName && !!owner.user.cpf } : null,
       members: band.members.map((m) => ({
         id: m.id,
         role: m.role,
