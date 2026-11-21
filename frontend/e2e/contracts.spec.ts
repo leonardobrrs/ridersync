@@ -55,8 +55,8 @@ test('contrato: aviso de dados antes de confirmar, PDF para as duas partes e atu
   // Contrato gerado na confirmação, com campos em aberto
   const card = page.getByRole('region', { name: 'Contrato' });
   await expect(card.getByText(/com casa de show/)).toBeVisible();
-  await expect(card.getByText(/campos ainda estão como “\[A PREENCHER\]”/)).toBeVisible();
-  const [download] = await Promise.all([page.waitForEvent('download'), card.getByRole('link', { name: 'Baixar contrato (PDF)' }).click()]);
+  await expect(card.getByRole('region', { name: 'O que falta preencher' })).toContainText('em branco no PDF');
+  const [download] = await Promise.all([page.waitForEvent('download'), card.getByRole('link', { name: 'Baixar PDF' }).click()]);
   expect(download.suggestedFilename()).toBe(`contrato-${booking.id}.pdf`);
   expect(readFileSync((await download.path())!).subarray(0, 5).toString()).toBe('%PDF-');
 
@@ -66,8 +66,8 @@ test('contrato: aviso de dados antes de confirmar, PDF para as duas partes e atu
   const artistCard = artist.page.getByRole('region', { name: 'Contrato' });
   await artistCard.getByRole('button', { name: 'Atualizar contrato' }).click();
   await toast(artist.page, 'Contrato atualizado');
-  await expect(artistCard.getByText(/ainda estão como/)).toHaveCount(0);
-  const [again] = await Promise.all([artist.page.waitForEvent('download'), artistCard.getByRole('link', { name: 'Baixar contrato (PDF)' }).click()]);
+  await expect(artistCard.getByRole('region', { name: 'O que falta preencher' })).toHaveCount(0);
+  const [again] = await Promise.all([artist.page.waitForEvent('download'), artistCard.getByRole('link', { name: 'Baixar PDF' }).click()]);
   expect(readFileSync((await again.path())!).subarray(0, 5).toString()).toBe('%PDF-');
 
   await artist.context.close();
@@ -108,12 +108,13 @@ test('contratante pessoa física: vê o contrato, vai aos próprios dados, atual
   const card = page.getByRole('region', { name: 'Contrato' });
   await expect(card.getByText(/para evento particular/)).toBeVisible();
   // Pendências: o que é, de quem é a vez e onde preencher
-  const mine = card.locator('li', { hasText: 'Nome completo do contratante, CPF do contratante, RG do contratante' });
-  await expect(mine).toContainText('quem preenche: você');
+  const pending = card.getByRole('region', { name: 'O que falta preencher' });
+  const mine = pending.locator('.pending-sec', { has: page.getByRole('heading', { name: 'Com você' }) });
+  await expect(mine).toContainText('Nome completo do contratante, CPF do contratante, RG do contratante');
   await expect(mine).toContainText('"Conta e privacidade" › "Dados para contrato"');
-  await expect(card.locator('li', { hasText: 'Nome completo do artista, CPF do artista' })).toContainText('a outra parte (artista)');
+  await expect(pending.locator('.pending-sec', { has: page.getByRole('heading', { name: 'Com a outra parte (artista)' }) })).toContainText('Nome completo do artista, CPF do artista');
   await expect(card.getByRole('button', { name: 'Atualizar contrato' })).toBeVisible();
-  await card.getByRole('link', { name: 'Meus dados para contrato' }).click();
+  await card.getByRole('link', { name: 'Meus dados' }).click();
   await expect(page).toHaveURL(/\/painel\/conta$/);
   await page.getByLabel('Nome completo (como no documento)').fill('Paula Festa da Silva');
   await page.getByLabel('CPF').fill('111.444.777-35');
@@ -125,7 +126,7 @@ test('contratante pessoa física: vê o contrato, vai aos próprios dados, atual
   await page.goto(`/painel/negociacoes/${booking.id}`);
   await card.getByRole('button', { name: 'Atualizar contrato' }).click();
   await toast(page, 'Contrato atualizado');
-  await expect(card.locator('li', { hasText: 'Nome completo do contratante' })).toHaveCount(0);
+  await expect(card.getByText('Nome completo do contratante, CPF do contratante, RG do contratante')).toHaveCount(0);
 
   // O artista é avisado (sino) da geração e da atualização
   await artist.page.goto('/painel/notificacoes');

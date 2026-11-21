@@ -361,9 +361,9 @@ schema genérico; as diferenças abaixo vêm do modelo real do repositório e s�
   seguinte. Embutida inteira (o subset do pdf-lib + fontkit perde glifos desta fonte); o PDF fica com ~600 KB.
   Blocos de assinatura nunca são partidos entre páginas. Modelo da casa passou a imprimir o prazo do saldo; a cláusula de
   substituição usa "da equipe que acompanha <artista>" para artista solo.
-- **Pendências explicadas (21/11)**: campo ausente sai como "[A PREENCHER: <o que é>]" (ex.: "CPF do contratante"). O PDF
-  ganha, em página própria, o anexo "PENDÊNCIAS DE PREENCHIMENTO" com quem preenche (CONTRATANTE, CONTRATADO ou as duas
-  partes) e como: dado cadastral → tela exata no RiderSync + "Atualizar contrato"; condição que não constou na proposta
-  (sinal, prazos, forma de pagamento, antecedência) → combinar e preencher à mão antes de assinar. Catálogo único em
-  `contract-data.rules.ts` (`PENDING_CATALOG`, `fieldLabels`, `renderContract`); o resumo da API expõe `pendingItems` e o
-  cartão mostra a mesma lista agrupada, dizendo se a vez é "você", "a outra parte" ou "as duas partes".
+- **Pendências só na tela (21/11, decisão do responsável)**: o texto guarda cada campo ausente com o nome do que falta
+  ("[A PREENCHER: CPF do contratante]"), mas o PDF não traz instruções: cada marcador vira uma linha em branco para as partes
+  preencherem à mão (campo sozinho na linha, como o nome sob a assinatura, sai "Nome: ____"; linhas com campo em branco não
+  são justificadas). O que falta, quem preenche e como aparece só no cartão do contrato na negociação ("O que falta
+  preencher", por seção: com você / com a outra parte / com as duas partes). Anexo de pendências de contratos gerados na
+  versão anterior é descartado na impressão.

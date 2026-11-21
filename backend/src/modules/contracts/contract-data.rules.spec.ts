@@ -312,10 +312,10 @@ describe('pendências: o que é, quem preenche, onde e como', () => {
     expect(items).toContainEqual(expect.objectContaining({ label: 'CPF do contratante', who: 'CONTRATANTE', how: expect.stringContaining('"Conta e privacidade" › "Dados para contrato"') }));
     expect(items).toContainEqual(expect.objectContaining({ label: 'CPF do artista', who: 'CONTRATADO' }));
     expect(items).toContainEqual(expect.objectContaining({ label: 'Forma de pagamento', who: 'AMBAS', how: expect.stringContaining('à mão') }));
-    expect(content).toContain('PENDÊNCIAS DE PREENCHIMENTO');
-    expect(content).toContain('- Nome completo do contratante; CPF do contratante; RG do contratante — quem preenche: o CONTRATANTE. No RiderSync');
+    expect(content).not.toContain('PENDÊNCIAS'); // o contrato não explica pendências: isso é na tela da negociação
+    expect(content).toContain('Nome completo: [A PREENCHER: Nome completo do contratante]');
     // a contagem é do texto do contrato, não do anexo
-    expect(pendingCount(content)).toBe(content.split('PENDÊNCIAS')[0].split('[A PREENCHER').length - 1);
+    expect(pendingCount(content)).toBe(content.split('[A PREENCHER').length - 1);
   });
 
   it('sem pendências não há anexo', () => {

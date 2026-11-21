@@ -62,37 +62,52 @@ export function ContractReadinessNotice({ b }: { b: BookingDetail }) {
   );
 }
 
-/** Itens com o mesmo responsável e a mesma instrução numa linha só (como no anexo do PDF). */
-function groupPending(items: ContractSummary['pendingItems']) {
-  const groups = new Map<string, { labels: string[]; who: ContractSummary['pendingItems'][number]['who']; how: string }>();
+type PendingItem = ContractSummary['pendingItems'][number];
+
+/** Itens com o mesmo responsável e a mesma instrução numa linha só. */
+function groupByHow(items: PendingItem[]) {
+  const groups = new Map<string, { labels: string[]; how: string }>();
   for (const i of items) {
-    const k = `${i.who}|${i.how}`;
-    const g = groups.get(k) ?? { labels: [], who: i.who, how: i.how };
+    const g = groups.get(i.how) ?? { labels: [], how: i.how };
     g.labels.push(i.label);
-    groups.set(k, g);
+    groups.set(i.how, g);
   }
   return [...groups.values()];
 }
 
-const WHO_LABEL = { CONTRATANTE: 'Contratante', CONTRATADO: 'Artista', AMBAS: 'As duas partes' } as const;
-
-/** Pendências do contrato: o que é cada "[A PREENCHER]", de quem é a vez (você / a outra parte / as duas) e como resolver. */
-function PendingList({ b, items, count, locked }: { b: BookingDetail; items: ContractSummary['pendingItems']; count: number; locked: boolean }) {
+/**
+ * O que falta preencher no contrato — só na tela (o PDF traz linhas em branco, sem instruções). Agrupado por quem
+ * preenche: primeiro o que é com você, depois com a outra parte e por fim o que as duas partes combinam à mão.
+ */
+function PendingList({ b, items, count, locked }: { b: BookingDetail; items: PendingItem[]; count: number; locked: boolean }) {
   const mine = b.mySide === 'ARTIST' ? 'CONTRATADO' : 'CONTRATANTE';
-  const whoText = (w: keyof typeof WHO_LABEL) => (w === 'AMBAS' ? 'as duas partes' : w === mine ? 'você' : `a outra parte (${WHO_LABEL[w].toLowerCase()})`);
+  const other = mine === 'CONTRATADO' ? 'CONTRATANTE' : 'CONTRATADO';
+  const sections = [
+    { who: mine, title: 'Com você' },
+    { who: other, title: `Com a outra parte (${other === 'CONTRATADO' ? 'artista' : 'contratante'})` },
+    { who: 'AMBAS', title: 'Com as duas partes' },
+  ]
+    .map((s) => ({ ...s, groups: groupByHow(items.filter((i) => i.who === s.who)) }))
+    .filter((s) => s.groups.length > 0);
   return (
-    <div className="inline-msg info pending-list" style={{ margin: 0 }}>
-      <p style={{ margin: 0 }}>
-        <strong>{count === 1 ? '1 campo ainda está' : `${count} campos ainda estão`} como “[A PREENCHER]”.</strong>
-        {locked ? ' Com o show realizado, complete à mão antes de assinar.' : ' O PDF traz a mesma lista no anexo “Pendências de preenchimento”.'}
+    <div className="pending-list" role="region" aria-label="O que falta preencher">
+      <p className="pending-head">
+        <strong>O que falta preencher</strong> — {count === 1 ? '1 campo sai' : `${count} campos saem`} em branco no PDF.
+        {locked ? ' Com o show realizado, completem à mão antes de assinar.' : ''}
       </p>
-      <ul>
-        {groupPending(items).map((g) => (
-          <li key={g.labels.join()}>
-            <strong>{g.labels.join(', ')}</strong> — quem preenche: {whoText(g.who)}. <span className="hint">{g.how}</span>
-          </li>
-        ))}
-      </ul>
+      {sections.map((s) => (
+        <div key={s.who} className="pending-sec">
+          <h3>{s.title}</h3>
+          <ul>
+            {s.groups.map((g) => (
+              <li key={g.how}>
+                <strong>{g.labels.join(', ')}</strong>
+                <span className="hint">{g.how}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
     </div>
   );
 }
@@ -116,27 +131,26 @@ export function ContractCard({ b }: { b: BookingDetail }) {
   const happened = showHappenedAt(b);
   const myDataButton = happened ? null : (
     <Link className="btn" to={myDataLink}>
-      Meus dados para contrato
+      Meus dados
     </Link>
   );
   return (
-    <section className="box" aria-label="Contrato">
+    <section className="box contract-card" aria-label="Contrato">
       <h2 className="lbl">Contrato</h2>
       {c ? (
-        <div className="stack-sm">
-          <p>
-            Contrato de prestação de serviços artísticos {c.templateType === 'VENUE' ? 'com casa de show' : 'para evento particular'}, gerado em {dateTime(c.generatedAt)}. Ambas as partes
-            têm acesso ao mesmo documento.
+        <>
+          <p className="contract-status">
+            {c.templateType === 'VENUE' ? 'Contrato com casa de show' : 'Contrato para evento particular'} · gerado em {dateTime(c.generatedAt)} · o mesmo documento para as duas
+            partes.
           </p>
-          {c.pendingFields > 0 && <PendingList b={b} items={c.pendingItems ?? []} count={c.pendingFields} locked={!!happened} />}
           {happened && (
             <p className="inline-msg ok" id={`locked-${b.id}`} style={{ margin: 0 }}>
               Show realizado em {dateTime(happened)}: o contrato não pode mais ser atualizado.
             </p>
           )}
-          <div className="actions" style={{ justifyContent: 'flex-start' }}>
+          <div className="contract-actions">
             <a className="btn cue" href={c.downloadUrl} download={`contrato-${b.id}.pdf`}>
-              Baixar contrato (PDF)
+              Baixar PDF
             </a>
             {happened ? (
               <button type="button" className="btn" disabled aria-describedby={`locked-${b.id}`} title="Show realizado: o contrato não pode mais ser atualizado">
@@ -149,22 +163,23 @@ export function ContractCard({ b }: { b: BookingDetail }) {
             )}
             {myDataButton}
           </div>
-        </div>
+          {c.pendingFields > 0 && <PendingList b={b} items={c.pendingItems ?? []} count={c.pendingFields} locked={!!happened} />}
+        </>
       ) : (
-        <div className="stack-sm">
-          <p>O contrato ainda não foi gerado para esta contratação.</p>
+        <>
+          <p className="contract-status">O contrato ainda não foi gerado para esta contratação.</p>
           <ContractReadinessNotice b={b} />
-          <div className="actions" style={{ justifyContent: 'flex-start' }}>
+          <div className="contract-actions">
             <button type="button" className="btn cue" disabled={generate.isPending} onClick={() => generate.mutate(undefined)}>
               {generate.isPending ? 'Gerando…' : 'Gerar contrato'}
             </button>
             {myDataButton}
           </div>
-        </div>
+        </>
       )}
       <p className="hint">
-        Modelo gerado automaticamente a partir dos termos aceitos e dos dados cadastrados — confira os dados e os campos “[A PREENCHER]” antes de assinar. Se alguém
-        completar os dados, use “Atualizar contrato” — possível até o show. Não há assinatura eletrônica nem validade jurídica garantida, e o pagamento é combinado fora da plataforma.
+        Modelo gerado a partir dos termos aceitos e dos dados cadastrados: confira tudo antes de assinar. {happened ? '' : 'Se alguém completar os dados, use “Atualizar contrato”. '}
+        Não há assinatura eletrônica nem validade jurídica garantida, e o pagamento é combinado fora da plataforma.
       </p>
     </section>
   );

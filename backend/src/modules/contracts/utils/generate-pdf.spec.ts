@@ -1,5 +1,5 @@
 import { PDFDocument } from 'pdf-lib';
-import { generateContractPdf, justifyPositions, reflowParagraphs } from './generate-pdf';
+import { BLANK_FIELD, generateContractPdf, justifyPositions, printableText, reflowParagraphs } from './generate-pdf';
 
 const text = (n: number) => Array.from({ length: n }, (_, i) => `Linha ${i + 1} do contrato com acentuação: ação, é, ç, ª, —.`).join('\n');
 
@@ -110,5 +110,28 @@ describe('justifyPositions', () => {
 
   it('palavra única fica à esquerda', () => {
     expect(justifyPositions([80], 300)).toEqual([0]);
+  });
+});
+
+describe('printableText (o que vai para o papel)', () => {
+  it('campo ausente vira linha em branco, sem "[A PREENCHER" nem instruções', () => {
+    const out = printableText('CPF: [A PREENCHER: CPF do contratante]\nSinal de R$ [A PREENCHER] até [A PREENCHER: Prazo do sinal].\n');
+    expect(out).toBe(`CPF: ${BLANK_FIELD}\nSinal de R$ ${BLANK_FIELD} até ${BLANK_FIELD}.\n`);
+    expect(out).not.toMatch(/PREENCHER/);
+  });
+
+  it('campo ausente sozinho na linha (nome na assinatura) sai rotulado', () => {
+    const sig = '_'.repeat(45);
+    expect(printableText(`${sig}\n[A PREENCHER: Nome completo do contratante]\nCONTRATANTE\n`)).toBe(`${sig}\nNome: ${BLANK_FIELD}\nCONTRATANTE\n`);
+  });
+
+  it('descarta o anexo de pendências de contratos gerados na versão anterior', () => {
+    const out = printableText('Maceió, 21/11/2026.\n\n\nPENDÊNCIAS DE PREENCHIMENTO\n- CPF do contratante — quem preenche: o CONTRATANTE.\n');
+    expect(out).toBe('Maceió, 21/11/2026.\n');
+  });
+
+  it('linha de campo em branco não é tratada como linha de assinatura', () => {
+    const blocks = reflowParagraphs(printableText('O CONTRATANTE\npagará [A PREENCHER: Valor do sinal]\ncontinua aqui\n'));
+    expect(blocks.filter((b) => b.kind === 'text')).toHaveLength(1); // reagrupado num parágrafo só
   });
 });

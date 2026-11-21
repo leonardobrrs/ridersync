@@ -162,7 +162,7 @@ describe('Contratos (integração)', () => {
       const row = await prisma.contract.findUniqueOrThrow({ where: { bookingId: bare.id } });
       expect(row.content).toContain('Sinal de R$ [A PREENCHER: Valor do sinal]');
       expect(row.content).toContain('minutos para preparação e passagem de som');
-      expect(row.content).toContain('PENDÊNCIAS DE PREENCHIMENTO'); // anexo explica cada pendência
+      expect(row.content).toContain('[A PREENCHER: Forma de pagamento]'); // rótulo interno; no PDF vira linha em branco
       expect(row.content).toContain('R$ 1.000,00 (mil reais)');
     });
 

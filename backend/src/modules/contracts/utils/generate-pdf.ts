@@ -30,7 +30,26 @@ const FOOTER_Y = 36;
 const MIN_FILL_TO_JUSTIFY = 0.7;
 
 /** Linhas que recebem destaque (negrito): título, cláusulas e cabeçalhos das partes. */
-const isHeading = (line: string, index: number) => index === 0 || /^(CLÁUSULA \d|CONTRATANTE$|CONTRATADO$|PENDÊNCIAS DE PREENCHIMENTO$)/.test(line.trim());
+const isHeading = (line: string, index: number) => index === 0 || /^(CLÁUSULA \d|CONTRATANTE$|CONTRATADO$)/.test(line.trim());
+
+/** Linha de assinatura do template (45 sublinhados). Linhas de campo em branco são mais curtas e não contam. */
+const SIGNATURE_LINE = /^_{40,}$/;
+/** Campo não informado: linha em branco para as partes preencherem à mão. */
+export const BLANK_FIELD = '_'.repeat(24);
+
+/**
+ * Texto como vai para o papel: cada "[A PREENCHER…]" vira uma linha em branco e eventual anexo de pendências de
+ * versões anteriores é descartado — o que falta é explicado na tela da negociação, não no contrato.
+ */
+export function printableText(content: string): string {
+  const body = content.split('\nPENDÊNCIAS DE PREENCHIMENTO')[0].replace(/\s+$/, '\n');
+  return (
+    body
+      // campo que ocupa a linha inteira (ex.: nome sob a linha de assinatura): rotulado, para não parecer outra assinatura
+      .replace(/^[ \t]*\[A PREENCHER(?::[^\]]*)?\][ \t]*$/gm, `Nome: ${BLANK_FIELD}`)
+      .replace(/\[A PREENCHER(?::[^\]]*)?\]/g, BLANK_FIELD)
+  );
+}
 
 export type Block =
   | { kind: 'blank' }
@@ -57,7 +76,7 @@ export function reflowParagraphs(content: string): Block[] {
         blocks.push({ kind: 'blank' });
         return;
       }
-      if (/^_{5,}$/.test(raw.trim())) reflow = false;
+      if (SIGNATURE_LINE.test(raw.trim())) reflow = false;
       if (isHeading(raw, index)) {
         blocks.push({ kind: 'heading', text: raw.trim(), title: index === 0 });
         return;
@@ -159,7 +178,7 @@ export async function generateContractPdf(content: string, opts: { title?: strin
   };
   const draw = (text: string, x: number, font: PDFFont) => page.drawText(text, { x, y: y - FONT_SIZE, size: FONT_SIZE, font, color: rgb(0, 0, 0) });
 
-  const blocks = reflowParagraphs(content);
+  const blocks = reflowParagraphs(printableText(content));
   /** Altura de um bloco de assinatura: da linha ____ até a próxima linha em branco. */
   const signatureHeight = (start: number) => {
     let h = 0;
@@ -167,12 +186,7 @@ export async function generateContractPdf(content: string, opts: { title?: strin
     return h;
   };
   blocks.forEach((block, index) => {
-    if (block.kind === 'text' && /^_{5,}$/.test(block.text) && y - signatureHeight(index) < MARGIN) {
-      page = doc.addPage([PAGE_W, PAGE_H]);
-      y = PAGE_H - MARGIN;
-    }
-    // Anexo de pendências sempre em página própria (pode ser retirado depois de completar os campos).
-    if (block.kind === 'heading' && block.text === 'PENDÊNCIAS DE PREENCHIMENTO' && y < PAGE_H - MARGIN) {
+    if (block.kind === 'text' && SIGNATURE_LINE.test(block.text) && y - signatureHeight(index) < MARGIN) {
       page = doc.addPage([PAGE_W, PAGE_H]);
       y = PAGE_H - MARGIN;
     }
@@ -201,7 +215,9 @@ export async function generateContractPdf(content: string, opts: { title?: strin
       const available = maxWidth - indent;
       const widths = lineWords.map((w) => regular.widthOfTextAtSize(w, FONT_SIZE));
       const natural = widths.reduce((a, b) => a + b, 0) + regular.widthOfTextAtSize(' ', FONT_SIZE) * (lineWords.length - 1);
-      const justify = idx < lines.length - 1 && lineWords.length > 1 && natural >= available * MIN_FILL_TO_JUSTIFY;
+      // Linha com campo em branco não é justificada: a linha a preencher já ocupa espaço e os vãos ficariam enormes.
+      const justify =
+        idx < lines.length - 1 && lineWords.length > 1 && natural >= available * MIN_FILL_TO_JUSTIFY && !lineWords.some((w) => w.includes(BLANK_FIELD));
       if (justify) {
         const xs = justifyPositions(widths, available);
         lineWords.forEach((w, k) => draw(w, MARGIN + indent + xs[k], regular));
