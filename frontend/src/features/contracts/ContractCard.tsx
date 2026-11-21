@@ -79,7 +79,7 @@ function groupByHow(items: PendingItem[]) {
  * O que falta preencher no contrato — só na tela (o PDF traz linhas em branco, sem instruções). Agrupado por quem
  * preenche: primeiro o que é com você, depois com a outra parte e por fim o que as duas partes combinam à mão.
  */
-function PendingList({ b, items, count, locked }: { b: BookingDetail; items: PendingItem[]; count: number; locked: boolean }) {
+function PendingList({ b, items, count, locked, unlabeled = 0 }: { b: BookingDetail; items: PendingItem[]; count: number; locked: boolean; unlabeled?: number }) {
   const mine = b.mySide === 'ARTIST' ? 'CONTRATADO' : 'CONTRATANTE';
   const other = mine === 'CONTRATADO' ? 'CONTRATANTE' : 'CONTRATADO';
   const sections = [
@@ -95,6 +95,14 @@ function PendingList({ b, items, count, locked }: { b: BookingDetail; items: Pen
         <strong>O que falta preencher</strong> — {count === 1 ? '1 campo sai' : `${count} campos saem`} em branco no PDF.
         {locked ? ' Com o show realizado, completem à mão antes de assinar.' : ''}
       </p>
+      {unlabeled > 0 && (
+        <p className="pending-legacy">
+          {unlabeled === 1 ? '1 campo foi gerado' : `${unlabeled} campos foram gerados`} por uma versão anterior, que não identificava cada campo.{' '}
+          {locked
+            ? 'Como o show já foi realizado, confiram no PDF as linhas em branco e completem à mão antes de assinar.'
+            : 'Clique em “Atualizar contrato” para gerar de novo: a lista abaixo passa a dizer o que é cada campo, quem preenche e como.'}
+        </p>
+      )}
       {sections.map((s) => (
         <div key={s.who} className="pending-sec">
           <h3>{s.title}</h3>
@@ -163,7 +171,9 @@ export function ContractCard({ b }: { b: BookingDetail }) {
             )}
             {myDataButton}
           </div>
-          {c.pendingFields > 0 && <PendingList b={b} items={c.pendingItems ?? []} count={c.pendingFields} locked={!!happened} />}
+          {c.pendingFields > 0 && (
+            <PendingList b={b} items={c.pendingItems ?? []} count={c.pendingFields} locked={!!happened} unlabeled={c.unlabeledPending ?? 0} />
+          )}
         </>
       ) : (
         <>

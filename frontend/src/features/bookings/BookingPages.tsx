@@ -72,8 +72,8 @@ function ContractTerms({ o }: { o: Offer }) {
   const items: [string, string][] = [];
   if (o.presentationDesc) items.push(['Apresentação', o.presentationDesc]);
   if (o.signalCents != null) {
-    items.push(['Sinal', `${money(o.signalCents)}${o.signalDueDate ? ` até ${dateOnly(o.signalDueDate)}` : ''}`]);
-    items.push(['Saldo', `${money(o.feeCents - o.signalCents)}${o.balanceDueDate ? ` até ${dateOnly(o.balanceDueDate)}` : ''}`]);
+    items.push(['Sinal (adiantado)', `${money(o.signalCents)}${o.signalDueDate ? ` até ${dateOnly(o.signalDueDate)}` : ''}`]);
+    items.push(['Saldo (restante do cachê)', `${money(o.feeCents - o.signalCents)}${o.balanceDueDate ? ` até ${dateOnly(o.balanceDueDate)}` : ''}`]);
   }
   if (o.paymentMethod) items.push(['Forma de pagamento', o.paymentMethod]);
   if (o.advanceMinutes != null) items.push(['Chegada', `${o.advanceMinutes} min antes`]);

@@ -424,6 +424,8 @@ export interface ContractSummary {
   pendingFields: number;
   /** O que falta, quem preenche (CONTRATANTE, CONTRATADO ou AMBAS), onde e como. */
   pendingItems: { label: string; who: 'CONTRATANTE' | 'CONTRATADO' | 'AMBAS'; how: string }[];
+  /** Campos em branco sem identificação (contratos gerados por uma versão anterior). */
+  unlabeledPending?: number;
 }
 
 /** Dados cadastrais que faltam em cada lado para o contrato (com onde completar). */
