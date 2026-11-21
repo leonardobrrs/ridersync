@@ -75,12 +75,21 @@ describe('contrato da negociação', () => {
       await waitFor(() => expect(fetchMock.mock.calls.some(([u, i]) => String(u).endsWith('/contracts/booking/b1/refresh') && i?.method === 'POST')).toBe(true));
     });
 
-    it('contratante, depois do show: ainda atualiza e o botão de dados leva à tela do seu lado', async () => {
-      vi.spyOn(globalThis, 'fetch').mockResolvedValue(json({ ...readiness, contractor: { missing: ['CPF do contratante'], link: '/painel/conta' } }));
-      renderCard(booking({ mySide: 'VENUE', contract, agreedOffer: { performanceAt: '2020-01-01T20:00:00Z' }, performance: { id: 'p1' } } as Partial<BookingDetail>));
-      expect(screen.getByRole('button', { name: 'Atualizar contrato' })).toBeInTheDocument();
-      expect(await screen.findByText(/Faltam seus dados para o contrato: CPF do contratante/)).toBeInTheDocument();
-      expect(screen.getByRole('link', { name: 'Meus dados para contrato' })).toHaveAttribute('href', '/painel/conta');
+    it.each([
+      ['apresentação registrada', { agreedOffer: { performanceAt: '2099-01-01T20:00:00Z' }, performance: { id: 'p1', performedAt: '2026-11-20T23:00:00Z' } }],
+      ['data do show já passou', { agreedOffer: { performanceAt: '2020-01-01T20:00:00Z' }, performance: null }],
+    ])('show realizado (%s): aviso e "Atualizar contrato" bloqueado para as duas partes', (_, over) => {
+      for (const mySide of ['VENUE', 'ARTIST']) {
+        const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(readiness));
+        const { unmount } = renderCard(booking({ mySide, contract, ...over } as Partial<BookingDetail>));
+        expect(screen.getByText(/Show realizado em .*: o contrato não pode mais ser atualizado/)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Atualizar contrato' })).toBeDisabled();
+        expect(screen.getByRole('link', { name: /Baixar contrato/ })).toBeInTheDocument();
+        expect(screen.queryByRole('link', { name: 'Meus dados para contrato' })).not.toBeInTheDocument();
+        expect(fetchMock).not.toHaveBeenCalled();
+        unmount();
+        vi.restoreAllMocks();
+      }
     });
   });
 });
