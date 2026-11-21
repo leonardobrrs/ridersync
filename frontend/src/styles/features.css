@@ -381,5 +381,16 @@ body:has(.chat-dock) #root{padding-bottom:calc(var(--tabbar-h) + env(safe-area-i
 .needs-offered{display:grid;gap:6px}
 .needs-sub{font-size:14px;margin-top:4px}
 .needs-list .fchk{display:flex;gap:8px;align-items:center;min-width:0}
-.pending-list ul{margin:8px 0 0;padding-left:18px;display:grid;gap:6px}
-.pending-list .hint{display:inline}
+/* Cartão do contrato (negociação): situação, ações em grade e o que falta preencher */
+.contract-card{display:grid;gap:12px}
+.contract-card .lbl{margin:0}
+.contract-status{margin:0;color:var(--muted);font-size:14px}
+.contract-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.contract-actions .btn{width:100%;justify-content:center;text-align:center;min-height:44px;white-space:normal;line-height:1.2}
+@media (max-width:640px){.contract-actions{grid-template-columns:1fr}}
+.pending-list{border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:grid;gap:10px;background:var(--sunk)}
+.pending-head{margin:0;font-size:14px}
+.pending-sec h3{margin:0 0 4px;font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.pending-sec ul{margin:0;padding:0;list-style:none;display:grid;gap:8px}
+.pending-sec li{display:grid;gap:2px;font-size:14px}
+.pending-sec li .hint{font-size:13px}

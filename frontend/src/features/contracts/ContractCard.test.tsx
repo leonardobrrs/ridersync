@@ -26,7 +26,7 @@ describe('contrato da negociação', () => {
 
   it('contratação confirmada com contrato: link de download autenticado', () => {
     renderCard(booking({ contract }));
-    const link = screen.getByRole('link', { name: /Baixar contrato/ });
+    const link = screen.getByRole('link', { name: 'Baixar PDF' });
     expect(link).toHaveAttribute('href', '/api/contracts/c1/download');
     expect(link).toHaveAttribute('download', 'contrato-b1.pdf');
     expect(screen.getByText(/com casa de show/)).toBeInTheDocument();
@@ -35,7 +35,7 @@ describe('contrato da negociação', () => {
 
   it('contratante também vê o download; evento particular descreve o modelo certo', () => {
     renderCard(booking({ mySide: 'VENUE', contract: { ...contract, templateType: 'INDIVIDUAL' } }));
-    expect(screen.getByRole('link', { name: /Baixar contrato/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Baixar PDF' })).toBeInTheDocument();
     expect(screen.getByText(/para evento particular/)).toBeInTheDocument();
   });
 
@@ -45,10 +45,10 @@ describe('contrato da negociação', () => {
       new Response(JSON.stringify(String(u).endsWith('/readiness') ? ready : contract), { status: 201, headers: { 'Content-Type': 'application/json' } }),
     );
     renderCard(booking());
-    expect(screen.queryByRole('link', { name: /Baixar contrato/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Baixar PDF' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Gerar contrato' }));
     await waitFor(() => expect(fetchMock.mock.calls.some(([u, i]) => String(u).endsWith('/contracts/booking/b1') && i?.method === 'POST')).toBe(true));
-    expect(screen.getByRole('link', { name: 'Meus dados para contrato' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Meus dados' })).toBeInTheDocument();
   });
 
   it.each([
@@ -73,14 +73,15 @@ describe('contrato da negociação', () => {
         { label: 'Forma de pagamento', who: 'AMBAS', how: 'Preencham à mão antes de assinar.' },
       ];
       renderCard(booking({ contract: { ...contract, pendingFields: 4, pendingItems }, agreedOffer: future, performance: null } as Partial<BookingDetail>));
-      expect(screen.getByText(/4 campos ainda estão/)).toBeInTheDocument();
+      expect(screen.getByRole('region', { name: 'O que falta preencher' })).toHaveTextContent('4 campos saem em branco no PDF');
       // o que é, de quem é a vez (do ponto de vista do artista) e como
-      expect(screen.getByText('CPF do artista').closest('li')).toHaveTextContent('quem preenche: você.');
-      expect(screen.getByText('CNPJ da casa').closest('li')).toHaveTextContent('quem preenche: a outra parte (contratante).');
-      expect(screen.getByText('Forma de pagamento').closest('li')).toHaveTextContent('as duas partes. Preencham à mão antes de assinar.');
+      const sec = (title: string) => screen.getByRole('heading', { name: title }).parentElement!;
+      expect(sec('Com você')).toHaveTextContent('CPF do artista');
+      expect(sec('Com a outra parte (contratante)')).toHaveTextContent('CNPJ da casa');
+      expect(sec('Com as duas partes')).toHaveTextContent('Forma de pagamentoPreencham à mão antes de assinar.');
       // com o contrato gerado, a lista de pendências substitui o aviso separado; o botão leva aos meus dados
       expect(screen.queryByText(/Faltam seus dados para o contrato/)).not.toBeInTheDocument();
-      await waitFor(() => expect(screen.getByRole('link', { name: 'Meus dados para contrato' })).toHaveAttribute('href', '/painel/conta'));
+      await waitFor(() => expect(screen.getByRole('link', { name: 'Meus dados' })).toHaveAttribute('href', '/painel/conta'));
       fireEvent.click(screen.getByRole('button', { name: 'Atualizar contrato' }));
       await waitFor(() => expect(fetchMock.mock.calls.some(([u, i]) => String(u).endsWith('/contracts/booking/b1/refresh') && i?.method === 'POST')).toBe(true));
     });
@@ -94,8 +95,8 @@ describe('contrato da negociação', () => {
         const { unmount } = renderCard(booking({ mySide, contract, ...over } as unknown as Partial<BookingDetail>));
         expect(screen.getByText(/Show realizado em .*: o contrato não pode mais ser atualizado/)).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Atualizar contrato' })).toBeDisabled();
-        expect(screen.getByRole('link', { name: /Baixar contrato/ })).toBeInTheDocument();
-        expect(screen.queryByRole('link', { name: 'Meus dados para contrato' })).not.toBeInTheDocument();
+        expect(screen.getByRole('link', { name: 'Baixar PDF' })).toBeInTheDocument();
+        expect(screen.queryByRole('link', { name: 'Meus dados' })).not.toBeInTheDocument();
         expect(fetchMock).not.toHaveBeenCalled();
         unmount();
         vi.restoreAllMocks();

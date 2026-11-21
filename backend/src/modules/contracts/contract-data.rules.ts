@@ -370,8 +370,9 @@ export function fieldLabels(src: Pick<ContractSource, 'contractorType' | 'artist
   };
 }
 
-const APPENDIX_TITLE = 'PENDÊNCIAS DE PREENCHIMENTO';
-const WHO_TEXT: Record<PendingWho, string> = { CONTRATANTE: 'o CONTRATANTE', CONTRATADO: 'o CONTRATADO', AMBAS: 'as duas partes' };
+/** Contratos gerados por uma versão anterior podiam ter um anexo de pendências no fim do texto: ele é ignorado. */
+export const LEGACY_APPENDIX_TITLE = 'PENDÊNCIAS DE PREENCHIMENTO';
+const APPENDIX_TITLE = LEGACY_APPENDIX_TITLE;
 
 /** Pendências do texto (rótulos únicos, na ordem em que aparecem), com quem preenche e como. Ignora o anexo. */
 export function pendingItemsFromContent(content: string): PendingItem[] {
@@ -384,21 +385,10 @@ export function pendingItemsFromContent(content: string): PendingItem[] {
 export const pendingCount = (content: string) => countPending(content.split(APPENDIX_TITLE)[0]);
 
 /**
- * Texto final do contrato: template preenchido (campos ausentes com o nome do que falta) e, se houver pendências, um
- * anexo informativo dizendo o que é cada uma, quem preenche, onde e como.
+ * Texto do contrato: template preenchido. Campos ausentes ficam marcados com o nome do que falta
+ * ("[A PREENCHER: CPF do contratante]") — a tela da negociação lista essas pendências (quem preenche, onde e como);
+ * no PDF cada marcador vira uma linha em branco para as partes completarem à mão.
  */
 export function renderContract(template: string, src: ContractSource): string {
-  const body = fillTemplate(template, buildContractFields(src), fieldLabels(src));
-  const items = pendingItemsFromContent(body);
-  if (!items.length) return body;
-  // Itens com a mesma instrução (mesmo responsável e mesmo caminho) viram uma linha só: "Nome completo, CPF, RG…".
-  const groups = new Map<string, { labels: string[]; who: PendingWho; how: string }>();
-  for (const i of items) {
-    const k = `${i.who}|${i.how}`;
-    const g = groups.get(k) ?? { labels: [], who: i.who, how: i.how };
-    g.labels.push(i.label);
-    groups.set(k, g);
-  }
-  const lines = [...groups.values()].map((g) => `- ${g.labels.join("; ")} — quem preenche: ${WHO_TEXT[g.who]}. ${g.how}`);
-  return `${body.replace(/\s+$/, '')}\n\n\n${APPENDIX_TITLE}\n(anexo informativo gerado pelo RiderSync — retire esta página depois de completar os campos)\n\n${lines.join('\n')}\n`;
+  return fillTemplate(template, buildContractFields(src), fieldLabels(src));
 }
