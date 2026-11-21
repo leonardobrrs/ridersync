@@ -306,11 +306,24 @@ describe('Contratos (integração)', () => {
       expect(stored.content).toContain('111.444.777-35');
     });
 
-    it('depois da data da apresentação o contrato não muda mais', async () => {
+    it('as duas partes são notificadas (sino + e-mail) quando o contrato é gerado e a cada atualização', async () => {
+      const booking = await prisma.booking.findUniqueOrThrow({ where: { id: bookingId }, select: { organizationId: true } });
+      const venueUserIds = (await prisma.organizationMember.findMany({ where: { organizationId: booking.organizationId, status: 'ACTIVE' }, select: { userId: true } })).map((m) => m.userId);
+      const lateUser = await prisma.user.findFirstOrThrow({ where: { legalName: 'Lia Ferraz Atrasada' }, select: { id: true } });
+      for (const type of ['CONTRACT_READY', 'CONTRACT_UPDATED']) {
+        const ns = await prisma.notification.findMany({ where: { type, link: `/painel/negociacoes/${bookingId}` }, select: { userId: true, id: true } });
+        expect(new Set(ns.map((n) => n.userId))).toEqual(new Set([...venueUserIds, lateUser.id]));
+        expect(await prisma.emailOutbox.count({ where: { notificationId: { in: ns.map((n) => n.id) } } })).toBe(ns.length);
+      }
+    });
+
+    it('depois do show o contrato ainda pode ser atualizado (a assinatura é fora da plataforma)', async () => {
       await prisma.bookingOffer.updateMany({ where: { bookingId, status: 'ACCEPTED' }, data: { performanceAt: new Date(Date.now() - 3600_000) } });
+      const before = await prisma.notification.count({ where: { type: 'CONTRACT_UPDATED', link: `/painel/negociacoes/${bookingId}` } });
       const res = await late.post(`/contracts/booking/${bookingId}/refresh`);
-      expect(res.status).toBe(409);
-      expect(res.body.code).toBe('CONTRACT_LOCKED');
+      expect(res.status).toBe(201);
+      // nova versão → novo aviso para as duas partes
+      expect(await prisma.notification.count({ where: { type: 'CONTRACT_UPDATED', link: `/painel/negociacoes/${bookingId}` } })).toBeGreaterThan(before);
     });
   });
 

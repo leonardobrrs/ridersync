@@ -347,8 +347,11 @@ schema genérico; as diferenças abaixo vêm do modelo real do repositório e s�
   limpa `User`, mas o contrato é registro da outra parte). Decidir política de retenção com o responsável.
 - **Fora do escopo (mantido)**: assinatura eletrônica, validade jurídica garantida, pagamentos, uso de IA no preenchimento.
 - **Revisão (21/11)**: o contrato não fica mais congelado enquanto faltam dados. `POST /contracts/booking/:id/refresh` refaz o
-  texto com os dados cadastrais atuais, pelas duas partes, só com a contratação CONFIRMED e antes da apresentação (data
-  acordada no futuro e sem `Performance`); depois disso responde 409 `CONTRACT_LOCKED`. Os termos continuam os da oferta
+  texto com os dados cadastrais atuais, pelas duas partes, enquanto a contratação estiver CONFIRMED — inclusive depois
+  do show (revisão de 21/11, após teste no staging: um contrato gerado tarde não podia ser corrigido; a assinatura é fora da
+  plataforma). Cada geração/atualização notifica as duas partes (sino + e-mail, categoria Negociações; tipos
+  `CONTRACT_READY`/`CONTRACT_UPDATED`, um aviso por versão). O cartão tem "Meus dados para contrato", que leva à tela de
+  dados do lado de quem vê (casa, banda ou Conta). Os termos continuam os da oferta
   aceita. `GET /contracts/booking/:id/readiness` lista os dados cadastrais faltantes de cada lado (regra pura
   `missingPartyData`) com o link de onde completar; a tela avisa antes de confirmar e no cartão do contrato. O resumo do
   contrato expõe só `pendingFields` (quantidade de "[A PREENCHER]"), nunca o texto.

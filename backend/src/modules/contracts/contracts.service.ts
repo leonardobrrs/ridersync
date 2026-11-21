@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { conflict, notFound } from '../../common/errors';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AccessService } from '../access/access.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { buildContractFields, ContractSource, missingPartyData } from './contract-data.rules';
 import { loadTemplate } from './templates';
 import { fillTemplate, PLACEHOLDER } from './utils/fill-template';
@@ -34,6 +35,7 @@ export class ContractsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly access: AccessService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /** Só quem administra um dos lados da negociação enxerga o contrato. Quem não participa recebe 404 (não revela existência). */
@@ -43,6 +45,45 @@ export class ContractsService {
       this.access.artistAccess(userId, booking.artistId),
     ]);
     if (!orgRole && !artistAccess?.canManage) throw notFound('Contrato não encontrado.');
+  }
+
+  /**
+   * Avisa as duas partes (todos os administradores de cada lado) que o contrato foi gerado ou atualizado — no
+   * sino e por e-mail, conforme as preferências de "Negociações". Cada versão do contrato notifica uma única vez.
+   */
+  private async notifyParties(
+    contract: { id: string; bookingId: string; generatedAt: Date; pendingFields: number },
+    kind: 'READY' | 'UPDATED',
+  ) {
+    try {
+      const b = await this.prisma.booking.findUniqueOrThrow({
+        where: { id: contract.bookingId },
+        select: { organizationId: true, artistId: true, title: true, event: { select: { title: true } } },
+      });
+      const [orgUsers, artistUsers] = await Promise.all([
+        this.access.organizationMemberUserIds(b.organizationId),
+        this.access.artistManagerUserIds(b.artistId),
+      ]);
+      const what = b.event?.title ?? b.title;
+      const pending =
+        contract.pendingFields > 0
+          ? ` Ainda há ${contract.pendingFields} campo(s) "[A PREENCHER]": complete seus dados para contrato e atualize o contrato na negociação.`
+          : ' Todos os campos estão preenchidos; confira antes de assinar.';
+      await this.prisma.$transaction((tx) =>
+        this.notifications.notify(tx, [...orgUsers, ...artistUsers], {
+          category: 'BOOKINGS',
+          type: kind === 'READY' ? 'CONTRACT_READY' : 'CONTRACT_UPDATED',
+          title: kind === 'READY' ? `Contrato disponível: ${what}` : `Contrato atualizado: ${what}`,
+          body: (kind === 'READY' ? 'O contrato de prestação de serviços desta contratação foi gerado.' : 'O contrato foi refeito com os dados cadastrais atuais.') + pending,
+          link: `/painel/negociacoes/${contract.bookingId}`,
+          dedupeKey: `contract:${kind}:${contract.id}:${contract.generatedAt.getTime()}`,
+        }),
+      );
+      await this.notifications.flush();
+    } catch (e) {
+      // Aviso é complementar: falha aqui não desfaz a geração do contrato.
+      this.logger.error(`Falha ao notificar o contrato ${contract.id}: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }
 
   private async loadSource(
@@ -156,7 +197,9 @@ export class ContractsService {
         data: { bookingId, templateType: source.contractorType, content, generatedAt: source.generatedAt },
         select: contractSummarySelect,
       });
-      return toContractSummary(created);
+      const summary = toContractSummary(created);
+      await this.notifyParties(summary, 'READY');
+      return summary;
     } catch (e) {
       // Duas confirmações concorrentes: a segunda perde a corrida pela unicidade de bookingId e devolve a existente.
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
@@ -168,18 +211,16 @@ export class ContractsService {
 
   /**
    * Refaz o texto com os dados cadastrais ATUAIS (ex.: as partes preencheram CPF/CNPJ depois da confirmação).
-   * Só enquanto a contratação está confirmada e a apresentação não aconteceu: depois disso o contrato fica como está.
+   * Permitido enquanto a contratação estiver CONFIRMADA — inclusive depois do show, já que a assinatura acontece fora da
+   * plataforma e o contrato pode ter sido gerado tarde. As duas partes são avisadas de cada atualização (sino + e-mail).
    * Os termos continuam os da oferta aceita.
    */
   async refreshForBooking(userId: string, bookingId: string) {
     const booking = await this.prisma.booking.findUnique({ where: { id: bookingId }, select: { organizationId: true, artistId: true } });
     if (!booking) throw notFound('Negociação não encontrada.');
     await this.assertParticipant(userId, booking);
-    const { status, performed, links: _links, ...source } = await this.loadSource(bookingId);
+    const { status, performed: _performed, links: _links, ...source } = await this.loadSource(bookingId);
     if (status !== 'CONFIRMED') throw conflict('NOT_CONFIRMED', 'O contrato só é gerado para contratações confirmadas.');
-    if (performed || source.offer.performanceAt.getTime() <= Date.now()) {
-      throw conflict('CONTRACT_LOCKED', 'Depois da data da apresentação o contrato não pode mais ser atualizado.');
-    }
     const content = fillTemplate(loadTemplate(source.contractorType), buildContractFields(source));
     const saved = await this.prisma.contract.upsert({
       where: { bookingId },
@@ -187,7 +228,9 @@ export class ContractsService {
       update: { templateType: source.contractorType, content, generatedAt: source.generatedAt },
       select: contractSummarySelect,
     });
-    return toContractSummary(saved);
+    const summary = toContractSummary(saved);
+    await this.notifyParties(summary, 'UPDATED');
+    return summary;
   }
 
   /** O que falta de dados cadastrais em cada lado (com o link de onde completar), para avisar antes e depois de confirmar. */

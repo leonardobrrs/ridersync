@@ -40,14 +40,15 @@ describe('contrato da negociação', () => {
   });
 
   it('sem contrato gerado: oferece gerar e chama a API', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify(contract), { status: 201, headers: { 'Content-Type': 'application/json' } }));
+    const ready = { contractor: { missing: [], link: '/painel/casas/o1' }, artist: { missing: [], link: '/painel/conta' } };
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (u) =>
+      new Response(JSON.stringify(String(u).endsWith('/readiness') ? ready : contract), { status: 201, headers: { 'Content-Type': 'application/json' } }),
+    );
     renderCard(booking());
     expect(screen.queryByRole('link', { name: /Baixar contrato/ })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Gerar contrato' }));
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toContain('/contracts/booking/b1');
-    expect(init?.method).toBe('POST');
+    await waitFor(() => expect(fetchMock.mock.calls.some(([u, i]) => String(u).endsWith('/contracts/booking/b1') && i?.method === 'POST')).toBe(true));
+    expect(screen.getByRole('link', { name: 'Meus dados para contrato' })).toBeInTheDocument();
   });
 
   it.each([
@@ -74,10 +75,12 @@ describe('contrato da negociação', () => {
       await waitFor(() => expect(fetchMock.mock.calls.some(([u, i]) => String(u).endsWith('/contracts/booking/b1/refresh') && i?.method === 'POST')).toBe(true));
     });
 
-    it('depois da data do show não oferece atualizar', () => {
-      vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(readiness));
-      renderCard(booking({ contract, agreedOffer: { performanceAt: '2020-01-01T20:00:00Z' }, performance: null } as Partial<BookingDetail>));
-      expect(screen.queryByRole('button', { name: 'Atualizar contrato' })).not.toBeInTheDocument();
+    it('contratante, depois do show: ainda atualiza e o botão de dados leva à tela do seu lado', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(json({ ...readiness, contractor: { missing: ['CPF do contratante'], link: '/painel/conta' } }));
+      renderCard(booking({ mySide: 'VENUE', contract, agreedOffer: { performanceAt: '2020-01-01T20:00:00Z' }, performance: { id: 'p1' } } as Partial<BookingDetail>));
+      expect(screen.getByRole('button', { name: 'Atualizar contrato' })).toBeInTheDocument();
+      expect(await screen.findByText(/Faltam seus dados para o contrato: CPF do contratante/)).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Meus dados para contrato' })).toHaveAttribute('href', '/painel/conta');
     });
   });
 });
