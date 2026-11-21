@@ -73,3 +73,61 @@ test('contrato: aviso de dados antes de confirmar, PDF para as duas partes e atu
   await artist.context.close();
   await contractor.context.close();
 });
+
+test('contratante pessoa física: vê o contrato, vai aos próprios dados, atualiza e o artista é avisado', async ({ browser }) => {
+  const id = stamp();
+  const artist = await newUser(browser, 'Davi Solo');
+  await createPublicMusicianProfile(artist.page, `Davi Solo ${id}`);
+  const artistId: string = (await (await artist.page.request.get('/api/auth/me')).json()).musician.id;
+
+  // Contratante sem casa: o primeiro evento particular cria o perfil de contratação individual
+  const contractor = await newUser(browser, 'Paula Festa', 'CONTRACTOR');
+  const page = contractor.page;
+  const inDays = (n: number) => new Date(Date.now() + n * 86400_000).toISOString();
+  const ev = await apiWrite(page, 'post', '/api/me/independent-events', {
+    title: `Aniversário ${id}`,
+    startsAt: inDays(20),
+    applicationDeadline: inDays(15),
+    locationCity: 'Maceió',
+    visibility: 'PRIVATE',
+    slots: 1,
+  });
+  const me = await (await page.request.get('/api/auth/me')).json();
+  const orgId: string = me.organizations.find((o: { type: string }) => o.type === 'INDIVIDUAL').id;
+  const booking = await apiWrite(page, 'post', '/api/bookings', {
+    organizationId: orgId,
+    artistId,
+    eventId: ev.id,
+    offer: { performanceAt: inDays(20), durationMinutes: 120, feeCents: 90000 },
+  });
+  await apiWrite(artist.page, 'post', `/api/bookings/${booking.id}/offers/${booking.pendingOffer.id}/accept`, {});
+  await apiWrite(page, 'post', `/api/bookings/${booking.id}/confirm`, {});
+
+  // Lado do contratante: cartão, aviso do que falta, "Atualizar contrato" e o botão para os próprios dados
+  await page.goto(`/painel/negociacoes/${booking.id}`);
+  const card = page.getByRole('region', { name: 'Contrato' });
+  await expect(card.getByText(/para evento particular/)).toBeVisible();
+  await expect(card.getByText(/Faltam seus dados para o contrato: Nome completo do contratante, CPF do contratante/)).toBeVisible();
+  await expect(card.getByRole('button', { name: 'Atualizar contrato' })).toBeVisible();
+  await card.getByRole('link', { name: 'Meus dados para contrato' }).click();
+  await expect(page).toHaveURL(/\/painel\/conta$/);
+  await page.getByLabel('Nome completo (como no documento)').fill('Paula Festa da Silva');
+  await page.getByLabel('CPF').fill('111.444.777-35');
+  await page.getByLabel('RG').fill('7654321 SSP/AL');
+  await page.getByRole('button', { name: 'Salvar dados' }).click();
+  await toast(page, /salv/i);
+
+  // Volta e atualiza: o aviso do próprio lado some
+  await page.goto(`/painel/negociacoes/${booking.id}`);
+  await card.getByRole('button', { name: 'Atualizar contrato' }).click();
+  await toast(page, 'Contrato atualizado');
+  await expect(card.getByText(/Faltam seus dados para o contrato: Nome completo do contratante/)).toHaveCount(0);
+
+  // O artista é avisado (sino) da geração e da atualização
+  await artist.page.goto('/painel/notificacoes');
+  await expect(artist.page.getByText(`Contrato atualizado: Aniversário ${id}`)).toBeVisible();
+  await expect(artist.page.getByText(`Contrato disponível: Aniversário ${id}`)).toBeVisible();
+
+  await artist.context.close();
+  await contractor.context.close();
+});
