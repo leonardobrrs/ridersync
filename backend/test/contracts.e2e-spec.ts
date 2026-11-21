@@ -271,6 +271,49 @@ describe('Contratos (integração)', () => {
     });
   });
 
+  describe('atualização e prontidão (dados preenchidos depois da confirmação)', () => {
+    let late: Client;
+    let lateArtist: { id: string };
+    let bookingId: string;
+
+    beforeAll(async () => {
+      late = await registerUser(app, 'Lia Atrasada');
+      lateArtist = await createPublicMusician(late, 'Lia Sem Dados');
+    });
+
+    it('confirmação sem dados civis do artista: contrato sai com campos em aberto e a prontidão aponta o que falta', async () => {
+      const b = await confirmDirect(late, lateArtist.id, terms({ performanceAt: inDays(45) }));
+      bookingId = b.id;
+      expect(b.contract.pendingFields).toBeGreaterThan(0);
+      const ready = await late.get(`/contracts/booking/${bookingId}/readiness`);
+      expect(ready.status).toBe(200);
+      expect(ready.body.artist).toEqual({ missing: ['Nome completo do artista', 'CPF do artista'], link: '/painel/conta' });
+      expect(ready.body.contractor.missing).toEqual([]);
+      expect(ready.body.contractor.link).toBe(`/painel/casas/${venue.id}`);
+      await stranger.get(`/contracts/booking/${bookingId}/readiness`).expect(404);
+    });
+
+    it('depois de preencher, qualquer parte atualiza o contrato (mesmo id, sem campos em aberto)', async () => {
+      const before = (await late.get(`/contracts/booking/${bookingId}`)).body;
+      await late.put('/account/legal-profile', { legalName: 'Lia Ferraz Atrasada', cpf: CPF_CONTRACTOR }).expect(200);
+      await stranger.post(`/contracts/booking/${bookingId}/refresh`).expect(404);
+      const res = await venueOwner.post(`/contracts/booking/${bookingId}/refresh`);
+      expect(res.status).toBe(201);
+      expect(res.body).toMatchObject({ id: before.id, pendingFields: 0 });
+      expect(res.body.content).toBeUndefined();
+      const stored = await prisma.contract.findUniqueOrThrow({ where: { bookingId }, select: { content: true } });
+      expect(stored.content).toContain('Lia Ferraz Atrasada');
+      expect(stored.content).toContain('111.444.777-35');
+    });
+
+    it('depois da data da apresentação o contrato não muda mais', async () => {
+      await prisma.bookingOffer.updateMany({ where: { bookingId, status: 'ACCEPTED' }, data: { performanceAt: new Date(Date.now() - 3600_000) } });
+      const res = await late.post(`/contracts/booking/${bookingId}/refresh`);
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe('CONTRACT_LOCKED');
+    });
+  });
+
   describe('LGPD', () => {
     it('exportação dos dados do titular inclui os dados civis informados', async () => {
       const exp = await soloUser.get('/account/export');

@@ -55,7 +55,7 @@ Legenda: `[x]` feito e verificado nesta máquina · `[~]` feito, com adaptação
 - [x] Contrato não é gerado duas vezes — unicidade no banco + retorno do existente; coberto e passando em `contracts.e2e-spec.ts`
 - [x] Usuário sem vínculo não baixa (404; sem login, 401; integrante MEMBER da banda, 404) — passando em `contracts.e2e-spec.ts`
 - [x] Campos ausentes aparecem como [A PREENCHER] — testes unitários passam
-- [ ] PDF legível e com formatação adequada — **não inspecionado visualmente** (sem poppler); testes confirmam PDF válido A4, paginação, quebra de linha e caracteres fora do WinAnsi
+- [x] PDF legível e com formatação adequada — inspecionado em 21/11 (casa com dados completos e evento particular sem dados); fonte embutida, assinaturas sem quebra de página
 - [x] Músico solo, banda com CNPJ, banda sem CNPJ, casa, pessoa física — mapeamento nos testes unitários (`contract-data.rules.spec.ts`) e fluxo completo no `backend/test/contracts.e2e-spec.ts` (14 testes passando)
 
 ## Validação executada
@@ -67,7 +67,7 @@ Legenda: `[x]` feito e verificado nesta máquina · `[~]` feito, com adaptação
 | Frontend: typecheck, lint, `vite build` | ok |
 | Migration aplicada | ok (Supabase) |
 | Integração (Jest + Supertest, banco `ridersync_test` no Supabase) | **12 suítes, 127 testes passam** (contratos 14, bookings, bandas, LGPD, agenda, auth, segurança, marketplace, eventos…) |
-| Playwright | não executado |
+| Playwright | 29 passam (inclui `contracts.spec.ts`), revisão de 21/11 |
 
 ## Observações
 - Contra banco remoto (us-east-2) a integração exigiu `--testTimeout=180000` e, para `/hire` e `/confirm`, timeout de transação do Prisma maior que o padrão de 5 s (ajuste temporário, **revertido**; não faz parte desta entrega). Num banco com baixa latência passa com a config padrão. Em produção, transações longas (confirmar/contratar) devem ser observadas se o banco ficar longe da API — vale configurar `transactionOptions.timeout` no `PrismaService`.

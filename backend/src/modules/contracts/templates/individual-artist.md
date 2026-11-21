@@ -87,7 +87,7 @@ dos valores e o reagendamento, sem aplicação de multas.
 
 CLÁUSULA 6ª — DA SUBSTITUIÇÃO DE INTEGRANTES
 Em caso de impossibilidade de participação de algum integrante
-do grupo {{ARTISTA_NOME_ARTISTICO}}, o CONTRATADO poderá substituí-lo
+{{ARTISTA_GRUPO}}, o CONTRATADO poderá substituí-lo
 mediante comunicação prévia ao CONTRATANTE com antecedência mínima
 de {{ANTECEDENCIA_SUBSTITUICAO}} dias, desde que a qualidade
 artística da apresentação não seja prejudicada.

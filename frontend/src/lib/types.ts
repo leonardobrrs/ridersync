@@ -420,6 +420,14 @@ export interface ContractSummary {
   generatedAt: string;
   /** Download autenticado (cookie de sessão); só as duas partes da negociação acessam. */
   downloadUrl: string;
+  /** Quantos campos saíram como "[A PREENCHER]". */
+  pendingFields: number;
+}
+
+/** Dados cadastrais que faltam em cada lado para o contrato (com onde completar). */
+export interface ContractReadiness {
+  contractor: { missing: string[]; link: string };
+  artist: { missing: string[]; link: string };
 }
 
 export interface LegalProfile {

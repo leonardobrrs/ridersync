@@ -1,4 +1,22 @@
-import { PDFDocument, PDFFont, StandardFonts, rgb } from 'pdf-lib';
+import fontkit from '@pdf-lib/fontkit';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { PDFDocument, PDFFont, rgb } from 'pdf-lib';
+
+/**
+ * Fonte serifada EMBUTIDA (Tinos, SIL OFL 1.1 — métricas da Times New Roman). Com as fontes padrão do PDF (Times
+ * não embutida) cada visualizador usa uma fonte substituta com larguras próprias: palavras em maiúsculas
+ * ("CONTRATADO") invadiam o espaço seguinte. Embutida, a largura medida aqui é a mesma desenhada em qualquer leitor.
+ * Caminhos literais com __dirname: o nest-cli copia fonts/ para dist e o rastreador da Vercel os inclui no bundle.
+ */
+let fontBytes: { regular: Buffer; bold: Buffer } | null = null;
+function loadFonts() {
+  fontBytes ??= {
+    regular: readFileSync(join(__dirname, '..', 'fonts', 'Tinos-Regular.ttf')),
+    bold: readFileSync(join(__dirname, '..', 'fonts', 'Tinos-Bold.ttf')),
+  };
+  return fontBytes;
+}
 
 // A4 em pontos (1 cm ≈ 28,35 pt). Margem de 2,5 cm — acima do mínimo de 2 cm.
 const PAGE_W = 595.28;
@@ -68,7 +86,7 @@ export function justifyPositions(wordWidths: number[], available: number): numbe
   return xs;
 }
 
-/** Fontes padrão do PDF só codificam WinAnsi: o que não couber (ex.: emoji em nome) vira "?" em vez de quebrar a geração. */
+/** O que a fonte não tem (ex.: emoji em nome) vira "?" em vez de quebrar a geração. */
 function sanitize(text: string, font: PDFFont): string {
   const supported = new Set(font.getCharacterSet());
   return Array.from(text.replace(/\t/g, '  '))
@@ -117,8 +135,11 @@ function wrapWords(words: string[], font: PDFFont, size: number, widthFirst: num
  */
 export async function generateContractPdf(content: string, opts: { title?: string; createdAt?: Date } = {}): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
-  const regular = await doc.embedStandardFont(StandardFonts.TimesRoman);
-  const bold = await doc.embedStandardFont(StandardFonts.TimesRomanBold);
+  doc.registerFontkit(fontkit);
+  const fonts = loadFonts();
+  // Fonte inteira (sem subset): o recorte do pdf-lib + fontkit perde glifos desta fonte (letras somem no PDF).
+  const regular = await doc.embedFont(fonts.regular);
+  const bold = await doc.embedFont(fonts.bold);
   doc.setTitle(opts.title ?? 'Contrato de prestação de serviços artísticos');
   doc.setProducer('RiderSync');
   doc.setCreator('RiderSync');
@@ -138,7 +159,18 @@ export async function generateContractPdf(content: string, opts: { title?: strin
   };
   const draw = (text: string, x: number, font: PDFFont) => page.drawText(text, { x, y: y - FONT_SIZE, size: FONT_SIZE, font, color: rgb(0, 0, 0) });
 
-  reflowParagraphs(content).forEach((block) => {
+  const blocks = reflowParagraphs(content);
+  /** Altura de um bloco de assinatura: da linha ____ até a próxima linha em branco. */
+  const signatureHeight = (start: number) => {
+    let h = 0;
+    for (let i = start; i < blocks.length && blocks[i].kind !== 'blank'; i++) h += LINE_H + (blocks[i].kind === 'heading' ? 4 : 0);
+    return h;
+  };
+  blocks.forEach((block, index) => {
+    if (block.kind === 'text' && /^_{5,}$/.test(block.text) && y - signatureHeight(index) < MARGIN) {
+      page = doc.addPage([PAGE_W, PAGE_H]);
+      y = PAGE_H - MARGIN;
+    }
     if (block.kind === 'blank') {
       y -= PARA_GAP;
       return;

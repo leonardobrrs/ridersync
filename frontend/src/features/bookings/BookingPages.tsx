@@ -13,7 +13,7 @@ import { Stars } from '../../components/Stars';
 import type { BookingDetail, BookingRow, Offer } from '../../lib/types';
 import { CompatibilityView } from '../artist/Compatibility';
 import { OfferForm } from './OfferForm';
-import { ContractCard } from '../contracts/ContractCard';
+import { ContractCard, ContractReadinessNotice } from '../contracts/ContractCard';
 
 export function BookingsPage() {
   const q = useQuery({ queryKey: ['bookings'], queryFn: () => api.get<BookingRow[]>('/bookings') });
@@ -297,6 +297,8 @@ export function BookingPage() {
               </div>
             )}
             {b.status === 'AGREED' && b.mySide === 'ARTIST' && <p className="hint">Termos aceitos. Aguardando a confirmação do contratante.</p>}
+            {/* Antes de confirmar: o contrato é gerado na confirmação com os dados cadastrados de cada lado. */}
+            {b.status === 'AGREED' && <ContractReadinessNotice b={b} />}
           </section>
 
           <ContractCard b={b} />

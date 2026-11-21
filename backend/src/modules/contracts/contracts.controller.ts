@@ -22,6 +22,18 @@ export class ContractsController {
     return this.contracts.ensureForBooking(user.id, bookingId);
   }
 
+  /** Refaz o contrato com os dados cadastrais atuais (só antes da apresentação). */
+  @Post('booking/:bookingId/refresh')
+  refresh(@CurrentUser() user: AuthUser, @Param('bookingId', ParseUUIDPipe) bookingId: string) {
+    return this.contracts.refreshForBooking(user.id, bookingId);
+  }
+
+  /** Dados cadastrais que faltam em cada lado para o contrato sair completo. */
+  @Get('booking/:bookingId/readiness')
+  readiness(@CurrentUser() user: AuthUser, @Param('bookingId', ParseUUIDPipe) bookingId: string) {
+    return this.contracts.readiness(user.id, bookingId);
+  }
+
   @Get(':contractId/download')
   async download(
     @CurrentUser() user: AuthUser,

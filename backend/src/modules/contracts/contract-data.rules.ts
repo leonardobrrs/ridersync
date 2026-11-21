@@ -131,6 +131,8 @@ function artistFields(src: ContractSource): ContractFields {
   if (src.artist.kind === 'SOLO') {
     return {
       ARTISTA_NOME_ARTISTICO: name,
+      // Cláusula de substituição: artista solo não tem "grupo"; quem pode ser substituído é quem o acompanha.
+      ARTISTA_GRUPO: `da equipe que acompanha ${name ?? MISSING}`,
       ARTISTA_NOME_LEGAL: val(src.soloPerson?.legalName),
       ARTISTA_DOCUMENTO: cpf(src.soloPerson?.cpf),
       ARTISTA_REPRESENTANTE: '',
@@ -139,6 +141,7 @@ function artistFields(src: ContractSource): ContractFields {
   if (val(src.band?.cnpj)) {
     return {
       ARTISTA_NOME_ARTISTICO: name,
+      ARTISTA_GRUPO: `do grupo ${name ?? MISSING}`,
       ARTISTA_NOME_LEGAL: val(src.band?.legalName),
       ARTISTA_DOCUMENTO: cnpj(src.band?.cnpj),
       ARTISTA_REPRESENTANTE: '',
@@ -149,6 +152,7 @@ function artistFields(src: ContractSource): ContractFields {
   const ownerCpf = cpf(src.bandOwner?.cpf);
   return {
     ARTISTA_NOME_ARTISTICO: name,
+    ARTISTA_GRUPO: `do grupo ${name ?? MISSING}`,
     ARTISTA_NOME_LEGAL: ownerName,
     ARTISTA_DOCUMENTO: ownerCpf,
     ARTISTA_REPRESENTANTE: `${ownerName ?? MISSING}, CPF ${ownerCpf ?? MISSING}, representando o grupo musical "${name ?? MISSING}"`,
@@ -236,4 +240,40 @@ export function buildContractFields(src: ContractSource): ContractFields {
 
 export function templateFileFor(type: ContractorType): 'venue-artist.md' | 'individual-artist.md' {
   return type === 'VENUE' ? 'venue-artist.md' : 'individual-artist.md';
+}
+
+/** Dados cadastrais (não negociados) que faltam em cada lado: o que cada parte pode completar antes ou depois de confirmar. */
+export interface MissingPartyData {
+  contractor: string[];
+  artist: string[];
+}
+
+/**
+ * Lista, com rótulos para a interface, os dados civis que sairiam como "[A PREENCHER]" no contrato. Termos da oferta
+ * (sinal, prazos, forma de pagamento) ficam fora: só mudam por contraproposta, não pelo cadastro.
+ */
+export function missingPartyData(src: ContractSource): MissingPartyData {
+  const f = buildContractFields(src);
+  const pick = (pairs: [key: string, label: string][]) => pairs.filter(([k]) => f[k] === undefined).map(([, label]) => label);
+  const contractor =
+    src.contractorType === 'VENUE'
+      ? pick([
+          ['CONTRATANTE_CNPJ', 'CNPJ da casa'],
+          ['CONTRATANTE_ENDERECO', 'Endereço da casa'],
+          ['CONTRATANTE_CIDADE', 'Cidade da casa'],
+        ])
+      : pick([
+          ['CONTRATANTE_NOME', 'Nome completo do contratante'],
+          ['CONTRATANTE_CPF', 'CPF do contratante'],
+          ['CONTRATANTE_RG', 'RG do contratante'],
+          ['CONTRATANTE_ENDERECO', 'Endereço do contratante'],
+          ['CONTRATANTE_TELEFONE', 'Telefone do contratante'],
+        ]);
+  const band = src.artist.kind === 'BAND';
+  const withCnpj = band && !!val(src.band?.cnpj);
+  const artist = pick([
+    ['ARTISTA_NOME_LEGAL', withCnpj ? 'Razão social da banda' : band ? 'Nome completo do responsável pela banda' : 'Nome completo do artista'],
+    ['ARTISTA_DOCUMENTO', band ? 'CPF do responsável pela banda (ou CNPJ da banda)' : 'CPF do artista'],
+  ]);
+  return { contractor, artist };
 }

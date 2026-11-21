@@ -27,7 +27,7 @@ Pela prestação dos serviços, o CONTRATANTE pagará ao CONTRATADO
 o valor total de R$ {{CACHE_VALOR}} ({{CACHE_VALOR_EXTENSO}}),
 da seguinte forma:
 - Sinal de R$ {{SINAL_VALOR}} ({{SINAL_VALOR_EXTENSO}}) até {{SINAL_PRAZO}};
-- Saldo de R$ {{SALDO_VALOR}} ({{SALDO_VALOR_EXTENSO}}) via {{FORMA_PAGAMENTO}}.
+- Saldo de R$ {{SALDO_VALOR}} ({{SALDO_VALOR_EXTENSO}}) via {{FORMA_PAGAMENTO}}, até {{SALDO_PRAZO}}.
 
 CLÁUSULA 3ª — DAS OBRIGAÇÕES DO CONTRATANTE
 São obrigações do CONTRATANTE:

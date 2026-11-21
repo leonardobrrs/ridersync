@@ -3,17 +3,25 @@ import { Prisma } from '@prisma/client';
 import { conflict, notFound } from '../../common/errors';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AccessService } from '../access/access.service';
-import { buildContractFields, ContractSource } from './contract-data.rules';
+import { buildContractFields, ContractSource, missingPartyData } from './contract-data.rules';
 import { loadTemplate } from './templates';
-import { fillTemplate } from './utils/fill-template';
+import { fillTemplate, PLACEHOLDER } from './utils/fill-template';
 import { generateContractPdf } from './utils/generate-pdf';
 
-const contractSummarySelect = { id: true, bookingId: true, templateType: true, generatedAt: true } satisfies Prisma.ContractSelect;
+export const contractSummarySelect = { id: true, bookingId: true, templateType: true, generatedAt: true, content: true } satisfies Prisma.ContractSelect;
 
 export const contractDownloadUrl = (id: string) => `/api/contracts/${id}/download`;
 
 export function toContractSummary(c: Prisma.ContractGetPayload<{ select: typeof contractSummarySelect }>) {
-  return { id: c.id, bookingId: c.bookingId, templateType: c.templateType, generatedAt: c.generatedAt, downloadUrl: contractDownloadUrl(c.id) };
+  return {
+    id: c.id,
+    bookingId: c.bookingId,
+    templateType: c.templateType,
+    generatedAt: c.generatedAt,
+    downloadUrl: contractDownloadUrl(c.id),
+    /** Campos que saíram como "[A PREENCHER]" (o texto em si nunca vai para a listagem; só no PDF autenticado). */
+    pendingFields: c.content.split(PLACEHOLDER).length - 1,
+  };
 }
 
 const personSelect = { legalName: true, cpf: true } satisfies Prisma.UserSelect;
@@ -37,13 +45,17 @@ export class ContractsService {
     if (!orgRole && !artistAccess?.canManage) throw notFound('Contrato não encontrado.');
   }
 
-  private async loadSource(bookingId: string): Promise<ContractSource & { status: string }> {
+  private async loadSource(
+    bookingId: string,
+  ): Promise<ContractSource & { status: string; performed: boolean; links: { contractor: string; artist: string } }> {
     const b = await this.prisma.booking.findUnique({
       where: { id: bookingId },
       select: {
         status: true,
+        performance: { select: { id: true } },
         organization: {
           select: {
+            id: true,
             type: true,
             name: true,
             legalName: true,
@@ -63,6 +75,7 @@ export class ContractsService {
             musicianProfile: { select: { user: { select: personSelect } } },
             band: {
               select: {
+                id: true,
                 legalName: true,
                 cnpj: true,
                 members: { where: ownerWhere, take: 1, orderBy: { joinedAt: 'asc' }, select: { user: { select: personSelect } } },
@@ -104,10 +117,16 @@ export class ContractsService {
     if (!b) throw notFound('Negociação não encontrada.');
     const offer = b.offers[0];
     if (!offer) throw conflict('NO_AGREED_OFFER', 'Não há termos acordados nesta negociação.');
-    const { members: orgOwners, type, ...orgData } = b.organization;
+    const { members: orgOwners, type, id: orgId, ...orgData } = b.organization;
     const { artist } = b;
     return {
       status: b.status,
+      performed: !!b.performance,
+      // Onde cada lado completa os dados para contrato.
+      links: {
+        contractor: type === 'VENUE' ? `/painel/casas/${orgId}` : '/painel/conta',
+        artist: artist.band ? `/painel/bandas/${artist.band.id}` : '/painel/conta',
+      },
       generatedAt: new Date(),
       contractorType: type,
       organization: orgData,
@@ -129,7 +148,7 @@ export class ContractsService {
   async generateForBooking(bookingId: string) {
     const existing = await this.prisma.contract.findUnique({ where: { bookingId }, select: contractSummarySelect });
     if (existing) return toContractSummary(existing);
-    const { status, ...source } = await this.loadSource(bookingId);
+    const { status, performed: _performed, links: _links, ...source } = await this.loadSource(bookingId);
     if (status !== 'CONFIRMED') throw conflict('NOT_CONFIRMED', 'O contrato só é gerado para contratações confirmadas.');
     const content = fillTemplate(loadTemplate(source.contractorType), buildContractFields(source));
     try {
@@ -145,6 +164,43 @@ export class ContractsService {
       }
       throw e;
     }
+  }
+
+  /**
+   * Refaz o texto com os dados cadastrais ATUAIS (ex.: as partes preencheram CPF/CNPJ depois da confirmação).
+   * Só enquanto a contratação está confirmada e a apresentação não aconteceu: depois disso o contrato fica como está.
+   * Os termos continuam os da oferta aceita.
+   */
+  async refreshForBooking(userId: string, bookingId: string) {
+    const booking = await this.prisma.booking.findUnique({ where: { id: bookingId }, select: { organizationId: true, artistId: true } });
+    if (!booking) throw notFound('Negociação não encontrada.');
+    await this.assertParticipant(userId, booking);
+    const { status, performed, links: _links, ...source } = await this.loadSource(bookingId);
+    if (status !== 'CONFIRMED') throw conflict('NOT_CONFIRMED', 'O contrato só é gerado para contratações confirmadas.');
+    if (performed || source.offer.performanceAt.getTime() <= Date.now()) {
+      throw conflict('CONTRACT_LOCKED', 'Depois da data da apresentação o contrato não pode mais ser atualizado.');
+    }
+    const content = fillTemplate(loadTemplate(source.contractorType), buildContractFields(source));
+    const saved = await this.prisma.contract.upsert({
+      where: { bookingId },
+      create: { bookingId, templateType: source.contractorType, content, generatedAt: source.generatedAt },
+      update: { templateType: source.contractorType, content, generatedAt: source.generatedAt },
+      select: contractSummarySelect,
+    });
+    return toContractSummary(saved);
+  }
+
+  /** O que falta de dados cadastrais em cada lado (com o link de onde completar), para avisar antes e depois de confirmar. */
+  async readiness(userId: string, bookingId: string) {
+    const booking = await this.prisma.booking.findUnique({ where: { id: bookingId }, select: { organizationId: true, artistId: true } });
+    if (!booking) throw notFound('Negociação não encontrada.');
+    await this.assertParticipant(userId, booking);
+    const { status: _s, performed: _p, links, ...source } = await this.loadSource(bookingId);
+    const missing = missingPartyData(source);
+    return {
+      contractor: { missing: missing.contractor, link: links.contractor },
+      artist: { missing: missing.artist, link: links.artist },
+    };
   }
 
   /** Geração a partir da confirmação: uma falha aqui não pode desfazer a contratação (o contrato pode ser gerado depois). */
