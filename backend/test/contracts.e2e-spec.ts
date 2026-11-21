@@ -317,13 +317,25 @@ describe('Contratos (integração)', () => {
       }
     });
 
-    it('depois do show o contrato ainda pode ser atualizado (a assinatura é fora da plataforma)', async () => {
+    it('show realizado (data passada): o contrato fica bloqueado e ninguém é avisado de nova versão', async () => {
       await prisma.bookingOffer.updateMany({ where: { bookingId, status: 'ACCEPTED' }, data: { performanceAt: new Date(Date.now() - 3600_000) } });
       const before = await prisma.notification.count({ where: { type: 'CONTRACT_UPDATED', link: `/painel/negociacoes/${bookingId}` } });
-      const res = await late.post(`/contracts/booking/${bookingId}/refresh`);
+      for (const c of [late, venueOwner]) {
+        const res = await c.post(`/contracts/booking/${bookingId}/refresh`);
+        expect(res.status).toBe(409);
+        expect(res.body.code).toBe('CONTRACT_LOCKED');
+      }
+      expect(await prisma.notification.count({ where: { type: 'CONTRACT_UPDATED', link: `/painel/negociacoes/${bookingId}` } })).toBe(before);
+      // o download continua disponível
+      expect((await late.get(`/contracts/booking/${bookingId}`)).body.downloadUrl).toMatch(/\/download$/);
+    });
+
+    it('contratação antiga sem contrato: a primeira geração continua permitida depois do show', async () => {
+      await prisma.contract.delete({ where: { bookingId } });
+      const res = await late.post(`/contracts/booking/${bookingId}`);
       expect(res.status).toBe(201);
-      // nova versão → novo aviso para as duas partes
-      expect(await prisma.notification.count({ where: { type: 'CONTRACT_UPDATED', link: `/painel/negociacoes/${bookingId}` } })).toBeGreaterThan(before);
+      expect(res.body.bookingId).toBe(bookingId);
+      await late.post(`/contracts/booking/${bookingId}/refresh`).expect(409);
     });
   });
 

@@ -5,14 +5,21 @@ import { api } from '../../lib/api';
 import { dateTime } from '../../lib/format';
 import type { BookingDetail, ContractReadiness, ContractSummary } from '../../lib/types';
 
-/** O contrato pode ser refeito com os dados atuais enquanto a contratação estiver confirmada (inclusive após o show). */
-export function canRefreshContract(b: BookingDetail) {
-  return b.status === 'CONFIRMED';
+/** Show realizado: apresentação registrada ou data combinada já passou. A partir daí o contrato não muda mais. */
+export function showHappenedAt(b: BookingDetail, now = Date.now()): string | null {
+  if (b.performance) return b.performance.performedAt;
+  if (b.agreedOffer && new Date(b.agreedOffer.performanceAt).getTime() <= now) return b.agreedOffer.performanceAt;
+  return null;
+}
+
+/** O contrato pode ser refeito com os dados atuais enquanto a contratação estiver confirmada e o show não aconteceu. */
+export function canRefreshContract(b: BookingDetail, now = Date.now()) {
+  return b.status === 'CONFIRMED' && !showHappenedAt(b, now);
 }
 
 /** Dados cadastrais que faltam em cada lado (e onde completá-los). Mesma consulta para o aviso e para o botão. */
 function useReadiness(b: BookingDetail) {
-  const enabled = !!b.mySide && (b.status === 'AGREED' || b.status === 'CONFIRMED');
+  const enabled = !!b.mySide && (b.status === 'AGREED' || canRefreshContract(b));
   return useQuery({
     queryKey: ['contract-readiness', b.id],
     queryFn: () => api.get<ContractReadiness>(`/contracts/booking/${b.id}/readiness`),
@@ -71,7 +78,8 @@ export function ContractCard({ b }: { b: BookingDetail }) {
   if (b.status !== 'CONFIRMED' || !b.mySide) return null;
   const c = b.contract;
   const myDataLink = readiness.data ? mineOf(b, readiness.data).link : '/painel/conta';
-  const myDataButton = (
+  const happened = showHappenedAt(b);
+  const myDataButton = happened ? null : (
     <Link className="btn" to={myDataLink}>
       Meus dados para contrato
     </Link>
@@ -91,12 +99,21 @@ export function ContractCard({ b }: { b: BookingDetail }) {
               atualizar o contrato; condições que não constaram na proposta (sinal, prazos, forma de pagamento) são completadas à mão antes de assinar.
             </p>
           )}
+          {happened && (
+            <p className="inline-msg ok" id={`locked-${b.id}`} style={{ margin: 0 }}>
+              Show realizado em {dateTime(happened)}: o contrato não pode mais ser atualizado.
+            </p>
+          )}
           <ContractReadinessNotice b={b} />
           <div className="actions" style={{ justifyContent: 'flex-start' }}>
             <a className="btn cue" href={c.downloadUrl} download={`contrato-${b.id}.pdf`}>
               Baixar contrato (PDF)
             </a>
-            {canRefreshContract(b) && (
+            {happened ? (
+              <button type="button" className="btn" disabled aria-describedby={`locked-${b.id}`} title="Show realizado: o contrato não pode mais ser atualizado">
+                Atualizar contrato
+              </button>
+            ) : (
               <button type="button" className="btn" disabled={refresh.isPending} onClick={() => refresh.mutate(undefined)}>
                 {refresh.isPending ? 'Atualizando…' : 'Atualizar contrato'}
               </button>
@@ -118,7 +135,7 @@ export function ContractCard({ b }: { b: BookingDetail }) {
       )}
       <p className="hint">
         Modelo gerado automaticamente a partir dos termos aceitos e dos dados cadastrados — confira os dados e os campos “[A PREENCHER]” antes de assinar. Se alguém
-        completar os dados, use “Atualizar contrato”. Não há assinatura eletrônica nem validade jurídica garantida, e o pagamento é combinado fora da plataforma.
+        completar os dados, use “Atualizar contrato” — possível até o show. Não há assinatura eletrônica nem validade jurídica garantida, e o pagamento é combinado fora da plataforma.
       </p>
     </section>
   );

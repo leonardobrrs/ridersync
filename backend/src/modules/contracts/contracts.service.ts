@@ -211,16 +211,19 @@ export class ContractsService {
 
   /**
    * Refaz o texto com os dados cadastrais ATUAIS (ex.: as partes preencheram CPF/CNPJ depois da confirmação).
-   * Permitido enquanto a contratação estiver CONFIRMADA — inclusive depois do show, já que a assinatura acontece fora da
-   * plataforma e o contrato pode ter sido gerado tarde. As duas partes são avisadas de cada atualização (sino + e-mail).
+   * Permitido enquanto a contratação estiver CONFIRMADA e o show não tiver acontecido (apresentação registrada ou data
+   * combinada já passada): depois disso o contrato fica como está. As duas partes são avisadas de cada atualização.
    * Os termos continuam os da oferta aceita.
    */
   async refreshForBooking(userId: string, bookingId: string) {
     const booking = await this.prisma.booking.findUnique({ where: { id: bookingId }, select: { organizationId: true, artistId: true } });
     if (!booking) throw notFound('Negociação não encontrada.');
     await this.assertParticipant(userId, booking);
-    const { status, performed: _performed, links: _links, ...source } = await this.loadSource(bookingId);
+    const { status, performed, links: _links, ...source } = await this.loadSource(bookingId);
     if (status !== 'CONFIRMED') throw conflict('NOT_CONFIRMED', 'O contrato só é gerado para contratações confirmadas.');
+    if (performed || source.offer.performanceAt.getTime() <= Date.now()) {
+      throw conflict('CONTRACT_LOCKED', 'Show realizado: o contrato não pode mais ser atualizado.');
+    }
     const content = fillTemplate(loadTemplate(source.contractorType), buildContractFields(source));
     const saved = await this.prisma.contract.upsert({
       where: { bookingId },
