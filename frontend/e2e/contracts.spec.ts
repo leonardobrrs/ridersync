@@ -107,7 +107,11 @@ test('contratante pessoa física: vê o contrato, vai aos próprios dados, atual
   await page.goto(`/painel/negociacoes/${booking.id}`);
   const card = page.getByRole('region', { name: 'Contrato' });
   await expect(card.getByText(/para evento particular/)).toBeVisible();
-  await expect(card.getByText(/Faltam seus dados para o contrato: Nome completo do contratante, CPF do contratante/)).toBeVisible();
+  // Pendências: o que é, de quem é a vez e onde preencher
+  const mine = card.locator('li', { hasText: 'Nome completo do contratante, CPF do contratante, RG do contratante' });
+  await expect(mine).toContainText('quem preenche: você');
+  await expect(mine).toContainText('"Conta e privacidade" › "Dados para contrato"');
+  await expect(card.locator('li', { hasText: 'Nome completo do artista, CPF do artista' })).toContainText('a outra parte (artista)');
   await expect(card.getByRole('button', { name: 'Atualizar contrato' })).toBeVisible();
   await card.getByRole('link', { name: 'Meus dados para contrato' }).click();
   await expect(page).toHaveURL(/\/painel\/conta$/);
@@ -121,7 +125,7 @@ test('contratante pessoa física: vê o contrato, vai aos próprios dados, atual
   await page.goto(`/painel/negociacoes/${booking.id}`);
   await card.getByRole('button', { name: 'Atualizar contrato' }).click();
   await toast(page, 'Contrato atualizado');
-  await expect(card.getByText(/Faltam seus dados para o contrato: Nome completo do contratante/)).toHaveCount(0);
+  await expect(card.locator('li', { hasText: 'Nome completo do contratante' })).toHaveCount(0);
 
   // O artista é avisado (sino) da geração e da atualização
   await artist.page.goto('/painel/notificacoes');

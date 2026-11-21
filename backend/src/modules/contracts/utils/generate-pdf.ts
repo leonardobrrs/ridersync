@@ -30,7 +30,7 @@ const FOOTER_Y = 36;
 const MIN_FILL_TO_JUSTIFY = 0.7;
 
 /** Linhas que recebem destaque (negrito): título, cláusulas e cabeçalhos das partes. */
-const isHeading = (line: string, index: number) => index === 0 || /^(CLÁUSULA \d|CONTRATANTE$|CONTRATADO$)/.test(line.trim());
+const isHeading = (line: string, index: number) => index === 0 || /^(CLÁUSULA \d|CONTRATANTE$|CONTRATADO$|PENDÊNCIAS DE PREENCHIMENTO$)/.test(line.trim());
 
 export type Block =
   | { kind: 'blank' }
@@ -168,6 +168,11 @@ export async function generateContractPdf(content: string, opts: { title?: strin
   };
   blocks.forEach((block, index) => {
     if (block.kind === 'text' && /^_{5,}$/.test(block.text) && y - signatureHeight(index) < MARGIN) {
+      page = doc.addPage([PAGE_W, PAGE_H]);
+      y = PAGE_H - MARGIN;
+    }
+    // Anexo de pendências sempre em página própria (pode ser retirado depois de completar os campos).
+    if (block.kind === 'heading' && block.text === 'PENDÊNCIAS DE PREENCHIMENTO' && y < PAGE_H - MARGIN) {
       page = doc.addPage([PAGE_W, PAGE_H]);
       y = PAGE_H - MARGIN;
     }

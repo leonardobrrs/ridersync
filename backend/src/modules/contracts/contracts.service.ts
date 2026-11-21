@@ -4,9 +4,8 @@ import { conflict, notFound } from '../../common/errors';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AccessService } from '../access/access.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { buildContractFields, ContractSource, missingPartyData } from './contract-data.rules';
+import { ContractSource, missingPartyData, pendingCount, pendingItemsFromContent, renderContract } from './contract-data.rules';
 import { loadTemplate } from './templates';
-import { fillTemplate, PLACEHOLDER } from './utils/fill-template';
 import { generateContractPdf } from './utils/generate-pdf';
 
 export const contractSummarySelect = { id: true, bookingId: true, templateType: true, generatedAt: true, content: true } satisfies Prisma.ContractSelect;
@@ -21,7 +20,9 @@ export function toContractSummary(c: Prisma.ContractGetPayload<{ select: typeof 
     generatedAt: c.generatedAt,
     downloadUrl: contractDownloadUrl(c.id),
     /** Campos que saíram como "[A PREENCHER]" (o texto em si nunca vai para a listagem; só no PDF autenticado). */
-    pendingFields: c.content.split(PLACEHOLDER).length - 1,
+    pendingFields: pendingCount(c.content),
+    /** O que falta, quem preenche, onde e como. */
+    pendingItems: pendingItemsFromContent(c.content),
   };
 }
 
@@ -191,7 +192,7 @@ export class ContractsService {
     if (existing) return toContractSummary(existing);
     const { status, performed: _performed, links: _links, ...source } = await this.loadSource(bookingId);
     if (status !== 'CONFIRMED') throw conflict('NOT_CONFIRMED', 'O contrato só é gerado para contratações confirmadas.');
-    const content = fillTemplate(loadTemplate(source.contractorType), buildContractFields(source));
+    const content = renderContract(loadTemplate(source.contractorType), source);
     try {
       const created = await this.prisma.contract.create({
         data: { bookingId, templateType: source.contractorType, content, generatedAt: source.generatedAt },
@@ -224,7 +225,7 @@ export class ContractsService {
     if (performed || source.offer.performanceAt.getTime() <= Date.now()) {
       throw conflict('CONTRACT_LOCKED', 'Show realizado: o contrato não pode mais ser atualizado.');
     }
-    const content = fillTemplate(loadTemplate(source.contractorType), buildContractFields(source));
+    const content = renderContract(loadTemplate(source.contractorType), source);
     const saved = await this.prisma.contract.upsert({
       where: { bookingId },
       create: { bookingId, templateType: source.contractorType, content, generatedAt: source.generatedAt },

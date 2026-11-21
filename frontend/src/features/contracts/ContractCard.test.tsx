@@ -5,7 +5,7 @@ import { ToastProvider } from '../../components/Toast';
 import type { BookingDetail } from '../../lib/types';
 import { ContractCard } from './ContractCard';
 
-const contract = { id: 'c1', bookingId: 'b1', templateType: 'VENUE' as const, generatedAt: '2026-11-20T15:00:00Z', downloadUrl: '/api/contracts/c1/download', pendingFields: 0 };
+const contract = { id: 'c1', bookingId: 'b1', templateType: 'VENUE' as const, generatedAt: '2026-11-20T15:00:00Z', downloadUrl: '/api/contracts/c1/download', pendingFields: 0, pendingItems: [] };
 
 const booking = (over: Partial<BookingDetail> = {}) => ({ id: 'b1', status: 'CONFIRMED', mySide: 'ARTIST', contract: null, ...over }) as unknown as BookingDetail;
 
@@ -67,10 +67,20 @@ describe('contrato da negociação', () => {
       const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) =>
         String(url).endsWith('/readiness') ? json(readiness) : json({ ...contract, pendingFields: 0 }, 201),
       );
-      renderCard(booking({ contract: { ...contract, pendingFields: 4 }, agreedOffer: future, performance: null } as Partial<BookingDetail>));
+      const pendingItems = [
+        { label: 'CPF do artista', who: 'CONTRATADO', how: 'No RiderSync, em "Conta e privacidade".' },
+        { label: 'CNPJ da casa', who: 'CONTRATANTE', how: 'Em "Dados da casa".' },
+        { label: 'Forma de pagamento', who: 'AMBAS', how: 'Preencham à mão antes de assinar.' },
+      ];
+      renderCard(booking({ contract: { ...contract, pendingFields: 4, pendingItems }, agreedOffer: future, performance: null } as Partial<BookingDetail>));
       expect(screen.getByText(/4 campos ainda estão/)).toBeInTheDocument();
-      expect(await screen.findByText(/Faltam seus dados para o contrato: CPF do artista/)).toBeInTheDocument();
-      expect(screen.getByRole('link', { name: 'Completar dados' })).toHaveAttribute('href', '/painel/conta');
+      // o que é, de quem é a vez (do ponto de vista do artista) e como
+      expect(screen.getByText('CPF do artista').closest('li')).toHaveTextContent('quem preenche: você.');
+      expect(screen.getByText('CNPJ da casa').closest('li')).toHaveTextContent('quem preenche: a outra parte (contratante).');
+      expect(screen.getByText('Forma de pagamento').closest('li')).toHaveTextContent('as duas partes. Preencham à mão antes de assinar.');
+      // com o contrato gerado, a lista de pendências substitui o aviso separado; o botão leva aos meus dados
+      expect(screen.queryByText(/Faltam seus dados para o contrato/)).not.toBeInTheDocument();
+      await waitFor(() => expect(screen.getByRole('link', { name: 'Meus dados para contrato' })).toHaveAttribute('href', '/painel/conta'));
       fireEvent.click(screen.getByRole('button', { name: 'Atualizar contrato' }));
       await waitFor(() => expect(fetchMock.mock.calls.some(([u, i]) => String(u).endsWith('/contracts/booking/b1/refresh') && i?.method === 'POST')).toBe(true));
     });
@@ -81,7 +91,7 @@ describe('contrato da negociação', () => {
     ])('show realizado (%s): aviso e "Atualizar contrato" bloqueado para as duas partes', (_, over) => {
       for (const mySide of ['VENUE', 'ARTIST']) {
         const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(readiness));
-        const { unmount } = renderCard(booking({ mySide, contract, ...over } as Partial<BookingDetail>));
+        const { unmount } = renderCard(booking({ mySide, contract, ...over } as unknown as Partial<BookingDetail>));
         expect(screen.getByText(/Show realizado em .*: o contrato não pode mais ser atualizado/)).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Atualizar contrato' })).toBeDisabled();
         expect(screen.getByRole('link', { name: /Baixar contrato/ })).toBeInTheDocument();

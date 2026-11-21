@@ -422,6 +422,8 @@ export interface ContractSummary {
   downloadUrl: string;
   /** Quantos campos saíram como "[A PREENCHER]". */
   pendingFields: number;
+  /** O que falta, quem preenche (CONTRATANTE, CONTRATADO ou AMBAS), onde e como. */
+  pendingItems: { label: string; who: 'CONTRATANTE' | 'CONTRATADO' | 'AMBAS'; how: string }[];
 }
 
 /** Dados cadastrais que faltam em cada lado para o contrato (com onde completar). */

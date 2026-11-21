@@ -1,4 +1,5 @@
 import { formatCnpj, formatCpf } from '../../common/documents';
+import { countPending, fillTemplate, placeholderFor } from './utils/fill-template';
 import { toExtenso } from './utils/to-extenso';
 
 /**
@@ -13,7 +14,6 @@ const DEFAULT_SUBSTITUTION_DAYS = 5;
 const DEFAULT_INFO_DAYS = 3;
 const EVENT_DESCRIPTION_MAX = 300;
 const WITNESS_LINE = '______________________________';
-const MISSING = '[A PREENCHER]';
 
 export type ContractorType = 'VENUE' | 'INDIVIDUAL';
 
@@ -132,7 +132,7 @@ function artistFields(src: ContractSource): ContractFields {
     return {
       ARTISTA_NOME_ARTISTICO: name,
       // Cláusula de substituição: artista solo não tem "grupo"; quem pode ser substituído é quem o acompanha.
-      ARTISTA_GRUPO: `da equipe que acompanha ${name ?? MISSING}`,
+      ARTISTA_GRUPO: `da equipe que acompanha ${name ?? placeholderFor('Nome artístico')}`,
       ARTISTA_NOME_LEGAL: val(src.soloPerson?.legalName),
       ARTISTA_DOCUMENTO: cpf(src.soloPerson?.cpf),
       ARTISTA_REPRESENTANTE: '',
@@ -141,7 +141,7 @@ function artistFields(src: ContractSource): ContractFields {
   if (val(src.band?.cnpj)) {
     return {
       ARTISTA_NOME_ARTISTICO: name,
-      ARTISTA_GRUPO: `do grupo ${name ?? MISSING}`,
+      ARTISTA_GRUPO: `do grupo ${name ?? placeholderFor('Nome artístico')}`,
       ARTISTA_NOME_LEGAL: val(src.band?.legalName),
       ARTISTA_DOCUMENTO: cnpj(src.band?.cnpj),
       ARTISTA_REPRESENTANTE: '',
@@ -152,10 +152,10 @@ function artistFields(src: ContractSource): ContractFields {
   const ownerCpf = cpf(src.bandOwner?.cpf);
   return {
     ARTISTA_NOME_ARTISTICO: name,
-    ARTISTA_GRUPO: `do grupo ${name ?? MISSING}`,
+    ARTISTA_GRUPO: `do grupo ${name ?? placeholderFor('Nome artístico')}`,
     ARTISTA_NOME_LEGAL: ownerName,
     ARTISTA_DOCUMENTO: ownerCpf,
-    ARTISTA_REPRESENTANTE: `${ownerName ?? MISSING}, CPF ${ownerCpf ?? MISSING}, representando o grupo musical "${name ?? MISSING}"`,
+    ARTISTA_REPRESENTANTE: `${ownerName ?? placeholderFor('Nome completo do responsável pela banda')}, CPF ${ownerCpf ?? placeholderFor('CPF do responsável pela banda')}, representando o grupo musical "${name ?? placeholderFor('Nome artístico')}"`,
   };
 }
 
@@ -276,4 +276,129 @@ export function missingPartyData(src: ContractSource): MissingPartyData {
     ['ARTISTA_DOCUMENTO', band ? 'CPF do responsável pela banda (ou CNPJ da banda)' : 'CPF do artista'],
   ]);
   return { contractor, artist };
+}
+
+// ───────────── Pendências: o que falta, quem preenche, onde e como ─────────────
+
+export type PendingWho = 'CONTRATANTE' | 'CONTRATADO' | 'AMBAS';
+export interface PendingItem {
+  label: string;
+  who: PendingWho;
+  how: string;
+}
+
+const THEN_UPDATE = ' Depois, clique em "Atualizar contrato" na negociação (possível até o show).';
+const ACCOUNT_DATA = 'No RiderSync, em "Conta e privacidade" › "Dados para contrato".' + THEN_UPDATE;
+const ACCOUNT_ADDRESS = 'No RiderSync, em "Conta e privacidade" › "Endereço para contrato".' + THEN_UPDATE;
+const VENUE_DATA = 'No RiderSync, em "Minhas casas" › a casa › "Dados da casa".' + THEN_UPDATE;
+const BAND_DATA = 'No RiderSync, em "Minhas bandas" › a banda › aba "Dados para contrato".' + THEN_UPDATE;
+const BAND_OWNER =
+  'O responsável (proprietário) da banda, no RiderSync, em "Conta e privacidade" › "Dados para contrato" — ou, se a banda tiver CNPJ, informe razão social e CNPJ em "Minhas bandas" › a banda › aba "Dados para contrato".' +
+  THEN_UPDATE;
+const EVENT_PLACE = 'No RiderSync, no local do evento ("Meus eventos" › o evento › "Local do evento") ou no endereço da casa em "Dados da casa".' + THEN_UPDATE;
+const BY_HAND = 'Não constou na proposta aceita: combinem entre as partes e preencham à mão no documento antes de assinar.';
+
+/** Catálogo por rótulo (os rótulos aparecem no texto do contrato e identificam a pendência). */
+export const PENDING_CATALOG: Record<string, Omit<PendingItem, 'label'>> = {
+  'Nome completo do contratante': { who: 'CONTRATANTE', how: ACCOUNT_DATA },
+  'CPF do contratante': { who: 'CONTRATANTE', how: ACCOUNT_DATA },
+  'RG do contratante': { who: 'CONTRATANTE', how: ACCOUNT_DATA },
+  'Endereço do contratante': { who: 'CONTRATANTE', how: ACCOUNT_ADDRESS },
+  'Cidade/UF do contratante': { who: 'CONTRATANTE', how: ACCOUNT_ADDRESS },
+  'Telefone do contratante': { who: 'CONTRATANTE', how: ACCOUNT_ADDRESS },
+  'CNPJ da casa': { who: 'CONTRATANTE', how: VENUE_DATA },
+  'Endereço da casa': { who: 'CONTRATANTE', how: VENUE_DATA },
+  'Cidade/UF da casa': { who: 'CONTRATANTE', how: VENUE_DATA },
+  'Nome completo do artista': { who: 'CONTRATADO', how: ACCOUNT_DATA },
+  'CPF do artista': { who: 'CONTRATADO', how: ACCOUNT_DATA },
+  'Razão social da banda': { who: 'CONTRATADO', how: BAND_DATA },
+  'CNPJ da banda': { who: 'CONTRATADO', how: BAND_DATA },
+  'Nome completo do responsável pela banda': { who: 'CONTRATADO', how: BAND_OWNER },
+  'CPF do responsável pela banda': { who: 'CONTRATADO', how: BAND_OWNER },
+  'Nome artístico': { who: 'CONTRATADO', how: 'No RiderSync, no perfil do artista ou da banda.' + THEN_UPDATE },
+  'Endereço do evento': { who: 'CONTRATANTE', how: EVENT_PLACE },
+  'Cidade do evento': { who: 'CONTRATANTE', how: EVENT_PLACE },
+  'UF do evento': { who: 'CONTRATANTE', how: EVENT_PLACE },
+  'Natureza do evento particular': {
+    who: 'CONTRATANTE',
+    how: 'No RiderSync, na descrição do evento ("Meus eventos" › o evento).' + THEN_UPDATE + ' Ou descrevam à mão antes de assinar.',
+  },
+  'Valor do sinal': { who: 'AMBAS', how: BY_HAND },
+  'Valor do sinal por extenso': { who: 'AMBAS', how: BY_HAND },
+  'Prazo do sinal': { who: 'AMBAS', how: BY_HAND },
+  'Valor do saldo': { who: 'AMBAS', how: BY_HAND },
+  'Valor do saldo por extenso': { who: 'AMBAS', how: BY_HAND },
+  'Prazo do saldo': { who: 'AMBAS', how: BY_HAND },
+  'Forma de pagamento': { who: 'AMBAS', how: BY_HAND },
+  'Antecedência de chegada (minutos)': { who: 'AMBAS', how: BY_HAND },
+  'Descrição da apresentação': { who: 'AMBAS', how: BY_HAND },
+};
+
+/** Rótulo de cada campo do template conforme o tipo de contratante e de artista. */
+export function fieldLabels(src: Pick<ContractSource, 'contractorType' | 'artist' | 'band'>): Record<string, string> {
+  const venue = src.contractorType === 'VENUE';
+  const band = src.artist.kind === 'BAND';
+  const withCnpj = band && !!val(src.band?.cnpj);
+  return {
+    CONTRATANTE_NOME: 'Nome completo do contratante',
+    CONTRATANTE_CPF: 'CPF do contratante',
+    CONTRATANTE_RG: 'RG do contratante',
+    CONTRATANTE_CNPJ: 'CNPJ da casa',
+    CONTRATANTE_ENDERECO: venue ? 'Endereço da casa' : 'Endereço do contratante',
+    CONTRATANTE_CIDADE: venue ? 'Cidade/UF da casa' : 'Cidade/UF do contratante',
+    CONTRATANTE_UF: venue ? 'Cidade/UF da casa' : 'Cidade/UF do contratante',
+    CONTRATANTE_TELEFONE: 'Telefone do contratante',
+    ARTISTA_NOME_ARTISTICO: 'Nome artístico',
+    ARTISTA_NOME_LEGAL: withCnpj ? 'Razão social da banda' : band ? 'Nome completo do responsável pela banda' : 'Nome completo do artista',
+    ARTISTA_DOCUMENTO: withCnpj ? 'CNPJ da banda' : band ? 'CPF do responsável pela banda' : 'CPF do artista',
+    SINAL_VALOR: 'Valor do sinal',
+    SINAL_VALOR_EXTENSO: 'Valor do sinal por extenso',
+    SINAL_PRAZO: 'Prazo do sinal',
+    SALDO_VALOR: 'Valor do saldo',
+    SALDO_VALOR_EXTENSO: 'Valor do saldo por extenso',
+    SALDO_PRAZO: 'Prazo do saldo',
+    FORMA_PAGAMENTO: 'Forma de pagamento',
+    ANTECEDENCIA_MINUTOS: 'Antecedência de chegada (minutos)',
+    APRESENTACAO_DESCRICAO: 'Descrição da apresentação',
+    EVENTO_ENDERECO: 'Endereço do evento',
+    EVENTO_CIDADE: 'Cidade do evento',
+    EVENTO_UF: 'UF do evento',
+    EVENTO_DESCRICAO: 'Natureza do evento particular',
+    FORO_CIDADE: 'Cidade do evento',
+    FORO_UF: 'UF do evento',
+    CONTRATO_CIDADE: 'Cidade do evento',
+  };
+}
+
+const APPENDIX_TITLE = 'PENDÊNCIAS DE PREENCHIMENTO';
+const WHO_TEXT: Record<PendingWho, string> = { CONTRATANTE: 'o CONTRATANTE', CONTRATADO: 'o CONTRATADO', AMBAS: 'as duas partes' };
+
+/** Pendências do texto (rótulos únicos, na ordem em que aparecem), com quem preenche e como. Ignora o anexo. */
+export function pendingItemsFromContent(content: string): PendingItem[] {
+  const body = content.split(APPENDIX_TITLE)[0];
+  const labels = [...new Set([...body.matchAll(/\[A PREENCHER: ([^\]]+)\]/g)].map((m) => m[1]))];
+  return labels.map((label) => ({ label, ...(PENDING_CATALOG[label] ?? { who: 'AMBAS' as const, how: BY_HAND }) }));
+}
+
+/** Quantos campos do texto (sem o anexo) estão "[A PREENCHER…]". */
+export const pendingCount = (content: string) => countPending(content.split(APPENDIX_TITLE)[0]);
+
+/**
+ * Texto final do contrato: template preenchido (campos ausentes com o nome do que falta) e, se houver pendências, um
+ * anexo informativo dizendo o que é cada uma, quem preenche, onde e como.
+ */
+export function renderContract(template: string, src: ContractSource): string {
+  const body = fillTemplate(template, buildContractFields(src), fieldLabels(src));
+  const items = pendingItemsFromContent(body);
+  if (!items.length) return body;
+  // Itens com a mesma instrução (mesmo responsável e mesmo caminho) viram uma linha só: "Nome completo, CPF, RG…".
+  const groups = new Map<string, { labels: string[]; who: PendingWho; how: string }>();
+  for (const i of items) {
+    const k = `${i.who}|${i.how}`;
+    const g = groups.get(k) ?? { labels: [], who: i.who, how: i.how };
+    g.labels.push(i.label);
+    groups.set(k, g);
+  }
+  const lines = [...groups.values()].map((g) => `- ${g.labels.join("; ")} — quem preenche: ${WHO_TEXT[g.who]}. ${g.how}`);
+  return `${body.replace(/\s+$/, '')}\n\n\n${APPENDIX_TITLE}\n(anexo informativo gerado pelo RiderSync — retire esta página depois de completar os campos)\n\n${lines.join('\n')}\n`;
 }
