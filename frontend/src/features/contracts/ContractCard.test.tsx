@@ -63,6 +63,18 @@ describe('contrato da negociação', () => {
     const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
     const readiness = { contractor: { missing: [], link: '/painel/casas/o1' }, artist: { missing: ['CPF do artista'], link: '/painel/conta' } };
 
+    it.each([
+      ['antes do show: manda atualizar', future, null, /Clique em “Atualizar contrato” para gerar de novo/],
+      ['show realizado: manda completar à mão', { performanceAt: '2020-01-01T20:00:00Z' }, { id: 'p1', performedAt: '2020-01-01T23:00:00Z' }, /completem à mão antes de assinar/],
+    ])('contrato de versão anterior, sem identificação dos campos (%s)', (_, agreedOffer, performance, expected) => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(readiness));
+      const legacy = { ...contract, pendingFields: 9, pendingItems: [], unlabeledPending: 9 };
+      renderCard(booking({ contract: legacy, agreedOffer, performance } as unknown as Partial<BookingDetail>));
+      const list = screen.getByRole('region', { name: 'O que falta preencher' });
+      expect(list).toHaveTextContent('9 campos foram gerados por uma versão anterior');
+      expect(list).toHaveTextContent(expected);
+    });
+
     it('mostra os campos em aberto, o que falta do meu lado e atualiza o contrato', async () => {
       const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) =>
         String(url).endsWith('/readiness') ? json(readiness) : json({ ...contract, pendingFields: 0 }, 201),

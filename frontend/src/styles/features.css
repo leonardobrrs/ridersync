@@ -394,3 +394,4 @@ body:has(.chat-dock) #root{padding-bottom:calc(var(--tabbar-h) + env(safe-area-i
 .pending-sec ul{margin:0;padding:0;list-style:none;display:grid;gap:8px}
 .pending-sec li{display:grid;gap:2px;font-size:14px}
 .pending-sec li .hint{font-size:13px}
+.pending-legacy{margin:0;font-size:14px;padding:8px 10px;border-radius:8px;background:var(--surface);border:1px dashed var(--line)}

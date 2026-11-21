@@ -23,6 +23,8 @@ export function toContractSummary(c: Prisma.ContractGetPayload<{ select: typeof 
     pendingFields: pendingCount(c.content),
     /** O que falta, quem preenche, onde e como. */
     pendingItems: pendingItemsFromContent(c.content),
+    /** Campos em branco sem identificação (contratos gerados antes dos rótulos): "Atualizar contrato" os identifica. */
+    unlabeledPending: c.content.split('[A PREENCHER]').length - 1,
   };
 }
 

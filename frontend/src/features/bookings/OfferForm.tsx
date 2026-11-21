@@ -154,13 +154,21 @@ export function OfferForm({
         <summary>Condições do contrato (opcional)</summary>
         <div className="stack-sm">
           <p className="hint">
-            Estes dados preenchem o contrato gerado quando a contratação for confirmada. O que ficar em branco aparece como “[A PREENCHER]”.
+            Estes dados preenchem o contrato gerado quando a contratação for confirmada. O que ficar em branco sai no contrato como uma linha para as partes
+            preencherem à mão. O cachê pode ser pago em duas partes: o <strong>sinal</strong>, adiantado para garantir a data, e o <strong>saldo</strong>, o restante
+            do cachê (cachê − sinal).
           </p>
           <TextField label="Descrição da apresentação" placeholder="Ex.: Show de forró pé de serra" maxLength={300} {...form.register('presentationDesc')} error={e.presentationDesc} />
           <div className="row3">
-            <TextField label="Sinal (R$)" inputMode="decimal" {...form.register('signal')} error={e.signal} hint={balanceCents != null ? `Saldo: ${money(balanceCents)}` : undefined} />
-            <TextField label="Prazo do sinal" type="date" {...form.register('signalDueDate')} error={e.signalDueDate} />
-            <TextField label="Prazo do saldo" type="date" {...form.register('balanceDueDate')} error={e.balanceDueDate} />
+            <TextField
+              label="Sinal (R$)"
+              inputMode="decimal"
+              {...form.register('signal')}
+              error={e.signal}
+              hint={balanceCents != null ? `Saldo (restante do cachê): ${money(balanceCents)}` : 'Valor adiantado para garantir a data.'}
+            />
+            <TextField label="Prazo do sinal" type="date" {...form.register('signalDueDate')} error={e.signalDueDate} hint="Até quando o sinal deve ser pago." />
+            <TextField label="Prazo do saldo" type="date" {...form.register('balanceDueDate')} error={e.balanceDueDate} hint="Até quando o restante deve ser pago (ex.: no dia do show)." />
           </div>
           <div className="row2">
             <TextField label="Forma de pagamento" placeholder="Ex.: Pix" maxLength={80} {...form.register('paymentMethod')} error={e.paymentMethod} />
