@@ -19,6 +19,7 @@ import type { BandDetail, BandRole, BandSummary } from '../../lib/types';
 import { ArtistWorkspace } from '../artist/ArtistWorkspace';
 import { ProfileFields, ProfileFormSchema, toArtistPayload, toFormValues, type ProfileFormValues } from '../artist/ArtistProfileForm';
 import { InstrumentLabel } from '../../components/InstrumentLabel';
+import { BandLegalSection } from '../contracts/LegalDataForms';
 
 export function BandsPage() {
   const q = useQuery({ queryKey: ['bands'], queryFn: () => api.get<BandSummary[]>('/bands/mine') });
@@ -343,7 +344,10 @@ export function BandPage() {
       <ArtistWorkspace
         artist={band.artist}
         queryKey={key}
-        extraTabs={[{ id: 'membros', label: `Integrantes (${band.members.filter((m) => m.status === 'ACTIVE').length})`, render: () => <MembersTab band={band} /> }]}
+        extraTabs={[
+          { id: 'membros', label: `Integrantes (${band.members.filter((m) => m.status === 'ACTIVE').length})`, render: () => <MembersTab band={band} /> },
+          ...(band.legal ? [{ id: 'contrato', label: 'Dados para contrato', render: () => <BandLegalSection band={band} /> }] : []),
+        ]}
       />
     </>
   );

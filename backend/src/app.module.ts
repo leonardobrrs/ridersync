@@ -11,6 +11,7 @@ import { AuthGuard } from './modules/auth/auth.guard';
 import { AuthModule } from './modules/auth/auth.module';
 import { BandsModule } from './modules/bands/bands.module';
 import { BookingsModule } from './modules/bookings/bookings.module';
+import { ContractsModule } from './modules/contracts/contracts.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { EventsModule } from './modules/events/events.module';
 import { MailModule } from './modules/mail/mail.module';
@@ -55,6 +56,7 @@ class HealthController {
     RidersModule,
     EventsModule,
     BookingsModule,
+    ContractsModule,
     DashboardModule,
     MaintenanceModule,
   ],

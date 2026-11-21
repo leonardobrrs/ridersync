@@ -165,3 +165,11 @@ Verificação: backend 237 testes; frontend 28; Playwright 24 (desktop, tablet, 
 - Validação: backend 246, frontend 31, Playwright 28, lint/typecheck/build ok; smoke remoto no Preview.
 - Ajustes pós-revisão: aviso do rider sem quebra de layout; candidatura em modal (identidade, necessidades e mensagem); busca de convite limpa após escolher o artista; contratante tem "Meus eventos" no topo e no Explorar em vez de "Eventos encerrados".
 - Candidatura: em evento numa casa de show, o inventário da casa vem pré-marcado em "Já oferecido pela casa" (o artista desmarca e ajusta); "Outros itens" para o resto. Corrigido o retorno indevido à home quando se clicava num resultado logo após a busca ao digitar.
+
+
+## Módulo de contratos (20/11) — branch `feat/contracts-module`
+- Contrato PDF gerado automaticamente quando a contratação é confirmada (confirmação normal e "contratar nas condições do evento"), a partir dos templates `venue-artist.md` / `individual-artist.md`; download autenticado para as duas partes; geração sob demanda como recuperação.
+- Backend: módulo `contracts` (service, controller, regras puras `contract-data.rules.ts`, `fill-template`, `to-extenso`, `generate-pdf`), migration `20261120120000_modulo_contratos` (aditiva, com CHECKs), termos de contrato opcionais na oferta, dados civis (`User`), razão social/CNPJ (`Band`, `Organization`), LGPD (exportação e anonimização).
+- Frontend: seção "Condições do contrato" na proposta/contraproposta, cartão "Contrato" na negociação, "Dados para contrato" em Conta, na casa e na banda.
+- Decisões e diferenças em relação à spec: `DECISOES_TECNICAS.md` ("Módulo de contratos"). Relatório: `CONTRACT_MODULE_REPORT.md`.
+- Validação: backend 190 testes unitários + 127 de integração (12 suítes, incl. `contracts.e2e-spec.ts`), frontend 38, typecheck/lint/build de ambos ok; migration aplicada e conferida num banco Supabase. **Não verificados**: PDF visual (sem poppler), Playwright, e a inclusão dos templates `.md` no bundle da Vercel (conferir no Preview).

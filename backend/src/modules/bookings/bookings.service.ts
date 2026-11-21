@@ -2,9 +2,10 @@ import { Injectable } from '@nestjs/common';
 import { Booking, BookingSide, BookingStatus } from '@prisma/client';
 import { z } from 'zod';
 import { conflict, notFound, unprocessable } from '../../common/errors';
-import { moneyCents, text } from '../../common/validation';
+import { moneyCents, optionalText, text } from '../../common/validation';
 import { PrismaService, Tx } from '../../prisma/prisma.service';
 import { AccessService } from '../access/access.service';
+import { ContractsService, toContractSummary } from '../contracts/contracts.service';
 import { publicArtistCardSelect, toArtistCard } from '../artists/artist.presenter';
 import { EventLifecycleService } from '../events/event-lifecycle.service';
 import { ACTIVE_EVENT_STATUSES, assertApplicationTransition } from '../events/event.rules';
@@ -20,14 +21,41 @@ const futureDate = z.iso
   .transform((s) => new Date(s))
   .refine((d) => d.getTime() > Date.now(), 'A data da apresentação deve estar no futuro.');
 
+const optionalInt = (min: number, max: number, label: string) =>
+  z
+    .number()
+    .int(`${label} inválido.`)
+    .min(min, `${label} deve ser de ${min} a ${max}.`)
+    .max(max, `${label} deve ser de ${min} a ${max}.`)
+    .nullish()
+    .transform((v) => v ?? null);
+/** Data sem hora (AAAA-MM-DD) → meia-noite UTC, como a coluna DATE do banco. */
+const optionalDateOnly = z.iso
+  .date({ error: 'Data inválida.' })
+  .nullish()
+  .transform((s) => (s ? new Date(`${s}T00:00:00.000Z`) : null));
+
+/**
+ * Termos da oferta. Os campos de contrato (sinal, prazos, forma de pagamento...) são opcionais: o que faltar aparece
+ * como "[A PREENCHER]" no contrato gerado na confirmação. O pagamento em si acontece fora da plataforma.
+ */
 export const OfferSchema = z
   .object({
     performanceAt: futureDate,
     durationMinutes: z.number().int().min(15, 'Duração mínima: 15 minutos.').max(720),
     feeCents: moneyCents,
     terms: z.string().trim().max(2000).default(''),
+    presentationDesc: optionalText(300, 'Descrição da apresentação'),
+    advanceMinutes: optionalInt(0, 1440, 'Antecedência'),
+    signalCents: moneyCents.nullish().transform((v) => v ?? null),
+    signalDueDate: optionalDateOnly,
+    balanceDueDate: optionalDateOnly,
+    paymentMethod: optionalText(80, 'Forma de pagamento'),
+    rescissionDays: optionalInt(0, 365, 'Prazo de rescisão'),
+    substitutionDays: optionalInt(0, 365, 'Prazo de substituição'),
   })
-  .strict();
+  .strict()
+  .refine((o) => o.signalCents === null || o.signalCents <= o.feeCents, { path: ['signalCents'], message: 'O sinal não pode ser maior que o cachê.' });
 
 export const DirectProposalSchema = z
   .object({
@@ -59,6 +87,7 @@ export class BookingsService {
     private readonly lifecycle: EventLifecycleService,
     private readonly notifications: NotificationsService,
     private readonly agenda: AgendaService,
+    private readonly contracts: ContractsService,
   ) {}
 
   private async sidesFor(userId: string, booking: { organizationId: string; artistId: string }, db?: Tx) {
@@ -294,6 +323,7 @@ export class BookingsService {
       return booking.id;
     });
     await this.notifications.flush();
+    await this.contracts.generateAfterConfirmation(id);
     return this.detail(userId, id);
   }
 
@@ -359,6 +389,14 @@ export class BookingsService {
             durationMinutes: true,
             feeCents: true,
             terms: true,
+            presentationDesc: true,
+            advanceMinutes: true,
+            signalCents: true,
+            signalDueDate: true,
+            balanceDueDate: true,
+            paymentMethod: true,
+            rescissionDays: true,
+            substitutionDays: true,
             status: true,
             createdAt: true,
             respondedAt: true,
@@ -376,6 +414,7 @@ export class BookingsService {
           select: { id: true, fromStatus: true, toStatus: true, actorSide: true, note: true, createdAt: true, actor: { select: { name: true } } },
         },
         performance: { select: { id: true, performedAt: true, notes: true, createdAt: true, registeredBy: { select: { name: true } } } },
+        contract: { select: { id: true, bookingId: true, templateType: true, generatedAt: true } },
         reviews: { orderBy: { createdAt: 'asc' }, select: { id: true, authorSide: true, rating: true, comment: true, createdAt: true } },
       },
     });
@@ -392,6 +431,8 @@ export class BookingsService {
       ...b,
       organization: { ...org, slug: org.type === 'VENUE' ? slug : null, photoUrl: mediaThumbUrl(photoId) },
       artist: toArtistCard(b.artist),
+      /** Contrato gerado na confirmação (null enquanto não existir); o download é autenticado. */
+      contract: b.contract ? toContractSummary(b.contract) : null,
       messages: b.messages.map((m) => ({ ...m, author: m.author ? { name: m.author.name, isMe: m.author.id === userId } : null })),
       /** Avaliação pós-show: cada lado avalia uma vez (contratante → artista; artista → contratante). */
       review: (() => {
@@ -448,7 +489,7 @@ export class BookingsService {
   // ─────────── Ações ───────────
 
   /** Bloqueia evento (se houver) e depois a negociação — mesma ordem do cancelamento de evento, evitando deadlock. */
-  private async act(userId: string, bookingId: string, fn: (tx: Tx, booking: Booking, side: BookingSide) => Promise<void>) {
+  private async act(userId: string, bookingId: string, fn: (tx: Tx, booking: Booking, side: BookingSide) => Promise<void>, afterCommit?: () => Promise<void>) {
     const ref = await this.prisma.booking.findUnique({ where: { id: bookingId }, select: { eventId: true } });
     if (!ref) throw notFound('Negociação não encontrada.');
     await this.prisma.$transaction(async (tx) => {
@@ -458,6 +499,7 @@ export class BookingsService {
       await fn(tx, booking, side);
     });
     await this.notifications.flush();
+    await afterCommit?.();
     return this.detail(userId, bookingId);
   }
 
@@ -530,7 +572,7 @@ export class BookingsService {
         body: `"${booking.title}" foi confirmada pelo contratante. O show já aparece na sua agenda.`,
         dedupeKey: `booking-confirmed:${booking.id}`,
       });
-    });
+    }, () => this.contracts.generateAfterConfirmation(bookingId));
   }
 
   async cancel(userId: string, bookingId: string, reason?: string) {

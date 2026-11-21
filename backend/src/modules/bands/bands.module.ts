@@ -1,10 +1,10 @@
-import { Controller, Delete, Get, HttpCode, Module, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
+import { Controller, Delete, Get, HttpCode, Module, Param, ParseUUIDPipe, Patch, Post, Put } from '@nestjs/common';
 import { ApiCookieAuth, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import { ApiZodBody, ZBody } from '../../common/zod';
 import { ArtistsModule } from '../artists/artists.module';
 import { AuthUser, CurrentUser } from '../auth/auth.decorators';
-import { BandsService, ChangeBandRoleSchema, CreateBandSchema, InviteBandMemberSchema, MemberPositionSchema, TransferSchema } from './bands.service';
+import { BandLegalSchema, BandsService, ChangeBandRoleSchema, CreateBandSchema, InviteBandMemberSchema, MemberPositionSchema, TransferSchema } from './bands.service';
 
 @ApiTags('bands')
 @ApiCookieAuth()
@@ -26,6 +26,16 @@ export class BandsController {
   @Get(':bandId')
   detail(@CurrentUser() user: AuthUser, @Param('bandId', ParseUUIDPipe) bandId: string) {
     return this.bands.detail(user.id, bandId);
+  }
+
+  @Put(':bandId/legal')
+  @ApiZodBody(BandLegalSchema)
+  updateLegal(
+    @CurrentUser() user: AuthUser,
+    @Param('bandId', ParseUUIDPipe) bandId: string,
+    @ZBody(BandLegalSchema) body: z.infer<typeof BandLegalSchema>,
+  ) {
+    return this.bands.updateLegal(user.id, bandId, body);
   }
 
   @Post(':bandId/invitations')

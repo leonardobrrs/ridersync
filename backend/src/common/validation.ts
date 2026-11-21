@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isValidCnpj, isValidCpf, onlyDigits } from './documents';
 import { PASSWORD_RULES } from './password-policy';
 import { AL_CITIES, FORMATS, GENRES, INSTRUMENTS, UF } from './domain-lists';
 
@@ -57,6 +58,18 @@ export const optionalPhone = z
   .trim()
   .max(20)
   .refine((v) => v === '' || /^[0-9()+\-\s]{8,20}$/.test(v), 'Telefone inválido.')
+  .nullish()
+  .transform((v) => (v ? v : null));
+
+/** CPF opcional: aceita máscara, valida os dígitos verificadores e guarda só os 11 dígitos. Vazio vira null. */
+export const optionalCpf = z
+  .union([z.literal(''), z.string().trim().max(14).refine(isValidCpf, 'CPF inválido.').transform(onlyDigits)])
+  .nullish()
+  .transform((v) => (v ? v : null));
+
+/** CNPJ opcional: aceita máscara, valida os dígitos verificadores e guarda só os 14 dígitos. Vazio vira null. */
+export const optionalCnpj = z
+  .union([z.literal(''), z.string().trim().max(18).refine(isValidCnpj, 'CNPJ inválido.').transform(onlyDigits)])
   .nullish()
   .transform((v) => (v ? v : null));
 

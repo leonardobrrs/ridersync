@@ -14,6 +14,7 @@ import { api, ApiError } from '../../lib/api';
 import { date } from '../../lib/format';
 import { useMe } from '../../lib/hooks';
 import { matchesWhenBothFilled, strongPassword } from '../../lib/password';
+import { IndividualContractorSection, LegalProfileSection } from '../contracts/LegalDataForms';
 import type { Me } from '../../lib/types';
 
 const NameSchema = z.object({ name: z.string().trim().min(2, 'Mínimo 2 caracteres.').max(120) });
@@ -33,6 +34,8 @@ export function AccountPage() {
     <>
       <PageHead title="Conta e privacidade" subtitle="Dados privados da sua conta — não aparecem em perfis públicos." />
       <ProfileSection me={me} />
+      <LegalProfileSection />
+      {me.user.accountType === 'CONTRACTOR' && <IndividualContractorSection />}
       <PasswordSection me={me} />
       <PrivacySection me={me} />
     </>

@@ -1,4 +1,4 @@
-import { Controller, Get, HttpCode, Module, Patch, Post, Res } from '@nestjs/common';
+import { Controller, Get, HttpCode, Module, Patch, Post, Put, Res } from '@nestjs/common';
 import { ApiCookieAuth, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
@@ -9,7 +9,7 @@ import { AuthModule } from '../auth/auth.module';
 import { AuthService } from '../auth/auth.service';
 import { SessionService } from '../auth/session.service';
 import { AccountDeletionService, DeleteAccountSchema } from './account-deletion.service';
-import { AcceptTermsSchema, AccountService, AccountTypeSchema, ChangePasswordSchema, UpdateAccountSchema } from './account.service';
+import { AcceptTermsSchema, AccountService, AccountTypeSchema, ChangePasswordSchema, LegalProfileSchema, UpdateAccountSchema } from './account.service';
 
 const sensitiveLimit = { default: { limit: 10, ttl: 60_000 } };
 
@@ -29,6 +29,18 @@ export class AccountController {
   async update(@CurrentUser() user: AuthUser, @ZBody(UpdateAccountSchema) body: z.infer<typeof UpdateAccountSchema>) {
     await this.account.update(user.id, body);
     return this.auth.me(user.id);
+  }
+
+  /** Dados civis para contratos (privados: só o próprio titular lê e altera). */
+  @Get('legal-profile')
+  legalProfile(@CurrentUser() user: AuthUser) {
+    return this.account.getLegalProfile(user.id);
+  }
+
+  @Put('legal-profile')
+  @ApiZodBody(LegalProfileSchema)
+  updateLegalProfile(@CurrentUser() user: AuthUser, @ZBody(LegalProfileSchema) body: z.infer<typeof LegalProfileSchema>) {
+    return this.account.updateLegalProfile(user.id, body);
   }
 
   @Throttle(sensitiveLimit)

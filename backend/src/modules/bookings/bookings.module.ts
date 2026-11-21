@@ -3,6 +3,7 @@ import { ApiCookieAuth, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import { ApiZodBody, ZBody } from '../../common/zod';
 import { AuthUser, CurrentUser } from '../auth/auth.decorators';
+import { ContractsModule } from '../contracts/contracts.module';
 import { EventsModule } from '../events/events.module';
 import { AgendaService } from './agenda.service';
 import {
@@ -108,5 +109,5 @@ export class BookingsController {
   }
 }
 
-@Module({ imports: [EventsModule], controllers: [BookingsController], providers: [BookingsService, AgendaService], exports: [BookingsService] })
+@Module({ imports: [EventsModule, ContractsModule], controllers: [BookingsController], providers: [BookingsService, AgendaService], exports: [BookingsService] })
 export class BookingsModule {}
