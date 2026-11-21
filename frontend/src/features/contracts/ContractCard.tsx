@@ -62,6 +62,41 @@ export function ContractReadinessNotice({ b }: { b: BookingDetail }) {
   );
 }
 
+/** Itens com o mesmo responsável e a mesma instrução numa linha só (como no anexo do PDF). */
+function groupPending(items: ContractSummary['pendingItems']) {
+  const groups = new Map<string, { labels: string[]; who: ContractSummary['pendingItems'][number]['who']; how: string }>();
+  for (const i of items) {
+    const k = `${i.who}|${i.how}`;
+    const g = groups.get(k) ?? { labels: [], who: i.who, how: i.how };
+    g.labels.push(i.label);
+    groups.set(k, g);
+  }
+  return [...groups.values()];
+}
+
+const WHO_LABEL = { CONTRATANTE: 'Contratante', CONTRATADO: 'Artista', AMBAS: 'As duas partes' } as const;
+
+/** Pendências do contrato: o que é cada "[A PREENCHER]", de quem é a vez (você / a outra parte / as duas) e como resolver. */
+function PendingList({ b, items, count, locked }: { b: BookingDetail; items: ContractSummary['pendingItems']; count: number; locked: boolean }) {
+  const mine = b.mySide === 'ARTIST' ? 'CONTRATADO' : 'CONTRATANTE';
+  const whoText = (w: keyof typeof WHO_LABEL) => (w === 'AMBAS' ? 'as duas partes' : w === mine ? 'você' : `a outra parte (${WHO_LABEL[w].toLowerCase()})`);
+  return (
+    <div className="inline-msg info pending-list" style={{ margin: 0 }}>
+      <p style={{ margin: 0 }}>
+        <strong>{count === 1 ? '1 campo ainda está' : `${count} campos ainda estão`} como “[A PREENCHER]”.</strong>
+        {locked ? ' Com o show realizado, complete à mão antes de assinar.' : ' O PDF traz a mesma lista no anexo “Pendências de preenchimento”.'}
+      </p>
+      <ul>
+        {groupPending(items).map((g) => (
+          <li key={g.labels.join()}>
+            <strong>{g.labels.join(', ')}</strong> — quem preenche: {whoText(g.who)}. <span className="hint">{g.how}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /**
  * Contrato da contratação confirmada, igual para as duas partes. Gerado automaticamente na confirmação; se a geração
  * falhou (ou a contratação é anterior ao módulo), qualquer das partes gera aqui. Ambas são notificadas (sino + e-mail)
@@ -93,18 +128,12 @@ export function ContractCard({ b }: { b: BookingDetail }) {
             Contrato de prestação de serviços artísticos {c.templateType === 'VENUE' ? 'com casa de show' : 'para evento particular'}, gerado em {dateTime(c.generatedAt)}. Ambas as partes
             têm acesso ao mesmo documento.
           </p>
-          {c.pendingFields > 0 && (
-            <p className="inline-msg info" style={{ margin: 0 }}>
-              {c.pendingFields === 1 ? '1 campo ainda está' : `${c.pendingFields} campos ainda estão`} como “[A PREENCHER]”. Dados cadastrais entram ao
-              atualizar o contrato; condições que não constaram na proposta (sinal, prazos, forma de pagamento) são completadas à mão antes de assinar.
-            </p>
-          )}
+          {c.pendingFields > 0 && <PendingList b={b} items={c.pendingItems ?? []} count={c.pendingFields} locked={!!happened} />}
           {happened && (
             <p className="inline-msg ok" id={`locked-${b.id}`} style={{ margin: 0 }}>
               Show realizado em {dateTime(happened)}: o contrato não pode mais ser atualizado.
             </p>
           )}
-          <ContractReadinessNotice b={b} />
           <div className="actions" style={{ justifyContent: 'flex-start' }}>
             <a className="btn cue" href={c.downloadUrl} download={`contrato-${b.id}.pdf`}>
               Baixar contrato (PDF)

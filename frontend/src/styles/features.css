@@ -381,3 +381,5 @@ body:has(.chat-dock) #root{padding-bottom:calc(var(--tabbar-h) + env(safe-area-i
 .needs-offered{display:grid;gap:6px}
 .needs-sub{font-size:14px;margin-top:4px}
 .needs-list .fchk{display:flex;gap:8px;align-items:center;min-width:0}
+.pending-list ul{margin:8px 0 0;padding-left:18px;display:grid;gap:6px}
+.pending-list .hint{display:inline}

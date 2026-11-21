@@ -1,4 +1,4 @@
-import { buildContractFields, ContractSource, missingPartyData, formatDateBR, formatDateOnly, formatMoney, formatTimeBR, resolveLocation, templateFileFor } from './contract-data.rules';
+import { buildContractFields, ContractSource, missingPartyData, pendingCount, pendingItemsFromContent, renderContract, formatDateBR, formatDateOnly, formatMoney, formatTimeBR, resolveLocation, templateFileFor } from './contract-data.rules';
 import { loadTemplate } from './templates';
 import { fillTemplate, PLACEHOLDER } from './utils/fill-template';
 
@@ -124,7 +124,7 @@ describe('buildContractFields — artista', () => {
   it('banda sem CNPJ e dono sem dados civis: representante com marcadores a preencher', () => {
     const f = buildContractFields(source({ artist: { kind: 'BAND', name: 'Os Fulanos' }, soloPerson: null, band: { legalName: null, cnpj: null }, bandOwner: null }));
     expect(f.ARTISTA_NOME_LEGAL).toBeUndefined();
-    expect(f.ARTISTA_REPRESENTANTE).toBe(`${PLACEHOLDER}, CPF ${PLACEHOLDER}, representando o grupo musical "Os Fulanos"`);
+    expect(f.ARTISTA_REPRESENTANTE).toBe('[A PREENCHER: Nome completo do responsável pela banda], CPF [A PREENCHER: CPF do responsável pela banda], representando o grupo musical "Os Fulanos"');
   });
 });
 
@@ -287,5 +287,46 @@ describe('missingPartyData', () => {
       contractor: ['CPF do contratante', 'RG do contratante', 'Endereço do contratante', 'Telefone do contratante'],
       artist: ['Nome completo do responsável pela banda'],
     });
+  });
+});
+
+describe('pendências: o que é, quem preenche, onde e como', () => {
+  const bare = (): ContractSource => ({
+    generatedAt: new Date('2026-11-21T15:00:00-03:00'),
+    contractorType: 'INDIVIDUAL',
+    organization: { name: 'Festa', legalName: null, cnpj: null, addressLine: null, neighborhood: null, city: 'Maceió', state: 'AL', contactPhone: null },
+    contractorPerson: { legalName: null, cpf: null, rg: null },
+    artist: { kind: 'SOLO', name: 'Bia' },
+    soloPerson: { legalName: null, cpf: null },
+    band: null,
+    bandOwner: null,
+    event: { title: 'Aniversário', description: '', locationName: 'Salão', locationAddress: 'Rua A, 1', locationCity: 'Maceió', locationState: 'AL', venue: null },
+    offer: { performanceAt: new Date('2026-12-12T20:00:00-03:00'), durationMinutes: 90, feeCents: 100000, presentationDesc: null, advanceMinutes: null, signalCents: null, signalDueDate: null, balanceDueDate: null, paymentMethod: null, rescissionDays: null, substitutionDays: null },
+  });
+
+  it('cada campo ausente diz o que é; o anexo diz quem preenche e como', () => {
+    const content = renderContract(loadTemplate('INDIVIDUAL'), bare());
+    expect(content).toContain('CPF: [A PREENCHER: CPF do contratante]');
+    expect(content).not.toContain('[A PREENCHER]'); // nenhum marcador sem rótulo
+    const items = pendingItemsFromContent(content);
+    expect(items).toContainEqual(expect.objectContaining({ label: 'CPF do contratante', who: 'CONTRATANTE', how: expect.stringContaining('"Conta e privacidade" › "Dados para contrato"') }));
+    expect(items).toContainEqual(expect.objectContaining({ label: 'CPF do artista', who: 'CONTRATADO' }));
+    expect(items).toContainEqual(expect.objectContaining({ label: 'Forma de pagamento', who: 'AMBAS', how: expect.stringContaining('à mão') }));
+    expect(content).toContain('PENDÊNCIAS DE PREENCHIMENTO');
+    expect(content).toContain('- Nome completo do contratante; CPF do contratante; RG do contratante — quem preenche: o CONTRATANTE. No RiderSync');
+    // a contagem é do texto do contrato, não do anexo
+    expect(pendingCount(content)).toBe(content.split('PENDÊNCIAS')[0].split('[A PREENCHER').length - 1);
+  });
+
+  it('sem pendências não há anexo', () => {
+    const src = bare();
+    src.contractorPerson = { legalName: 'Ana Lins', cpf: '52998224725', rg: '1234' };
+    src.organization = { ...src.organization, addressLine: 'Rua B, 2', contactPhone: '82999990000' };
+    src.soloPerson = { legalName: 'Bia Tenório', cpf: '11144477735' };
+    src.event = { ...src.event!, description: 'Festa de aniversário' };
+    src.offer = { ...src.offer, presentationDesc: 'Show', advanceMinutes: 60, signalCents: 30000, signalDueDate: new Date('2026-12-01T00:00:00Z'), balanceDueDate: new Date('2026-12-12T00:00:00Z'), paymentMethod: 'Pix' };
+    const content = renderContract(loadTemplate('INDIVIDUAL'), src);
+    expect(pendingItemsFromContent(content)).toEqual([]);
+    expect(content).not.toContain('PENDÊNCIAS');
   });
 });

@@ -160,9 +160,9 @@ describe('Contratos (integração)', () => {
     it('termos ausentes aparecem como [A PREENCHER] e a oferta antiga não é alterada', async () => {
       const bare = await confirmDirect(soloUser, solo.id, { performanceAt: inDays(30), durationMinutes: 60, feeCents: 100000, terms: '' });
       const row = await prisma.contract.findUniqueOrThrow({ where: { bookingId: bare.id } });
-      expect(row.content).toContain('Sinal de R$ [A PREENCHER]');
+      expect(row.content).toContain('Sinal de R$ [A PREENCHER: Valor do sinal]');
       expect(row.content).toContain('minutos para preparação e passagem de som');
-      expect(row.content).toContain('[A PREENCHER]');
+      expect(row.content).toContain('PENDÊNCIAS DE PREENCHIMENTO'); // anexo explica cada pendência
       expect(row.content).toContain('R$ 1.000,00 (mil reais)');
     });
 
