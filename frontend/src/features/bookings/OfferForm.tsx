@@ -33,6 +33,15 @@ const OfferFormSchema = z
   .refine((v) => v.signal === '' || v.fee === '' || (centsFromReais(v.signal) ?? 0) <= (centsFromReais(v.fee) ?? 0), {
     path: ['signal'],
     message: 'O sinal não pode ser maior que o cachê.',
+  })
+  // Datas AAAA-MM-DD comparam como texto; o dia do show é o da data/hora local informada.
+  .refine((v) => !v.signalDueDate || !v.performanceAt || v.signalDueDate <= v.performanceAt.slice(0, 10), {
+    path: ['signalDueDate'],
+    message: 'O prazo do sinal não pode ser depois da data da apresentação.',
+  })
+  .refine((v) => !v.signalDueDate || !v.balanceDueDate || v.signalDueDate <= v.balanceDueDate, {
+    path: ['balanceDueDate'],
+    message: 'O prazo do saldo não pode ser antes do prazo do sinal.',
   });
 type Values = z.infer<typeof OfferFormSchema>;
 

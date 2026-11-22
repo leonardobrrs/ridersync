@@ -35,6 +35,12 @@ const optionalDateOnly = z.iso
   .nullish()
   .transform((s) => (s ? new Date(`${s}T00:00:00.000Z`) : null));
 
+/** Os refinamentos rodam mesmo quando um campo já falhou (ex.: data em formato inválido continua texto). */
+const isDate = (v: unknown): v is Date => v instanceof Date && !Number.isNaN(v.getTime());
+
+/** Dia da apresentação no fuso de Maceió (UTC−3, sem horário de verão), à meia-noite UTC — mesma base das colunas DATE. */
+const showDateUtc = (performanceAt: Date) => new Date(`${new Date(performanceAt.getTime() - 3 * 3_600_000).toISOString().slice(0, 10)}T00:00:00.000Z`);
+
 /**
  * Termos da oferta. Os campos de contrato (sinal, prazos, forma de pagamento...) são opcionais: o que faltar aparece
  * como "[A PREENCHER]" no contrato gerado na confirmação. O pagamento em si acontece fora da plataforma.
@@ -55,7 +61,15 @@ export const OfferSchema = z
     substitutionDays: optionalInt(0, 365, 'Prazo de substituição'),
   })
   .strict()
-  .refine((o) => o.signalCents === null || o.signalCents <= o.feeCents, { path: ['signalCents'], message: 'O sinal não pode ser maior que o cachê.' });
+  .refine((o) => o.signalCents === null || o.signalCents <= o.feeCents, { path: ['signalCents'], message: 'O sinal não pode ser maior que o cachê.' })
+  .refine((o) => !isDate(o.signalDueDate) || !isDate(o.performanceAt) || o.signalDueDate.getTime() <= showDateUtc(o.performanceAt).getTime(), {
+    path: ['signalDueDate'],
+    message: 'O prazo do sinal não pode ser depois da data da apresentação.',
+  })
+  .refine((o) => !isDate(o.signalDueDate) || !isDate(o.balanceDueDate) || o.signalDueDate.getTime() <= o.balanceDueDate.getTime(), {
+    path: ['balanceDueDate'],
+    message: 'O prazo do saldo não pode ser antes do prazo do sinal.',
+  });
 
 export const DirectProposalSchema = z
   .object({
