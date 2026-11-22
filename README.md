@@ -52,7 +52,7 @@ contratação. Eventos, candidaturas, propostas, mensagens e a confirmação do 
 
 | Para quem | O que faz no RiderSync |
 |---|---|
-| **Músicos** | Perfil profissional, portfólio com fotos e vídeos, rider técnico, candidaturas e negociações |
+| **Músicos** | Perfil profissional, portfólio com fotos e vídeos, rider técnico, candidaturas e negociações | 
 | **Bandas** | Perfil, portfólio e rider próprios, integrantes com função e papel, convites e transferência de propriedade |
 | **Casas de show** | Perfil do espaço, inventário técnico, eventos públicos ou privados, análise de candidaturas e contratação |
 | **Contratantes independentes** | Eventos particulares sem casa de show (aniversários, casamentos, festas) e contratação direta |
