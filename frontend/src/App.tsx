@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect } from 'react';
-import { createBrowserRouter, Link, RouterProvider, useLocation } from 'react-router';
+import { createBrowserRouter, Link, Navigate, RouterProvider, useLocation } from 'react-router';
 import type { ReactNode } from 'react';
 import { PanelLayout, RequireAccountType, SiteLayout } from './components/Layout';
 import { ToastProvider } from './components/Toast';
@@ -73,6 +73,8 @@ const router = createBrowserRouter([
     element: <Root />,
     children: [
       { path: '/', element: <MarketplacePage /> },
+      // "/artistas" sem perfil: a busca de artistas e bandas é a página inicial.
+      { path: '/artistas', element: <Navigate to="/" replace /> },
       { path: '/artistas/:slug', element: <ArtistPublicPage /> },
       { path: '/oportunidades', element: <OpportunitiesPage /> },
       { path: '/oportunidades/:eventId', element: <OpportunityPage /> },
