@@ -84,6 +84,31 @@ export class PublicAgendaService {
     );
   }
 
+  /**
+   * Perfil público: histórico de shows realizados — contratações confirmadas cuja apresentação já terminou (ou com
+   * apresentação registrada). Conta todos; lista os mais recentes, com privados apenas como "Evento privado".
+   */
+  async artistHistory(artistId: string, limit = 12) {
+    const now = Date.now();
+    const rows = await this.prisma.booking.findMany({
+      where: { artistId, status: 'CONFIRMED', offers: { some: { status: 'ACCEPTED', performanceAt: { lt: new Date(now) } } } },
+      select: { ...showSelect, performance: { select: { performedAt: true } } },
+    });
+    const done = rows
+      .filter((r) => r.offers[0])
+      .map((r) => ({ r, at: r.performance?.performedAt ?? r.offers[0].performanceAt, end: r.offers[0].performanceAt.getTime() + r.offers[0].durationMinutes * 60_000 }))
+      .filter((x) => x.end <= now || !!x.r.performance)
+      .sort((a, b) => b.at.getTime() - a.at.getTime());
+    return {
+      total: done.length,
+      items: done.slice(0, limit).map(({ r, at }) =>
+        isPublicShow(r)
+          ? { private: false as const, performedAt: at, title: r.event?.title ?? null, place: placeOf(r), eventId: r.event?.id ?? null }
+          : { private: true as const, performedAt: at, title: null, place: null, eventId: null },
+      ),
+    };
+  }
+
   /** Página pública da casa: shows confirmados públicos nela. */
   async venueUpcoming(organizationId: string, limit = 10) {
     const rows = await this.confirmedUpcoming(

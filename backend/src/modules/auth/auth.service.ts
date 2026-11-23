@@ -3,7 +3,7 @@ import { AccountType } from '@prisma/client';
 import { z } from 'zod';
 import { googleEnabled, loadEnv } from '../../config/env';
 import { conflict, forbidden, tooManyRequests, unauthorized, unprocessable } from '../../common/errors';
-import { email, password, passwordsMatch, passwordsMatchError, text } from '../../common/validation';
+import { email, password, passwordsMatch, passwordsMatchError, requiredCpf, text } from '../../common/validation';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MailService } from '../mail/mail.module';
 import { passwordResetEmail, verificationEmail } from '../mail/mail.templates';
@@ -19,6 +19,7 @@ export const RegisterSchema = z
   .object({
     accountType: z.enum(['ARTIST', 'CONTRACTOR'], { error: 'Escolha se você é artista ou contratante.' }),
     name: text(2, 120, 'Nome'),
+    cpf: requiredCpf,
     email,
     password,
     passwordConfirmation: z.string({ error: 'Confirme a senha.' }).max(128),
@@ -68,6 +69,7 @@ export class AuthService {
         name: input.name,
         email: input.email,
         accountType: input.accountType,
+        cpf: input.cpf,
         passwordHash: await hashPassword(input.password),
         termsAcceptedAt: new Date(),
         termsVersion: PRIVACY_POLICY_VERSION,
@@ -200,6 +202,7 @@ export class AuthService {
         passwordHash: true,
         googleSub: true,
         termsVersion: true,
+        cpf: true,
         musicianProfile: { select: { artist: { select: { id: true, slug: true, name: true, visibility: true, photoId: true } } } },
         bandMemberships: {
           where: { status: 'ACTIVE' },
@@ -233,6 +236,8 @@ export class AuthService {
           user.musicianProfile?.artist?.photoId ?? user.orgMemberships.find((m) => m.organization.photoId)?.organization.photoId ?? null,
         ),
         needsTermsAcceptance: user.termsVersion !== PRIVACY_POLICY_VERSION,
+        // Cadastro com Google não passa pelo formulário: o CPF (obrigatório no cadastro) é pedido no primeiro acesso.
+        needsCpf: !user.cpf && !!user.googleSub,
       },
       musician: user.musicianProfile?.artist ? withoutPhotoId(user.musicianProfile.artist) : null,
       bands: user.bandMemberships

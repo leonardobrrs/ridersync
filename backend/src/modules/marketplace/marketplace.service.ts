@@ -166,7 +166,12 @@ export class MarketplaceService {
       },
     });
     if (!a) throw notFound('Perfil não encontrado ou não está público.');
-    const [rider, upcoming, reviews] = await Promise.all([this.riders.getRider(a.id), this.agenda.artistUpcoming(a.id), this.reviews.forArtist(a.id)]);
+    const [rider, upcoming, reviews, showHistory] = await Promise.all([
+      this.riders.getRider(a.id),
+      this.agenda.artistUpcoming(a.id),
+      this.reviews.forArtist(a.id),
+      this.agenda.artistHistory(a.id),
+    ]);
     const { band, musicianProfile, portfolioItems, bio, contactEmail, contactPhone, instagram, website, publishedAt } = a;
     const members = band?.members ?? [];
     return {
@@ -177,6 +182,7 @@ export class MarketplaceService {
       portfolio: portfolioItems.map(toPortfolioItem),
       rider: { notes: rider.notes, items: rider.items },
       upcomingEvents: upcoming,
+      showHistory,
       reviews,
       // Banda: só integrantes com perfil individual público aparecem nominalmente.
       members: band

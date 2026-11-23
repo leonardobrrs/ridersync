@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router';
 import { z } from 'zod';
+import { CpfField } from '../contracts/LegalDataForms';
+import { isValidCpf } from '../../lib/documents';
 import { Dialog } from '../../components/Dialog';
 import { applyServerErrors, FormError, TextField } from '../../components/Fields';
 import { Icon } from '../../components/Icon';
@@ -25,6 +27,7 @@ const RegisterSchema = z
   .object({
     accountType: z.enum(['ARTIST', 'CONTRACTOR'], { error: 'Escolha se você é artista ou contratante.' }),
     name: z.string().trim().min(2, 'Informe seu nome (mínimo 2 caracteres).').max(120),
+    cpf: z.string().trim().min(1, 'Informe o CPF.').refine(isValidCpf, 'CPF inválido. Confira os números.'),
     email: z.email('Informe um e-mail válido.'),
     password: strongPassword,
     passwordConfirmation: z.string().min(1, 'Confirme a senha.'),
@@ -307,6 +310,13 @@ export function RegisterPage() {
             <p className="hint">{kind.text}</p>
             <FormError message={formError} />
             <TextField label="Nome" autoComplete="name" hint={kind.nameHint} {...form.register('name')} error={form.formState.errors.name} />
+            <CpfField
+              label="CPF"
+              autoComplete="off"
+              hint="Obrigatório. Usado nos contratos das suas contratações; nunca aparece no perfil público."
+              {...form.register('cpf')}
+              error={form.formState.errors.cpf}
+            />
             <TextField
               label="E-mail"
               type="email"

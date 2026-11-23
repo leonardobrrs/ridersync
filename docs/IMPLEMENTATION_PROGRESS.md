@@ -177,3 +177,20 @@ Verificação: backend 237 testes; frontend 28; Playwright 24 (desktop, tablet, 
 - Revisão pós-staging (21/11): atualização do contrato liberada enquanto confirmado (também após o show); notificação e e-mail às duas partes a cada geração/atualização; botão "Meus dados para contrato" para os dois lados; e2e do contratante pessoa física.
 - Decisão do responsável (21/11): contrato bloqueado após o show (apresentação registrada ou data passada), com aviso "Show realizado em …" e botão "Atualizar contrato" desativado.
 - Pendências do contrato: só na tela da negociação ("O que falta preencher"); no PDF, campos ausentes viram linhas em branco. Cartão do contrato reorganizado (ações em grade; empilhadas no celular). Formulário de evento: campos alinhados pelo topo.
+
+## Reunião de 22/11 (2026-11-23)
+
+CPF obrigatório no cadastro (e no primeiro acesso via Google), CNPJ obrigatório para casas, confirmações de ações,
+atualização em tempo real (`/me/pulse`), histórico completo de negociações com filtro pessoal × banda, negociação
+iniciada com o cachê do evento, contraproposta já na candidatura (inclusive pelo card da lista de oportunidades),
+histórico e total de shows no perfil público e botão de tema claro/escuro. Decisões em `DECISOES_TECNICAS.md`.
+
+| Verificação | Resultado |
+|---|---|
+| `npm run lint` / `npm run typecheck` | sem erros |
+| Backend (Jest, unitários + integração) | **349 testes passando** (35 suítes; novo `test/reuniao-22-11.e2e-spec.ts`) |
+| Frontend (Vitest) | **46 testes passando** |
+| Playwright | **32 testes passando** (novo `e2e/reuniao-22-11.spec.ts`: tema, contraproposta pela lista, tempo real, abas) |
+| `npm run build` | API e SPA ok |
+
+Antes de publicar no staging: aplicar a migration nova (`npm run db:migrate:neon:staging`).

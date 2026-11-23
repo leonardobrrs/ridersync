@@ -1,7 +1,7 @@
 import { INestApplication } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { NotificationsService } from '../src/modules/notifications/notifications.service';
-import { bootApp, Client, createPublicMusician, createVenue, inDays, lastMailTo, registerContractor, registerUser, TEST_PASSWORD } from './helpers';
+import { bootApp, Client, createPublicMusician, createVenue, inDays, lastMailTo, registerContractor, registerUser, TEST_PASSWORD, validCpf } from './helpers';
 
 describe('Notificações e LGPD (integração)', () => {
   let app: INestApplication;
@@ -134,7 +134,7 @@ describe('Notificações e LGPD (integração)', () => {
 
       // o e-mail fica livre para um novo cadastro
       await new Client(app)
-        .post('/auth/register', { accountType: 'ARTIST', name: 'Novo', email, password: TEST_PASSWORD, passwordConfirmation: TEST_PASSWORD, acceptTerms: true })
+        .post('/auth/register', { accountType: 'ARTIST', name: 'Novo', cpf: validCpf(), email, password: TEST_PASSWORD, passwordConfirmation: TEST_PASSWORD, acceptTerms: true })
         .expect(201);
     });
 

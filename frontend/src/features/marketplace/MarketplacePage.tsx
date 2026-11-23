@@ -127,6 +127,16 @@ export function OpportunityCard({ e }: { e: EventPublic }) {
           </span>
         </div>
       </Link>
+      {e.acceptingApplications && (
+        <div className="opp-acts">
+          <Link className="btn sm cue" to={`/oportunidades/${e.id}?acao=candidatar`}>
+            Candidatar-se
+          </Link>
+          <Link className="btn sm" to={`/oportunidades/${e.id}?acao=contraproposta`}>
+            Contraproposta
+          </Link>
+        </div>
+      )}
     </article>
   );
 }

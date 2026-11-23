@@ -1,12 +1,13 @@
 import { INestApplication } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { randomBytes, scryptSync } from 'node:crypto';
-import { bootApp, Client, lastMailTo, registerContractor, registerUser, TEST_PASSWORD, tokenFrom, uniqueEmail } from './helpers';
+import { bootApp, Client, lastMailTo, registerContractor, registerUser, TEST_PASSWORD, tokenFrom, uniqueEmail, validCnpj, validCpf } from './helpers';
 
 const NEW_PASSWORD = 'Nova@Senha456';
 const body = (email: string, over: Record<string, unknown> = {}) => ({
   accountType: 'ARTIST',
   name: 'Pessoa Nova',
+  cpf: validCpf(),
   email,
   password: TEST_PASSWORD,
   passwordConfirmation: TEST_PASSWORD,
@@ -26,10 +27,14 @@ describe('Autenticação e conta (integração)', () => {
   });
 
   describe('cadastro', () => {
-    it('exige tipo de conta, aceite dos termos, senha forte e confirmação idêntica', async () => {
+    it('exige tipo de conta, CPF válido, aceite dos termos, senha forte e confirmação idêntica', async () => {
       const c = new Client(app);
       const cases: [Record<string, unknown>, string][] = [
         [{ accountType: undefined }, 'accountType'],
+        [{ cpf: undefined }, 'cpf'],
+        [{ cpf: '' }, 'cpf'],
+        [{ cpf: '111.111.111-11' }, 'cpf'],
+        [{ cpf: '529.982.247-26' }, 'cpf'],
         [{ accountType: 'VENUE' }, 'accountType'],
         [{ acceptTerms: false }, 'acceptTerms'],
         [{ password: 'fraca', passwordConfirmation: 'fraca' }, 'password'],
@@ -58,6 +63,8 @@ describe('Autenticação e conta (integração)', () => {
       expect(JSON.stringify(me.body)).not.toMatch(/passwordHash|argon2|scrypt/);
       const row = await prisma.user.findUniqueOrThrow({ where: { email } });
       expect(row.termsAcceptedAt).not.toBeNull();
+      expect(row.cpf).toMatch(/^\d{11}$/); // guardado só com os dígitos
+      expect(JSON.stringify(me.body)).not.toContain(row.cpf!); // CPF não volta no /auth/me
       expect(row.passwordHash).toMatch(/^\$argon2id\$/);
       const mail = lastMailTo(email);
       expect(mail?.subject).toMatch(/Confirme seu e-mail/);
@@ -204,7 +211,7 @@ describe('Autenticação e conta (integração)', () => {
       const artist = await registerUser(app, 'Ana Artista');
       expect((await contractor.post('/me/musician-profile', { name: 'Perfil X' })).body.code).toBe('WRONG_ACCOUNT_TYPE');
       expect((await contractor.post('/bands', { name: 'Banda Xis' })).body.code).toBe('WRONG_ACCOUNT_TYPE');
-      expect((await artist.post('/organizations', { name: 'Casa X', city: 'Maceió' })).body.code).toBe('WRONG_ACCOUNT_TYPE');
+      expect((await artist.post('/organizations', { name: 'Casa X', city: 'Maceió', cnpj: validCnpj() })).body.code).toBe('WRONG_ACCOUNT_TYPE');
     });
 
     it('conta legada sem tipo escolhe uma única vez', async () => {

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { createPublicMusicianProfile, newUser, stamp } from './helpers';
+import { createPublicMusicianProfile, newUser, stamp, validCnpj } from './helpers';
 
 /** Ajustes da reunião de 18/11 (desktop). Responsividade no celular: responsive.spec.ts. */
 
@@ -61,6 +61,7 @@ test('telefone com máscara automática e casa de show acessível pelo menu do p
   await page.goto('/painel/casas');
   await page.getByRole('button', { name: 'Cadastrar casa' }).click();
   await page.getByLabel('Nome do estabelecimento').fill(venue);
+  await page.getByLabel('CNPJ (obrigatório)').fill(validCnpj());
   const phone = page.getByLabel('Telefone/WhatsApp');
   await phone.pressSequentially('8233334444');
   await expect(phone).toHaveValue('(82) 3333-4444');

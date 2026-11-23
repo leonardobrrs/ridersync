@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
-import { conflict, unauthorized } from '../../common/errors';
-import { optionalCpf, optionalText, password, text } from '../../common/validation';
+import { conflict, unauthorized, unprocessable } from '../../common/errors';
+import { optionalCpf, optionalText, password, requiredCpf, text } from '../../common/validation';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuthUser } from '../auth/auth.decorators';
 import { PRIVACY_POLICY_VERSION } from '../auth/auth.service';
@@ -26,6 +26,7 @@ export const ChangePasswordSchema = z
 export const LegalProfileSchema = z
   .object({ legalName: optionalText(120, 'Nome completo'), cpf: optionalCpf, rg: optionalText(20, 'RG') })
   .strict();
+export const CpfSchema = z.object({ cpf: requiredCpf }).strict();
 export const AccountTypeSchema = z.object({ accountType: z.enum(['ARTIST', 'CONTRACTOR']) }).strict();
 export const AcceptTermsSchema = z.object({ version: z.literal(PRIVACY_POLICY_VERSION, { error: 'Versão da política desatualizada. Recarregue a página.' }) }).strict();
 
@@ -46,7 +47,16 @@ export class AccountService {
   }
 
   async updateLegalProfile(userId: string, input: z.infer<typeof LegalProfileSchema>) {
+    if (!input.cpf) {
+      const current = await this.prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { cpf: true } });
+      if (current.cpf) throw unprocessable('CPF_REQUIRED', 'O CPF é obrigatório e não pode ser removido; você pode corrigi-lo.');
+    }
     return this.prisma.user.update({ where: { id: userId }, data: input, select: { legalName: true, cpf: true, rg: true } });
+  }
+
+  /** CPF do cadastro (contas criadas com Google informam no primeiro acesso). */
+  async setCpf(userId: string, input: z.infer<typeof CpfSchema>) {
+    await this.prisma.user.update({ where: { id: userId }, data: { cpf: input.cpf } });
   }
 
   /** Contas com senha exigem a atual; contas criadas só com Google podem definir a primeira senha. */

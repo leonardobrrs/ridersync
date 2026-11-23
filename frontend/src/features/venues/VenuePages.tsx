@@ -19,8 +19,8 @@ import { date, dateTime, EVENT_STATUS, ROLE_LABEL } from '../../lib/format';
 import { useAction, useMeta } from '../../lib/hooks';
 import type { OrgDetail, OrgEventRow, OrgSummary, Rider } from '../../lib/types';
 import { EquipmentEditor, type EquipmentInput } from '../artist/EquipmentEditor';
-import { CnpjField, cnpjRule } from '../contracts/LegalDataForms';
-import { maskCnpj } from '../../lib/documents';
+import { CnpjField } from '../contracts/LegalDataForms';
+import { isValidCnpj, maskCnpj } from '../../lib/documents';
 
 const OrgSchema = z.object({
   name: z.string().trim().min(2, 'Nome é obrigatório.').max(100),
@@ -36,7 +36,8 @@ const OrgSchema = z.object({
   instagram: z.string().trim().max(31),
   website: z.string().trim().refine((v) => v === '' || /^https:\/\/[^\s]+\.[^\s]+/.test(v), 'Use um link começando com https://'),
   legalName: z.string().trim().max(150, 'No máximo 150 caracteres.'),
-  cnpj: cnpjRule,
+  /** Obrigatório para casas de show (reunião de 22/11). */
+  cnpj: z.string().trim().min(1, 'Informe o CNPJ da casa.').refine(isValidCnpj, 'CNPJ inválido.'),
 });
 type OrgValues = z.infer<typeof OrgSchema>;
 
@@ -70,7 +71,7 @@ const toOrgPayload = (v: OrgValues) => ({
   instagram: v.instagram || null,
   website: v.website || null,
   legalName: v.legalName || null,
-  cnpj: v.cnpj || null,
+  cnpj: v.cnpj,
 });
 
 function OrgFields({ form }: { form: ReturnType<typeof useForm<OrgValues>> }) {
@@ -105,10 +106,10 @@ function OrgFields({ form }: { form: ReturnType<typeof useForm<OrgValues>> }) {
       </fieldset>
       <fieldset>
         <legend>Dados para contrato (privados)</legend>
-        <p className="hint">Aparecem somente nos contratos das contratações confirmadas — nunca na página pública da casa.</p>
+        <p className="hint">O CNPJ é obrigatório para casas de show. Estes dados aparecem somente nos contratos das contratações confirmadas — nunca na página pública da casa.</p>
         <div className="row2">
           <TextField label="Razão social" {...form.register('legalName')} error={e.legalName} />
-          <CnpjField label="CNPJ" {...form.register('cnpj')} error={e.cnpj} />
+          <CnpjField label="CNPJ (obrigatório)" required aria-required="true" {...form.register('cnpj')} error={e.cnpj} />
         </div>
       </fieldset>
     </>

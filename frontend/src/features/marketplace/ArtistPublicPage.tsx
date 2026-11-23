@@ -1,20 +1,20 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
-import { Dialog } from '../../components/Dialog';
+import { ConfirmDialog, Dialog } from '../../components/Dialog';
 import { Icon } from '../../components/Icon';
 import { ProfilePhoto, Thumb } from '../../components/Media';
 import { Avatar, Poster } from '../../components/Poster';
 import { ErrorState, Loading } from '../../components/States';
 import { Tabs } from '../../components/Tabs';
 import { useToast } from '../../components/Toast';
-import { api } from '../../lib/api';
-import { dayMonth, money, PORTFOLIO_KIND } from '../../lib/format';
+import { api, errorMessage } from '../../lib/api';
+import { dateTime, dayMonth, money, PORTFOLIO_KIND } from '../../lib/format';
 import { formatPhone, phoneDigits } from '../../lib/phone';
 import { ReviewsSummary } from '../../components/Stars';
 import { useMe } from '../../lib/hooks';
-import type { BookingDetail, OrgEventRow, PortfolioItem, PublicArtist, Rider, UpcomingEvent } from '../../lib/types';
-import { OfferForm } from '../bookings/OfferForm';
+import type { BookingDetail, OrgEventRow, PastShow, PortfolioItem, PublicArtist, Rider, UpcomingEvent } from '../../lib/types';
+import { OfferForm, type OfferPayload } from '../bookings/OfferForm';
 import { InstrumentLabel } from '../../components/InstrumentLabel';
 
 export function PortfolioGrid({ items }: { items: PortfolioItem[] }) {
@@ -108,12 +108,56 @@ export function UpcomingEvents({ items }: { items: UpcomingEvent[] }) {
   );
 }
 
+/** Histórico de shows realizados (privados aparecem só como "Evento privado"). */
+export function ShowHistory({ total, items }: { total: number; items: PastShow[] }) {
+  if (total === 0) return <p className="muted">Nenhum show realizado pela plataforma ainda.</p>;
+  return (
+    <>
+      <p className="show-total">
+        <b>{total}</b> {total === 1 ? 'show realizado' : 'shows realizados'} pelo RiderSync
+      </p>
+      <ul className="dates past">
+        {items.map((e, i) => {
+          const d = new Date(e.performedAt);
+          const label = d.toLocaleDateString('pt-BR', { timeZone: 'America/Maceio', day: '2-digit', month: 'short', year: 'numeric' });
+          return (
+            <li key={`${e.performedAt}-${i}`}>
+              <span className="dt">
+                <b>{d.toLocaleDateString('pt-BR', { timeZone: 'America/Maceio', day: '2-digit' })}</b>
+                <small>{d.toLocaleDateString('pt-BR', { timeZone: 'America/Maceio', month: 'short', year: '2-digit' }).replace('.', '')}</small>
+              </span>
+              {e.private ? (
+                <span>
+                  <strong>Evento privado</strong>
+                  <small>{label}</small>
+                </span>
+              ) : (
+                <span>
+                  <strong>{e.eventId ? <Link to={`/oportunidades/${e.eventId}`}>{e.title ?? e.place.name ?? 'Show'}</Link> : (e.title ?? e.place.name ?? 'Show')}</strong>
+                  <small>
+                    {e.place.venueSlug ? <Link to={`/casas/${e.place.venueSlug}`}>{e.place.name}</Link> : e.place.name}
+                    {e.place.city ? ` · ${e.place.city}` : ''} · {label}
+                  </small>
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {total > items.length && <p className="hint">Mostrando os {items.length} mais recentes.</p>}
+    </>
+  );
+}
+
 function ProposalBox({ a }: { a: PublicArtist }) {
   const { data: me } = useMe();
   const qc = useQueryClient();
   const navigate = useNavigate();
   const toast = useToast();
   const [open, setOpen] = useState(false);
+  /** Proposta preenchida aguardando confirmação. */
+  const [pending, setPending] = useState<OfferPayload | null>(null);
+  const [sending, setSending] = useState(false);
   const [orgId, setOrgId] = useState('');
   const [eventId, setEventId] = useState('');
   const orgs = me?.organizations ?? [];
@@ -180,16 +224,41 @@ function ProposalBox({ a }: { a: PublicArtist }) {
               submitLabel="Enviar proposta"
               onCancel={() => setOpen(false)}
               initial={{ feeCents: a.baseFeeCents }}
-              onSubmit={async (p) => {
-                const b = await api.post<BookingDetail>('/bookings', { organizationId: selectedOrg, artistId: a.id, eventId: eventId || undefined, ...p });
-                await qc.invalidateQueries({ queryKey: ['bookings'] });
-                toast('Proposta enviada.');
-                navigate(`/painel/negociacoes/${b.id}`);
-              }}
+              onSubmit={async (p) => setPending(p)}
             />
           </div>
         )}
       </Dialog>
+      <ConfirmDialog
+        open={!!pending}
+        title="Enviar proposta?"
+        message={
+          pending && (
+            <>
+              Você está enviando a {a.name} uma proposta de <strong>{money(pending.offer.feeCents)}</strong> para {dateTime(pending.offer.performanceAt)}. O artista
+              poderá aceitar, recusar ou enviar uma contraproposta.
+            </>
+          )
+        }
+        confirmLabel="Enviar proposta"
+        busy={sending}
+        onClose={() => !sending && setPending(null)}
+        onConfirm={async () => {
+          if (!pending) return;
+          setSending(true);
+          try {
+            const b = await api.post<BookingDetail>('/bookings', { organizationId: selectedOrg, artistId: a.id, eventId: eventId || undefined, ...pending });
+            await qc.invalidateQueries({ queryKey: ['bookings'] });
+            toast('Proposta enviada.');
+            navigate(`/painel/negociacoes/${b.id}`);
+          } catch (e) {
+            toast(errorMessage(e), 'error');
+          } finally {
+            setSending(false);
+            setPending(null);
+          }
+        }}
+      />
     </>
   );
 }
@@ -295,6 +364,10 @@ export function ArtistPublicPage() {
                       <dt>Em atividade desde</dt>
                       <dd>{a.careerStartYear ?? '—'}</dd>
                     </div>
+                    <div>
+                      <dt>Shows realizados</dt>
+                      <dd>{a.showHistory.total}</dd>
+                    </div>
                     {a.kind === 'SOLO' && (
                       <div>
                         <dt>Instrumentos</dt>
@@ -322,6 +395,10 @@ export function ArtistPublicPage() {
                 <section className="box sec" aria-labelledby="ev-h">
                   <h2 id="ev-h">Próximos eventos</h2>
                   <UpcomingEvents items={a.upcomingEvents} />
+                </section>
+                <section className="box sec" aria-labelledby="hist-h">
+                  <h2 id="hist-h">Histórico de shows ({a.showHistory.total})</h2>
+                  <ShowHistory total={a.showHistory.total} items={a.showHistory.items} />
                 </section>
                 <section className="box sec" aria-labelledby="rv-h">
                   <h2 id="rv-h">Avaliações de contratantes</h2>

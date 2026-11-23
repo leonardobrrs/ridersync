@@ -279,6 +279,8 @@ describe('Contratos (integração)', () => {
     beforeAll(async () => {
       late = await registerUser(app, 'Lia Atrasada');
       lateArtist = await createPublicMusician(late, 'Lia Sem Dados');
+      // Conta antiga, de antes do CPF obrigatório no cadastro: sem dados civis.
+      await prisma.user.update({ where: { id: late.user!.id }, data: { cpf: null } });
     });
 
     it('confirmação sem dados civis do artista: contrato sai com campos em aberto e a prontidão aponta o que falta', async () => {

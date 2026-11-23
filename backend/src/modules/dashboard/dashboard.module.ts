@@ -15,6 +15,37 @@ export class DashboardService {
     private readonly bookings: BookingsService,
   ) {}
 
+  /**
+   * "Pulso" para atualização em tempo real sem recarregar a página: assinatura barata (uma consulta) de tudo o que
+   * pode mudar para o usuário — negociações, ofertas, mensagens, contratos, candidaturas, eventos, notificações e
+   * convites. O frontend consulta a cada poucos segundos (aba visível) e recarrega as telas abertas quando muda.
+   * Sem fila, Redis ou conexão persistente: funciona igual em várias instâncias serverless.
+   */
+  async pulse(userId: string) {
+    const [artistIds, orgIds] = await Promise.all([this.access.managedArtistIds(userId), this.access.managedOrganizationIds(userId)]);
+    const rows = await this.prisma.$queryRaw<{ v: string }[]>`
+      WITH b AS (
+        SELECT id, "updatedAt" FROM "Booking"
+        WHERE "artistId" = ANY(${artistIds}::uuid[]) OR "organizationId" = ANY(${orgIds}::uuid[])
+      )
+      SELECT concat_ws('|',
+        (SELECT count(*) || ':' || coalesce(floor(extract(epoch FROM max("updatedAt")) * 1000), 0) FROM b),
+        (SELECT count(*) || ':' || coalesce(floor(extract(epoch FROM max(coalesce(o."respondedAt", o."createdAt"))) * 1000), 0)
+           FROM "BookingOffer" o WHERE o."bookingId" IN (SELECT id FROM b)),
+        (SELECT count(*) FROM "BookingMessage" m WHERE m."bookingId" IN (SELECT id FROM b)),
+        (SELECT count(*) FROM "Contract" c WHERE c."bookingId" IN (SELECT id FROM b)),
+        (SELECT count(*) || ':' || coalesce(floor(extract(epoch FROM max(a."updatedAt")) * 1000), 0)
+           FROM "EventApplication" a JOIN "Event" e ON e.id = a."eventId"
+           WHERE a."artistId" = ANY(${artistIds}::uuid[]) OR e."organizerId" = ANY(${orgIds}::uuid[])),
+        (SELECT count(*) || ':' || coalesce(floor(extract(epoch FROM max("updatedAt")) * 1000), 0)
+           FROM "Event" WHERE "organizerId" = ANY(${orgIds}::uuid[])),
+        (SELECT count(*) || ':' || count(*) FILTER (WHERE "readAt" IS NULL) FROM "Notification" WHERE "userId" = ${userId}::uuid),
+        (SELECT count(*) FROM "BandMember" WHERE "userId" = ${userId}::uuid AND status = 'INVITED'),
+        (SELECT count(*) FROM "OrganizationMember" WHERE "userId" = ${userId}::uuid AND status = 'INVITED')
+      ) AS v`;
+    return { v: rows[0]?.v ?? '' };
+  }
+
   /** Painel simples: ações pendentes e próximos compromissos confirmados — sem analytics. */
   async summary(userId: string) {
     const [artistIds, orgIds, bookings] = await Promise.all([
@@ -135,6 +166,12 @@ export class DashboardController {
   @Get('schedule')
   schedule(@CurrentUser() user: AuthUser) {
     return this.dashboard.schedule(user.id);
+  }
+
+  /** Assinatura do estado do usuário para atualização automática das telas (consulta leve, sem cache). */
+  @Get('pulse')
+  pulse(@CurrentUser() user: AuthUser) {
+    return this.dashboard.pulse(user.id);
   }
 }
 

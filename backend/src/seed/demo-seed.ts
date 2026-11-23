@@ -13,6 +13,7 @@ import { AccountType, ApplicationStatus, BookingStatus, EventStatus, EventVisibi
 import { resolveVideoThumbnail } from '../common/video-thumbnail';
 import { PRIVACY_POLICY_VERSION } from '../modules/auth/auth.service';
 import { hashPassword } from '../modules/auth/password';
+import { fakeCnpj, fakeCpf } from './fake-documents';
 
 if (existsSync('.env')) process.loadEnvFile('.env');
 
@@ -43,16 +44,16 @@ export async function runDemoSeed(prisma: PrismaClient) {
   // ─────────── Contas ───────────
   const user = async (local: string, name: string, accountType: AccountType) => {
     const email = D(local);
-    const existing = await prisma.user.findUnique({ where: { email }, select: { id: true, accountType: true } });
+    const existing = await prisma.user.findUnique({ where: { email }, select: { id: true, accountType: true, cpf: true } });
     if (existing) {
       return prisma.user.update({
         where: { id: existing.id },
-        data: { passwordHash, accountType: existing.accountType ?? accountType, emailVerifiedAt: now, termsAcceptedAt: now, termsVersion: PRIVACY_POLICY_VERSION },
+        data: { passwordHash, accountType: existing.accountType ?? accountType, emailVerifiedAt: now, termsAcceptedAt: now, termsVersion: PRIVACY_POLICY_VERSION, ...(existing.cpf ? {} : { cpf: fakeCpf(email) }) },
         select: { id: true, name: true },
       });
     }
     return prisma.user.create({
-      data: { email, name, passwordHash, accountType, emailVerifiedAt: now, termsAcceptedAt: now, termsVersion: PRIVACY_POLICY_VERSION },
+      data: { email, name, passwordHash, accountType, emailVerifiedAt: now, termsAcceptedAt: now, termsVersion: PRIVACY_POLICY_VERSION, cpf: fakeCpf(email), legalName: name.replace(/ \(demo\)$/, '') },
       select: { id: true, name: true },
     });
   };
@@ -263,6 +264,8 @@ export async function runDemoSeed(prisma: PrismaClient) {
         ...data,
         slug,
         type: 'VENUE',
+        cnpj: fakeCnpj(slug),
+        legalName: `${String(data.name).replace(/ \(demo\)$/, '')} Ltda`,
         members: { create: [{ userId: owner.id, role: 'OWNER', status: 'ACTIVE', joinedAt: now }] },
         equipment: {
           create: [

@@ -571,24 +571,26 @@ enum ApplicationStatus {
 
 /// Candidatura — NÃO é contratação. Única por (evento, identidade artística).
 model EventApplication {
-  id            String            @id @default(uuid()) @db.Uuid
-  eventId       String            @db.Uuid
-  event         Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  artistId      String            @db.Uuid
-  artist        Artist            @relation(fields: [artistId], references: [id], onDelete: Cascade)
-  submittedById String?           @db.Uuid
-  submittedBy   User?             @relation("ApplicationSubmitter", fields: [submittedById], references: [id], onDelete: SetNull)
-  message       String            @default("")
+  id               String            @id @default(uuid()) @db.Uuid
+  eventId          String            @db.Uuid
+  event            Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  artistId         String            @db.Uuid
+  artist           Artist            @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  submittedById    String?           @db.Uuid
+  submittedBy      User?             @relation("ApplicationSubmitter", fields: [submittedById], references: [id], onDelete: SetNull)
+  message          String            @default("")
   /// O que o artista precisa que a casa disponibilize: [{ catalogItemId, customName, quantity, notes }].
-  needs         Json              @default("[]")
-  status        ApplicationStatus @default(PENDING)
-  decidedAt     DateTime?
-  decidedById   String?           @db.Uuid
-  decidedBy     User?             @relation("ApplicationDecider", fields: [decidedById], references: [id], onDelete: SetNull)
-  decisionNote  String?
-  withdrawnAt   DateTime?
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
+  needs            Json              @default("[]")
+  /// Contraproposta de cachê enviada junto com a candidatura (centavos). Nulo = aceita o cachê publicado.
+  proposedFeeCents Int?
+  status           ApplicationStatus @default(PENDING)
+  decidedAt        DateTime?
+  decidedById      String?           @db.Uuid
+  decidedBy        User?             @relation("ApplicationDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+  decisionNote     String?
+  withdrawnAt      DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
 
   booking Booking?
 

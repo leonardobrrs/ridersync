@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { createPublicMusicianProfile, localInput, newUser, PASSWORD, pickChip, stamp, toast } from './helpers';
+import { createPublicMusicianProfile, localInput, newUser, PASSWORD, pickChip, stamp, toast, validCnpj } from './helpers';
 
 /**
  * Fluxo ponta a ponta com contas separadas por tipo:
@@ -117,6 +117,7 @@ test('MVP: perfil, banda, convite e transferência, casa, evento, vagas, negocia
   await vera.page.goto('/painel/casas');
   await vera.page.getByRole('button', { name: 'Cadastrar casa' }).click();
   await vera.page.getByLabel('Nome do estabelecimento').fill(venueName);
+  await vera.page.getByLabel('CNPJ (obrigatório)').fill(validCnpj());
   await vera.page.getByRole('button', { name: 'Cadastrar', exact: true }).click();
   await expect(vera.page.getByRole('heading', { level: 1 })).toHaveText(venueName);
   const venueUrl = vera.page.url();
@@ -160,7 +161,9 @@ test('MVP: perfil, banda, convite e transferência, casa, evento, vagas, negocia
   await expect(card.locator('img')).toHaveAttribute('src', /^\/api\/media\/.+\?v=thumb$/);
   await ana.page.getByRole('link', { name: eventTitle }).click();
   // Candidatura em modal: identidade, necessidades técnicas e mensagem
-  await ana.page.getByRole('button', { name: 'Candidatar-se', exact: true }).click();
+  // Candidatura e contraproposta ficam disponíveis direto na oportunidade.
+  await expect(ana.page.getByRole('button', { name: 'Enviar contraproposta' })).toBeVisible();
+  await ana.page.getByRole('button', { name: /^Candidatar-se por R\$/ }).click();
   await expect(ana.page.getByRole('dialog', { name: `Candidatura — ${eventTitle}` })).toBeVisible();
   await ana.page.getByLabel('Candidatar-se como').selectOption({ label: `${artistName} (Perfil individual)` });
   // O que a artista precisa que a casa disponibilize: preenchido a partir do perfil (rider) e ajustável.
@@ -172,7 +175,13 @@ test('MVP: perfil, banda, convite e transferência, casa, evento, vagas, negocia
   await needs.getByRole('button', { name: 'Preencher a partir do meu perfil' }).click();
   await expect(needs.getByText('Pedal looper')).toBeVisible();
   await ana.page.getByLabel('Mensagem para a casa').fill('Tenho repertório autoral para a noite.');
-  await ana.page.getByRole('button', { name: 'Enviar candidatura' }).click();
+  await expect(ana.page.getByRole('radio', { name: /Aceito o cachê publicado/ })).toBeChecked();
+  await ana.page.getByRole('button', { name: 'Revisar e enviar' }).click();
+  // Confirmação antes de enviar (reunião 22/11)
+  const reviewDlg = ana.page.getByRole('dialog', { name: 'Confirme sua candidatura' });
+  await expect(reviewDlg).toContainText('Você está se candidatando a');
+  await expect(reviewDlg).toContainText('aceitando o cachê publicado');
+  await reviewDlg.getByRole('button', { name: 'Confirmar candidatura' }).click();
   await toast(ana.page, 'Candidatura enviada');
   // Redireciona para as candidaturas
   await expect(ana.page).toHaveURL(/\/painel\/candidaturas$/);
@@ -189,11 +198,12 @@ test('MVP: perfil, banda, convite e transferência, casa, evento, vagas, negocia
   await expect(cmp.getByRole('row', { name: /Pedal looper.*Conferir com a casa/ })).toBeVisible();
   await cmp.getByRole('button', { name: 'Fechar' }).click();
 
-  // Selecionar abre a negociação direto e NÃO ocupa a vaga (só a confirmação ocupa).
+  // Selecionar abre a negociação já com o cachê publicado (sem redigitar) e NÃO ocupa a vaga.
   await vera.page.getByRole('button', { name: 'Selecionar e negociar' }).click();
-  const offerDlg = vera.page.getByRole('dialog');
-  await offerDlg.getByLabel('Mensagem (opcional)').fill('Parabéns! Seguem os termos.');
-  await offerDlg.getByRole('button', { name: 'Enviar proposta' }).click();
+  const openDlg = vera.page.getByRole('dialog', { name: 'Confirmar ação' });
+  await expect(openDlg).toContainText('condições publicadas');
+  await openDlg.getByRole('button', { name: 'Abrir negociação' }).click();
+  await toast(vera.page, 'Negociação aberta com o cachê do evento');
   await expect(vera.page).toHaveURL(/\/painel\/negociacoes\//);
   const bookingUrl = vera.page.url();
   await vera.page.goto(eventManageUrl);
@@ -207,7 +217,7 @@ test('MVP: perfil, banda, convite e transferência, casa, evento, vagas, negocia
   await ana.page.goto('/painel/notificacoes');
   await expect(ana.page.getByText('Nova proposta de contratação').first()).toBeVisible();
   await ana.page.goto(bookingUrl.replace(/^https?:\/\/[^/]+/, ''));
-  await expect(ana.page.getByText('Parabéns! Seguem os termos.')).toBeVisible();
+  await expect(ana.page.locator('.offer').first()).toContainText('800');
   await ana.page.getByRole('button', { name: 'Comparar rider com o inventário da casa' }).click();
   await expect(ana.page.getByRole('dialog', { name: 'Compatibilidade técnica' })).toBeVisible();
   await ana.page.getByRole('dialog', { name: 'Compatibilidade técnica' }).getByRole('button', { name: 'Fechar' }).click();
@@ -215,6 +225,9 @@ test('MVP: perfil, banda, convite e transferência, casa, evento, vagas, negocia
   const counter = ana.page.getByRole('dialog', { name: 'Contraproposta' });
   await counter.getByLabel('Cachê (R$)').fill('1200');
   await counter.getByRole('button', { name: 'Enviar contraproposta' }).click();
+  const sure = ana.page.getByRole('dialog', { name: 'Enviar contraproposta?' });
+  await expect(sure).toContainText('1.200');
+  await sure.getByRole('button', { name: 'Enviar contraproposta' }).click();
   await toast(ana.page, 'Contraproposta enviada');
   await expect(ana.page.locator('.offer')).toHaveCount(2);
 

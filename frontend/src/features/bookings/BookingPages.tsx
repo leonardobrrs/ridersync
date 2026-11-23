@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router';
-import { ConfirmButton, Dialog, TextPromptDialog } from '../../components/Dialog';
+import { ConfirmButton, ConfirmDialog, Dialog, TextPromptDialog } from '../../components/Dialog';
 import { PageHead } from '../../components/Layout';
 import { Empty, ErrorState, Loading, Status } from '../../components/States';
 import { useToast } from '../../components/Toast';
@@ -12,29 +12,92 @@ import { ReviewDialog } from './ReviewDialog';
 import { Stars } from '../../components/Stars';
 import type { BookingDetail, BookingRow, Offer } from '../../lib/types';
 import { CompatibilityView } from '../artist/Compatibility';
-import { OfferForm } from './OfferForm';
+import { OfferForm, type OfferPayload } from './OfferForm';
 import { ContractCard, ContractReadinessNotice } from '../contracts/ContractCard';
+
+type Phase = 'open' | 'history' | 'all';
+type Identity = 'all' | 'personal' | 'band';
+
+/** Em andamento: negociando, acordada ou confirmada com o show ainda por vir. Histórico: o que já terminou. */
+function phaseOf(b: BookingRow, now: number): Exclude<Phase, 'all'> {
+  if (b.status === 'NEGOTIATING' || b.status === 'AGREED') return 'open';
+  if (b.status === 'CONFIRMED' && !b.performance && (!b.latestOffer || new Date(b.latestOffer.performanceAt).getTime() > now)) return 'open';
+  return 'history';
+}
 
 export function BookingsPage() {
   const q = useQuery({ queryKey: ['bookings'], queryFn: () => api.get<BookingRow[]>('/bookings') });
-  const [filter, setFilter] = useState<'open' | 'all'>('open');
-  const rows = (q.data ?? []).filter((b) => filter === 'all' || ['NEGOTIATING', 'AGREED', 'CONFIRMED'].includes(b.status));
+  const [phase, setPhase] = useState<Phase>('open');
+  const [identity, setIdentity] = useState<Identity>('all');
+  const [bandId, setBandId] = useState('');
+  // Referência de "agora": o momento em que a lista foi carregada (render puro; o pulso recarrega a lista).
+  const now = q.dataUpdatedAt;
+  const all = q.data ?? [];
+  // Filtro pessoal × banda: só faz sentido no lado do artista e quando há negociações das duas identidades.
+  const artistRows = all.filter((b) => b.mySides.includes('ARTIST'));
+  const bands = [...new Map(artistRows.filter((b) => b.artist.kind === 'BAND').map((b) => [b.artist.id, b.artist])).values()];
+  const hasPersonal = artistRows.some((b) => b.artist.kind === 'SOLO');
+  const showIdentity = bands.length > 0 && (hasPersonal || bands.length > 1);
+  const byIdentity = all.filter((b) => {
+    if (!showIdentity || identity === 'all') return true;
+    if (!b.mySides.includes('ARTIST')) return false;
+    if (identity === 'personal') return b.artist.kind === 'SOLO';
+    return b.artist.kind === 'BAND' && (!bandId || b.artist.id === bandId);
+  });
+  const count = (p: Phase) => byIdentity.filter((b) => p === 'all' || phaseOf(b, now) === p).length;
+  const when = (b: BookingRow) => new Date(b.performance?.performedAt ?? b.latestOffer?.performanceAt ?? b.updatedAt).getTime();
+  const rows = byIdentity
+    .filter((b) => phase === 'all' || phaseOf(b, now) === phase)
+    .sort((a, b) => (phase === 'history' ? when(b) - when(a) : 0));
+  const tab = (p: Phase, label: string) => (
+    <button type="button" role="tab" aria-selected={phase === p} onClick={() => setPhase(p)}>
+      {label} <span className="count">{count(p)}</span>
+    </button>
+  );
   return (
     <>
-      <PageHead title="Negociações" subtitle="Propostas diretas e negociações iniciadas a partir de candidaturas — o mesmo fluxo." />
-      <div className="seg" role="tablist" aria-label="Filtro">
-        <button type="button" role="tab" aria-selected={filter === 'open'} onClick={() => setFilter('open')}>
-          Ativas
-        </button>
-        <button type="button" role="tab" aria-selected={filter === 'all'} onClick={() => setFilter('all')}>
-          Todas
-        </button>
+      <PageHead title="Negociações" subtitle="Propostas, contrapropostas e contratações — as em andamento e todo o histórico." />
+      <div className="row wrap-row" style={{ gap: 10 }}>
+        <div className="seg" role="tablist" aria-label="Situação">
+          {tab('open', 'Em andamento')}
+          {tab('history', 'Histórico')}
+          {tab('all', 'Todas')}
+        </div>
+        {showIdentity && (
+          <div className="seg" role="tablist" aria-label="Identidade">
+            {(
+              [
+                ['all', 'Todas as identidades'],
+                ['personal', 'Pessoais'],
+                ['band', bands.length === 1 ? `Banda ${bands[0].name}` : 'Como banda'],
+              ] as [Identity, string][]
+            ).map(([k, label]) =>
+              k === 'personal' && !hasPersonal ? null : (
+                <button key={k} type="button" role="tab" aria-selected={identity === k} onClick={() => setIdentity(k)}>
+                  {label}
+                </button>
+              ),
+            )}
+          </div>
+        )}
+        {showIdentity && identity === 'band' && bands.length > 1 && (
+          <select className="input sm" aria-label="Banda" value={bandId} onChange={(e) => setBandId(e.target.value)} style={{ width: 'auto' }}>
+            <option value="">Todas as bandas</option>
+            {bands.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
       {q.isLoading && <Loading />}
       {q.error && <ErrorState error={q.error} retry={q.refetch} />}
       {q.data && rows.length === 0 && (
-        <Empty title="Nenhuma negociação">
-          Casas enviam propostas pelo marketplace; artistas recebem propostas e respondem aqui.
+        <Empty title={phase === 'history' ? 'Nenhuma negociação encerrada ainda' : 'Nenhuma negociação'}>
+          {phase === 'history'
+            ? 'Negociações recusadas, canceladas e shows já realizados ficam aqui.'
+            : 'Casas enviam propostas pelo marketplace; artistas recebem propostas e respondem aqui.'}
         </Empty>
       )}
       <div className="stack-sm">
@@ -44,7 +107,7 @@ export function BookingsPage() {
               <h3>{b.title}</h3>
               <span className="row" style={{ gap: 6 }}>
                 {b.awaitingMe && <span className="st falta">Aguardando você</span>}
-                <Status value={b.status} map={BOOKING_STATUS} />
+                {b.performance ? <span className="st ok">Show realizado</span> : <Status value={b.status} map={BOOKING_STATUS} />}
               </span>
             </div>
             <div className="meta">
@@ -67,7 +130,6 @@ export function BookingsPage() {
   );
 }
 
-/** Condições de contrato da oferta (sinal, saldo, prazos…), quando informadas. */
 function ContractTerms({ o }: { o: Offer }) {
   const items: [string, string][] = [];
   if (o.presentationDesc) items.push(['Apresentação', o.presentationDesc]);
@@ -102,6 +164,9 @@ export function BookingPage() {
   const toast = useToast();
   const q = useQuery({ queryKey: key, queryFn: () => api.get<BookingDetail>(`/bookings/${bookingId}`), refetchInterval: 20_000 });
   const [counter, setCounter] = useState(false);
+  /** Contraproposta preenchida aguardando a confirmação ("Você vai enviar…"). */
+  const [pendingCounter, setPendingCounter] = useState<OfferPayload['offer'] | null>(null);
+  const [sendingCounter, setSendingCounter] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
   const [perfNotes, setPerfNotes] = useState('');
@@ -319,9 +384,14 @@ export function BookingPage() {
                     <input className="input" value={perfNotes} maxLength={1000} onChange={(e) => setPerfNotes(e.target.value)} />
                   </label>
                   <div className="actions">
-                    <button className="btn dark" type="button" onClick={() => apply(() => api.post(`/bookings/${b.id}/performance`, { notes: perfNotes }), 'Apresentação registrada.')}>
+                    <ConfirmButton
+                      className="btn dark"
+                      confirm="Registrar esta apresentação como realizada? Ela passa a contar no histórico de shows do artista."
+                      confirmLabel="Registrar"
+                      onConfirm={() => apply(() => api.post(`/bookings/${b.id}/performance`, { notes: perfNotes }), 'Apresentação registrada.')}
+                    >
                       Registrar como realizada
-                    </button>
+                    </ConfirmButton>
                   </div>
                 </div>
               ) : (
@@ -432,15 +502,41 @@ export function BookingPage() {
             withMessage={false}
             submitLabel="Enviar contraproposta"
             onCancel={() => setCounter(false)}
-            onSubmit={async ({ offer }) => {
-              qc.setQueryData(key, await api.post<BookingDetail>(`/bookings/${b.id}/offers/${p.id}/counter`, offer));
-              await qc.invalidateQueries({ queryKey: ['bookings'] });
-              setCounter(false);
-              toast('Contraproposta enviada. A proposta anterior foi mantida no histórico.');
-            }}
+            onSubmit={async ({ offer }) => setPendingCounter(offer)}
           />
         )}
       </Dialog>
+      <ConfirmDialog
+        open={!!pendingCounter}
+        title="Enviar contraproposta?"
+        message={
+          pendingCounter && (
+            <>
+              Você está enviando uma contraproposta de <strong>{money(pendingCounter.feeCents)}</strong> para {dateTime(pendingCounter.performanceAt)} (
+              {duration(pendingCounter.durationMinutes)}). A outra parte poderá aceitar, recusar ou responder; a proposta anterior fica no histórico.
+            </>
+          )
+        }
+        confirmLabel="Enviar contraproposta"
+        busy={sendingCounter}
+        onClose={() => !sendingCounter && setPendingCounter(null)}
+        onConfirm={async () => {
+          if (!pendingCounter || !p) return;
+          setSendingCounter(true);
+          try {
+            qc.setQueryData(key, await api.post<BookingDetail>(`/bookings/${b.id}/offers/${p.id}/counter`, pendingCounter));
+            await qc.invalidateQueries({ queryKey: ['bookings'] });
+            setPendingCounter(null);
+            setCounter(false);
+            toast('Contraproposta enviada. A proposta anterior foi mantida no histórico.');
+          } catch (e) {
+            setPendingCounter(null);
+            toast(errorMessage(e), 'error');
+          } finally {
+            setSendingCounter(false);
+          }
+        }}
+      />
     </>
   );
 }

@@ -37,6 +37,8 @@ export interface Me {
     /** Foto da pessoa: a do perfil individual ou, para contratantes, a da organização. */
     profilePhotoUrl: string | null;
     needsTermsAcceptance: boolean;
+    /** Conta criada com Google ainda sem CPF (obrigatório no cadastro): pedido no primeiro acesso. */
+    needsCpf: boolean;
   };
   musician: ArtistRef | null;
   bands: { bandId: string; role: BandRole; artist: ArtistRef }[];
@@ -113,6 +115,10 @@ export type UpcomingEvent =
   | { private: false; startsAt: string; title: string | null; place: Place; eventId: string | null }
   | { private: true; startsAt: string; title: null; place: null; eventId: null };
 
+export type PastShow =
+  | { private: false; performedAt: string; title: string | null; place: Place; eventId: string | null }
+  | { private: true; performedAt: string; title: null; place: null; eventId: null };
+
 export interface HomeData {
   shows: PublicShow[];
   opportunities: EventPublic[];
@@ -176,6 +182,8 @@ export interface PublicArtist extends ArtistCard {
   portfolio: PortfolioItem[];
   rider: Rider;
   upcomingEvents: UpcomingEvent[];
+  /** Shows realizados: total e os mais recentes (privados sem detalhes). */
+  showHistory: { total: number; items: PastShow[] };
   reviews: ReviewSummary;
   members: { total: number; public: { slug: string; name: string; instrument: string | null; photoUrl: string | null }[] } | null;
   bands: { slug: string; name: string }[];
@@ -354,6 +362,8 @@ export interface EventManage extends EventPublic {
     status: ApplicationStatus;
     message: string;
     needs: Need[];
+    /** Contraproposta de cachê enviada com a candidatura (centavos); nulo = aceitou o cachê publicado. */
+    proposedFeeCents: number | null;
     createdAt: string;
     decidedAt: string | null;
     decisionNote: string | null;
@@ -380,12 +390,13 @@ export interface MyApplication {
   id: string;
   status: ApplicationStatus;
   message: string;
+  proposedFeeCents: number | null;
   createdAt: string;
   decidedAt: string | null;
   decisionNote: string | null;
   withdrawnAt: string | null;
   artist: { id: string; name: string; slug: string; kind: ArtistKind };
-  event: { id: string; title: string; startsAt: string; applicationDeadline: string; status: EventStatus; statusLabel: string; visibility: EventVisibility; organizer: OrgPublicRef };
+  event: { id: string; title: string; startsAt: string; applicationDeadline: string; status: EventStatus; statusLabel: string; visibility: EventVisibility; feeCents: number | null; organizer: OrgPublicRef };
   booking: { id: string; status: BookingStatus } | null;
 }
 

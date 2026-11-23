@@ -9,6 +9,7 @@ import {
   alCity,
   email,
   optionalCnpj,
+  requiredCnpj,
   optionalEmail,
   optionalExternalUrl,
   optionalInstagram,
@@ -40,12 +41,13 @@ const OrgFields = {
   legalName: optionalText(150, 'Razão social'),
   cnpj: optionalCnpj,
 };
+/** CNPJ obrigatório para casas de show; na edição pode ser trocado, mas não removido. */
 export const CreateOrganizationSchema = z
   .object(OrgFields)
   .partial()
-  .extend({ name: OrgFields.name, city: OrgFields.city })
+  .extend({ name: OrgFields.name, city: OrgFields.city, cnpj: requiredCnpj })
   .strict();
-export const UpdateOrganizationSchema = z.object(OrgFields).partial().strict();
+export const UpdateOrganizationSchema = z.object(OrgFields).partial().extend({ cnpj: requiredCnpj.optional() }).strict();
 export const InviteOrgMemberSchema = z.object({ email, role: z.enum(['ADMIN']).default('ADMIN') }).strict();
 /** OWNER só é concedido pela transferência de propriedade (fluxo dedicado com senha). */
 export const ChangeOrgRoleSchema = z.object({ role: z.enum(['ADMIN'], { error: 'Use "Transferir propriedade" para definir um novo proprietário.' }) }).strict();

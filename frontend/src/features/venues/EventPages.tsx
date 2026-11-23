@@ -459,6 +459,46 @@ export function EventManagePage() {
   const transition = (action: Action, reason?: string) => run(() => api.post(`/events/${ev.id}/transition`, { action, reason: reason || undefined }), 'Evento atualizado.');
   const app = ev.applications.find((a) => a.id === negotiate);
 
+  /**
+   * Selecionar candidatura: a negociação começa com o cachê publicado do evento (sem redigitar) ou, se o artista
+   * enviou contraproposta, com ela pendente para o contratante responder. Só quando o evento é "a combinar" e não há
+   * contraproposta abre o formulário de proposta.
+   */
+  const startNegotiation = (a: (typeof ev.applications)[number], opts: { label: string; className?: string; disabled?: boolean }) => {
+    const className = opts.className ?? 'btn sm';
+    if (ev.feeCents == null && a.proposedFeeCents == null) {
+      return (
+        <button className={className} type="button" disabled={opts.disabled} onClick={() => setNegotiate(a.id)}>
+          {opts.label}
+        </button>
+      );
+    }
+    const confirm =
+      a.proposedFeeCents != null
+        ? `Selecionar ${a.artist.name} e abrir a negociação com a contraproposta dele: cachê de ${money(a.proposedFeeCents)} em ${dateTime(ev.startsAt)}. Você poderá aceitar, recusar ou responder com outro valor.`
+        : `Selecionar ${a.artist.name} e abrir a negociação com as condições publicadas: ${dateTime(ev.startsAt)}, ${duration(ev.durationMinutes ?? 60)}, cachê de ${money(ev.feeCents)}. O artista poderá aceitar ou enviar uma contraproposta. Nenhuma vaga é ocupada até a confirmação.`;
+    return (
+      <ConfirmButton
+        className={className}
+        disabled={opts.disabled}
+        confirm={confirm}
+        confirmLabel="Abrir negociação"
+        onConfirm={async () => {
+          try {
+            const b = await api.post<BookingDetail>(`/applications/${a.id}/booking`, {});
+            await qc.invalidateQueries({ queryKey: ['bookings'] });
+            toast(a.proposedFeeCents != null ? 'Negociação aberta com a contraproposta do artista.' : 'Negociação aberta com o cachê do evento.');
+            navigate(`/painel/negociacoes/${b.id}`);
+          } catch (e) {
+            toast(errorMessage(e), 'error');
+          }
+        }}
+      >
+        {opts.label}
+      </ConfirmButton>
+    );
+  };
+
   return (
     <>
       <PageHead
@@ -612,6 +652,12 @@ export function EventManagePage() {
                     <span>enviada {dateTime(a.createdAt)}</span>
                     {a.booking && <Status value={a.booking.status} map={BOOKING_STATUS} />}
                   </div>
+                  {a.proposedFeeCents != null && (
+                    <p className="counter-note" role="note">
+                      <strong>Contraproposta de cachê: {money(a.proposedFeeCents)}</strong>
+                      {ev.feeCents != null && <> (cachê publicado: {money(ev.feeCents)})</>}
+                    </p>
+                  )}
                   {a.message && <p style={{ marginTop: 6, fontSize: 14 }}>“{a.message}”</p>}
                   {a.needs.length > 0 ? (
                     <div className="needs-view">
@@ -638,8 +684,14 @@ export function EventManagePage() {
                     <>
                       <ConfirmButton
                         className="btn sm cue"
-                        disabled={ev.filledSlots >= ev.slots || ev.feeCents == null}
-                        title={ev.feeCents == null ? 'Defina o cachê do evento para contratar direto.' : undefined}
+                        disabled={ev.filledSlots >= ev.slots || ev.feeCents == null || a.proposedFeeCents != null}
+                        title={
+                          a.proposedFeeCents != null
+                            ? 'O artista enviou contraproposta: use "Selecionar e negociar" para responder.'
+                            : ev.feeCents == null
+                              ? 'Defina o cachê do evento para contratar direto.'
+                              : undefined
+                        }
                         confirm={`Contratar ${a.artist.name} nas condições do evento: ${dateTime(ev.startsAt)}, ${duration(ev.durationMinutes ?? 60)}, cachê ${money(ev.feeCents)}${a.needs.length ? `, fornecendo: ${a.needs.map((n) => needLabel(n, catalog)).join('; ')}` : ''}. A contratação é confirmada na hora e ocupa uma vaga.`}
                         confirmLabel="Contratar agora"
                         onConfirm={async () => {
@@ -655,10 +707,8 @@ export function EventManagePage() {
                       >
                         Contratar nas condições
                       </ConfirmButton>
-                      {/* Selecionar abre a negociação (proposta) direto; não ocupa vaga. */}
-                      <button className="btn sm" type="button" disabled={ev.filledSlots >= ev.slots} onClick={() => setNegotiate(a.id)}>
-                        Selecionar e negociar
-                      </button>
+                      {/* Selecionar abre a negociação já com o cachê publicado (ou a contraproposta do artista); não ocupa vaga. */}
+                      {startNegotiation(a, { label: 'Selecionar e negociar', disabled: ev.filledSlots >= ev.slots })}
                       <ConfirmButton
                         className="btn sm danger"
                         confirm={`Recusar a candidatura de ${a.artist.name}?`}
@@ -670,11 +720,7 @@ export function EventManagePage() {
                       </ConfirmButton>
                     </>
                   )}
-                  {a.status === 'ACCEPTED' && !a.booking && (
-                    <button className="btn sm dark" type="button" onClick={() => setNegotiate(a.id)}>
-                      Iniciar negociação
-                    </button>
-                  )}
+                  {a.status === 'ACCEPTED' && !a.booking && startNegotiation(a, { label: 'Iniciar negociação', className: 'btn sm dark' })}
                   {a.booking && (
                     <Link className="btn sm" to={`/painel/negociacoes/${a.booking.id}`}>
                       Ver negociação

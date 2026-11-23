@@ -3,6 +3,8 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNod
 import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { api } from '../lib/api';
 import { useMe } from '../lib/hooks';
+import { useTheme } from '../lib/theme';
+import { useLivePulse } from '../lib/usePulse';
 import { useDismiss } from '../lib/useDismiss';
 import type { AccountType, Me } from '../lib/types';
 import { AccountGate } from './AccountGate';
@@ -102,8 +104,20 @@ function UserMenu({ me }: { me: Me }) {
   );
 }
 
+/** Alterna entre tema claro e escuro (a escolha fica salva neste navegador). */
+export function ThemeToggle({ className = 'hlink theme-btn' }: { className?: string }) {
+  const { theme, toggle } = useTheme();
+  const next = theme === 'dark' ? 'claro' : 'escuro';
+  return (
+    <button type="button" className={className} onClick={toggle} aria-label={`Usar tema ${next}`} title={`Usar tema ${next}`}>
+      <Icon name={theme === 'dark' ? 'sun' : 'moon'} />
+    </button>
+  );
+}
+
 function Header() {
   const { data: me } = useMe();
+  useLivePulse(!!me);
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const location = useLocation();
@@ -165,6 +179,7 @@ function Header() {
               <span className="t">Meus eventos</span>
             </NavLink>
           )}
+          <ThemeToggle />
           {me ? (
             <>
               <NotificationBell />

@@ -22,6 +22,7 @@ import { LocalStorageDriver, StorageDriver, VercelBlobStorageDriver } from '../m
 import { PRIVACY_POLICY_VERSION } from '../modules/auth/auth.service';
 import { hashPassword } from '../modules/auth/password';
 import { DEMO_PASSWORD, runDemoSeed } from './demo-seed';
+import { fakeCnpj, fakeCpf } from './fake-documents';
 
 if (existsSync('.env')) process.loadEnvFile('.env');
 
@@ -217,7 +218,7 @@ export async function runShowcaseSeed(prisma: PrismaClient, imageDir: string) {
     const found = await prisma.user.findUnique({ where: { email }, select: { id: true, name: true } });
     if (found) return found;
     return prisma.user.create({
-      data: { email, name, passwordHash, accountType, emailVerifiedAt: now, termsAcceptedAt: now, termsVersion: PRIVACY_POLICY_VERSION },
+      data: { email, name, passwordHash, accountType, emailVerifiedAt: now, termsAcceptedAt: now, termsVersion: PRIVACY_POLICY_VERSION, cpf: fakeCpf(email), legalName: name },
       select: { id: true, name: true },
     });
   };
@@ -320,6 +321,8 @@ export async function runShowcaseSeed(prisma: PrismaClient, imageDir: string) {
           slug: v.slug,
           type: 'VENUE',
           name: v.name,
+          cnpj: fakeCnpj(v.slug),
+          legalName: `${v.name} Ltda`,
           venueKind: v.kind,
           description: v.description,
           addressLine: v.address ?? null,
@@ -601,6 +604,37 @@ export async function runShowcaseSeed(prisma: PrismaClient, imageDir: string) {
   await booking({ title: 'Forró de Novembro — Mestre Damião', orgId: V['galpao-sertao-demo'], venueUser: 'antonio', artist: 'damiao', artistUser: 'damiao', event: 'forro-passado', status: 'CONFIRMED', offers: [{ side: 'VENUE', fee: 1500, status: 'ACCEPTED', terms: 'Trio pé-de-serra, 2 horas.' }], performed: true });
   await booking({ title: 'Brisa Elétrica ao Vivo', orgId: V['espaco-mandacaru-demo'], venueUser: 'luana', artist: 'brisa-eletrica-demo', artistUser: 'lucas', event: 'rock-passado', status: 'CONFIRMED', offers: [{ side: 'VENUE', fee: 1200, status: 'ACCEPTED', terms: 'Show do disco novo.' }], performed: true });
   await booking({ title: 'Samba de Outubro — Os Malungos', orgId: V['bar-do-cais-demo'], venueUser: 'fernanda', artist: 'os-malungos-demo', artistUser: 'marilia', event: 'samba-passado', status: 'CONFIRMED', offers: [{ side: 'VENUE', fee: 1100, status: 'ACCEPTED', terms: 'Roda de 3 horas.' }], performed: true });
+
+  // ─────────── Contrapropostas na candidatura (reunião 22/11) ───────────
+  const counters: [string, string, number][] = [
+    ['verao', 'gabi', 180000],
+    ['mpb-teatro', 'julia', 250000],
+    ['forro-sertao', 'damiao', 320000],
+    ['jazz-quarta', 'caio', 60000],
+    ['recital', 'rebeca', 120000],
+  ];
+  for (const [ev, artist, fee] of counters) {
+    if (!E[ev] || !A[artist]) continue;
+    await prisma.eventApplication.updateMany({
+      where: { eventId: E[ev].id, artistId: A[artist], status: 'PENDING', proposedFeeCents: null, booking: null },
+      data: { proposedFeeCents: fee },
+    });
+  }
+
+  // ─────────── CPF/CNPJ fictícios nos dados de demonstração já existentes ───────────
+  // Só contas do domínio reservado @demo.ridersync.local (e casas que pertencem a elas). Contas reais não são tocadas.
+  const demoUsers = await prisma.user.findMany({ where: { email: { endsWith: '@demo.ridersync.local' }, cpf: null }, select: { id: true, email: true, name: true, legalName: true } });
+  for (const u of demoUsers) {
+    await prisma.user.update({ where: { id: u.id }, data: { cpf: fakeCpf(u.email), ...(u.legalName ? {} : { legalName: u.name.replace(/ \(demo\)$/, '') }) } });
+  }
+  const demoVenues = await prisma.organization.findMany({
+    where: { type: 'VENUE', cnpj: null, members: { some: { role: 'OWNER', status: 'ACTIVE', user: { email: { endsWith: '@demo.ridersync.local' } } } } },
+    select: { id: true, slug: true, name: true, legalName: true },
+  });
+  for (const o of demoVenues) {
+    await prisma.organization.update({ where: { id: o.id }, data: { cnpj: fakeCnpj(o.slug), ...(o.legalName ? {} : { legalName: `${o.name.replace(/ \(demo\)$/, '')} Ltda` }) } });
+  }
+  console.warn(`Documentos fictícios: ${demoUsers.length} conta(s) com CPF e ${demoVenues.length} casa(s) com CNPJ preenchidos.`);
 
   // ─────────── Imagens nos registros que ainda não têm ───────────
   const instTag: Record<string, string[]> = {

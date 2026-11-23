@@ -1,15 +1,15 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { NeedsPicker } from './NeedsPicker';
 import { FormError } from '../../components/Fields';
-import { Dialog } from '../../components/Dialog';
+import { ConfirmButton, Dialog } from '../../components/Dialog';
 import { Poster } from '../../components/Poster';
 import { OpportunityCard } from '../marketplace/MarketplacePage';
 import { Empty, ErrorState, Loading, Status } from '../../components/States';
 import { useToast } from '../../components/Toast';
 import { api, errorMessage, qs } from '../../lib/api';
-import { APPLICATION_STATUS, dateTime, duration, EVENT_STATUS, money } from '../../lib/format';
+import { APPLICATION_STATUS, centsFromReais, dateTime, duration, EVENT_STATUS, money } from '../../lib/format';
 import { useMe, useMeta } from '../../lib/hooks';
 import type { ApplicationStatus, EventPublic, Need } from '../../lib/types';
 
@@ -91,6 +91,7 @@ interface MyApp {
   id: string;
   artistId: string;
   status: ApplicationStatus;
+  proposedFeeCents: number | null;
   booking: { id: string; status: string } | null;
 }
 
@@ -116,6 +117,31 @@ export function OpportunityPage() {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [applyOpen, setApplyOpen] = useState(false);
+  /** 'event' = aceita o cachê publicado; 'counter' = envia contraproposta já na candidatura. */
+  const [feeMode, setFeeMode] = useState<'event' | 'counter'>('event');
+  const [counterFee, setCounterFee] = useState('');
+  /** Etapa de confirmação: "Você está se candidatando a…" antes de enviar. */
+  const [reviewing, setReviewing] = useState(false);
+  function openApply(mode: 'event' | 'counter') {
+    setErr(null);
+    setReviewing(false);
+    setFeeMode(mode);
+    setApplyOpen(true);
+  }
+
+  // Atalhos vindos da lista de oportunidades: ?acao=candidatar | contraproposta abre o formulário (uma vez).
+  const [params, setParams] = useSearchParams();
+  const action = params.get('acao');
+  const canApply = !!me && !!q.data?.acceptingApplications && identities.length > 0;
+  useEffect(() => {
+    if (!action || !canApply) return;
+    openApply(action === 'contraproposta' ? 'counter' : 'event');
+    setParams((p) => {
+      p.delete('acao');
+      return p;
+    }, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [action, canApply]);
 
   if (q.isLoading) return <Loading />;
   if (q.error) return <div className="wrap page"><ErrorState error={q.error} retry={q.refetch} /></div>;
@@ -127,20 +153,30 @@ export function OpportunityPage() {
     await qc.invalidateQueries({ queryKey: ['event-my-apps', eventId] });
     await qc.invalidateQueries({ queryKey: ['my-applications'] });
   };
-  const apply = async () => {
+  const counterCents = feeMode === 'counter' ? centsFromReais(counterFee) : null;
+  /** Valida e vai para a etapa de confirmação. */
+  const review = () => {
     setErr(null);
     if (!selected) return setErr('Escolha com qual identidade artística deseja se candidatar.');
+    if (feeMode === 'counter' && (counterCents == null || counterCents <= 0)) return setErr('Informe o cachê que você propõe.');
+    setReviewing(true);
+  };
+  const apply = async () => {
+    setErr(null);
     setBusy(true);
     try {
-      await api.post(`/events/${e.id}/applications`, { artistId: selected, message, needs });
+      await api.post(`/events/${e.id}/applications`, { artistId: selected, message, needs, proposedFeeCents: counterCents });
       setMessage('');
       setNeeds([]);
+      setCounterFee('');
+      setReviewing(false);
       setApplyOpen(false);
       await refresh();
-      toast('Candidatura enviada! Acompanhe o andamento aqui.');
+      toast(counterCents != null ? 'Candidatura enviada com sua contraproposta de cachê.' : 'Candidatura enviada! Acompanhe o andamento aqui.');
       navigate('/painel/candidaturas');
     } catch (x) {
       setErr(errorMessage(x));
+      setReviewing(false);
     } finally {
       setBusy(false);
     }
@@ -296,11 +332,18 @@ export function OpportunityPage() {
                     <li key={a.id} className="row between">
                       <span>
                         <strong>{ident?.name ?? 'Identidade'}</strong> <Status value={a.status} map={APPLICATION_STATUS} />
+                        {a.proposedFeeCents != null && <small className="hint"> · contraproposta {money(a.proposedFeeCents)}</small>}
                       </span>
                       {(a.status === 'PENDING' || a.status === 'ACCEPTED') && !a.booking && (
-                        <button className="btn sm ghost danger" type="button" onClick={() => withdraw(a.id)}>
+                        <ConfirmButton
+                          className="btn sm ghost danger"
+                          confirm={`Retirar a candidatura de ${ident?.name ?? 'esta identidade'} em "${e.title}"? Você poderá se candidatar de novo enquanto as inscrições estiverem abertas.`}
+                          confirmLabel="Retirar candidatura"
+                          danger
+                          onConfirm={() => withdraw(a.id)}
+                        >
                           Retirar
-                        </button>
+                        </ConfirmButton>
                       )}
                       {a.booking && (
                         <Link className="btn sm" to={`/painel/negociacoes/${a.booking.id}`}>
@@ -319,45 +362,103 @@ export function OpportunityPage() {
             )}
             {me && e.acceptingApplications && identities.length > 0 && (
               <>
-                <button className="btn cue block" type="button" onClick={() => { setErr(null); setApplyOpen(true); }}>
-                  Candidatar-se
+                <button className="btn cue block" type="button" onClick={() => openApply('event')}>
+                  {e.feeCents != null ? `Candidatar-se por ${money(e.feeCents)}` : 'Candidatar-se'}
                 </button>
-                <p className="hint">Somente perfis públicos podem se candidatar. A seleção não confirma a contratação.</p>
+                <button className="btn block" type="button" onClick={() => openApply('counter')}>
+                  Enviar contraproposta
+                </button>
+                <p className="hint">
+                  {e.feeCents != null
+                    ? 'Não concorda com o cachê? Envie uma contraproposta junto com a candidatura — o contratante responde na negociação.'
+                    : 'Cachê a combinar: proponha o seu valor na candidatura.'}{' '}
+                  Somente perfis públicos podem se candidatar. A seleção não confirma a contratação.
+                </p>
               </>
             )}
-            <Dialog open={applyOpen} onClose={() => !busy && setApplyOpen(false)} title={`Candidatura — ${e.title}`} wide>
-              <div className="form">
-                <FormError message={err} />
-                <label className="field">
-                  <span>Candidatar-se como</span>
-                  <select className="input" value={selected} onChange={(x) => setArtistId(x.target.value)}>
-                    <option value="">Selecione…</option>
-                    {identities.map((i) => {
-                      const existing = appsByArtist.get(i.id);
-                      const blocked = existing && existing.status !== 'WITHDRAWN';
-                      return (
-                        <option key={i.id} value={i.id} disabled={!!blocked}>
-                          {i.name} ({i.kind}){i.visibility !== 'PUBLIC' ? ' — perfil privado' : ''}
-                          {blocked ? ' — já candidatado' : ''}
-                        </option>
-                      );
-                    })}
-                  </select>
-                </label>
-                {selected && <NeedsPicker artistId={selected} venueSlug={e.location.venueSlug} value={needs} onChange={setNeeds} />}
-                <label className="field">
-                  <span>Mensagem para a casa</span>
-                  <textarea className="input" maxLength={1500} value={message} onChange={(x) => setMessage(x.target.value)} style={{ minHeight: 90 }} />
-                </label>
-                <div className="actions">
-                  <button className="btn ghost" type="button" onClick={() => setApplyOpen(false)} disabled={busy}>
-                    Cancelar
-                  </button>
-                  <button className="btn cue" type="button" onClick={apply} disabled={busy}>
-                    {busy ? 'Enviando…' : 'Enviar candidatura'}
-                  </button>
+            <Dialog open={applyOpen} onClose={() => !busy && setApplyOpen(false)} title={reviewing ? 'Confirme sua candidatura' : `Candidatura — ${e.title}`} wide>
+              {reviewing ? (
+                <div className="stack">
+                  <FormError message={err} />
+                  <div className="inline-msg info" role="status">
+                    Você está se candidatando a <strong>{e.title}</strong> como <strong>{identities.find((i) => i.id === selected)?.name}</strong>, em{' '}
+                    {dateTime(e.startsAt)}
+                    {counterCents != null ? (
+                      <>
+                        , com contraproposta de cachê de <strong>{money(counterCents)}</strong>
+                        {e.feeCents != null && <> (publicado: {money(e.feeCents)})</>}.
+                      </>
+                    ) : e.feeCents != null ? (
+                      <>
+                        , aceitando o cachê publicado de <strong>{money(e.feeCents)}</strong>.
+                      </>
+                    ) : (
+                      <>, com cachê a combinar.</>
+                    )}
+                  </div>
+                  {needs.length > 0 && <p className="hint">Você pediu {needs.length} item(ns) de equipamento à casa.</p>}
+                  <p className="hint">O contratante recebe sua candidatura e pode selecioná-la para negociar ou contratar. A candidatura sozinha não confirma a contratação.</p>
+                  <div className="actions">
+                    <button className="btn ghost" type="button" onClick={() => setReviewing(false)} disabled={busy}>
+                      Voltar e editar
+                    </button>
+                    <button className="btn cue" type="button" onClick={apply} disabled={busy}>
+                      {busy ? 'Enviando…' : 'Confirmar candidatura'}
+                    </button>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="form">
+                  <FormError message={err} />
+                  <label className="field">
+                    <span>Candidatar-se como</span>
+                    <select className="input" value={selected} onChange={(x) => setArtistId(x.target.value)}>
+                      <option value="">Selecione…</option>
+                      {identities.map((i) => {
+                        const existing = appsByArtist.get(i.id);
+                        const blocked = existing && existing.status !== 'WITHDRAWN';
+                        return (
+                          <option key={i.id} value={i.id} disabled={!!blocked}>
+                            {i.name} ({i.kind}){i.visibility !== 'PUBLIC' ? ' — perfil privado' : ''}
+                            {blocked ? ' — já candidatado' : ''}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </label>
+                  <fieldset className="fee-choice">
+                    <legend>Cachê</legend>
+                    <label className="check">
+                      <input type="radio" name="fee-mode" checked={feeMode === 'event'} onChange={() => setFeeMode('event')} />
+                      <span>{e.feeCents != null ? `Aceito o cachê publicado: ${money(e.feeCents)}` : 'Cachê a combinar: o contratante envia a proposta'}</span>
+                    </label>
+                    <label className="check">
+                      <input type="radio" name="fee-mode" checked={feeMode === 'counter'} onChange={() => setFeeMode('counter')} />
+                      <span>Quero propor outro cachê (contraproposta)</span>
+                    </label>
+                    {feeMode === 'counter' && (
+                      <label className="field">
+                        <span>Cachê que você propõe (R$)</span>
+                        <input className="input" inputMode="decimal" placeholder="Ex.: 1.200,00" value={counterFee} onChange={(x) => setCounterFee(x.target.value)} autoFocus />
+                        <small className="hint">Explique na mensagem o que está incluído (formação, tempo de show, equipamento).</small>
+                      </label>
+                    )}
+                  </fieldset>
+                  {selected && <NeedsPicker artistId={selected} venueSlug={e.location.venueSlug} value={needs} onChange={setNeeds} />}
+                  <label className="field">
+                    <span>Mensagem para a casa</span>
+                    <textarea className="input" maxLength={1500} value={message} onChange={(x) => setMessage(x.target.value)} style={{ minHeight: 90 }} />
+                  </label>
+                  <div className="actions">
+                    <button className="btn ghost" type="button" onClick={() => setApplyOpen(false)} disabled={busy}>
+                      Cancelar
+                    </button>
+                    <button className="btn cue" type="button" onClick={review} disabled={busy}>
+                      Revisar e enviar
+                    </button>
+                  </div>
+                </div>
+              )}
             </Dialog>
           </section>
         </aside>

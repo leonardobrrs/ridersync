@@ -2,6 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { api, ApiError } from '../lib/api';
+import { isValidCpf, maskCpf } from '../lib/documents';
 import { useMe } from '../lib/hooks';
 import type { AccountType, AuthConfig, Me } from '../lib/types';
 import { AccountTypeChooser } from './AccountTypeChooser';
@@ -11,7 +12,7 @@ import { useToast } from './Toast';
 
 /**
  * Pendências da conta exibidas no painel: e-mail não confirmado (aviso), tipo de conta de contas
- * legadas e aceite da versão vigente da política (modais obrigatórios).
+ * legadas, aceite da versão vigente da política e CPF de contas criadas com Google (modais obrigatórios).
  */
 export function AccountGate() {
   const { data: me } = useMe();
@@ -21,6 +22,7 @@ export function AccountGate() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
+  const [cpf, setCpf] = useState('');
   if (!me) return null;
 
   const update = (next: Me) => qc.setQueryData(['me'], next);
@@ -38,6 +40,8 @@ export function AccountGate() {
 
   const needsType = !me.user.accountType;
   const needsTerms = !needsType && me.user.needsTermsAcceptance;
+  const needsCpf = !needsType && !needsTerms && !!me.user.needsCpf;
+  const cpfValid = isValidCpf(cpf);
 
   return (
     <>
@@ -113,6 +117,35 @@ export function AccountGate() {
             Li e aceito
           </button>
         </div>
+      </Dialog>
+      <Dialog open={needsCpf} onClose={() => undefined} dismissible={false} title="Informe seu CPF">
+        <form
+          className="stack"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (cpfValid) void run(() => api.post<Me>('/account/cpf', { cpf }));
+          }}
+        >
+          <p>O CPF é obrigatório no cadastro do RiderSync e é usado nos contratos das suas contratações. Ele nunca aparece no seu perfil público.</p>
+          <label className="field">
+            <span>CPF</span>
+            <input
+              className="input"
+              inputMode="numeric"
+              placeholder="000.000.000-00"
+              maxLength={14}
+              value={cpf}
+              onChange={(e) => setCpf(maskCpf(e.target.value))}
+              aria-invalid={cpf.length === 14 && !cpfValid}
+              autoFocus
+            />
+          </label>
+          {cpf.length === 14 && !cpfValid && <span className="err">CPF inválido. Confira os números.</span>}
+          <FormError message={error} />
+          <button type="submit" className="btn cue block" disabled={!cpfValid || busy}>
+            {busy ? 'Salvando…' : 'Salvar CPF'}
+          </button>
+        </form>
       </Dialog>
     </>
   );

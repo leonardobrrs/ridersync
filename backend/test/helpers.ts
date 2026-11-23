@@ -42,10 +42,25 @@ export const uniqueEmail = (prefix: string) =>
 
 export const TEST_PASSWORD = 'Senha@Segura123';
 
+/** CPF/CNPJ válidos e aleatórios (dígitos verificadores corretos) para cadastros de teste. */
+function checkDigits(base: number[], weights: (len: number) => number[]) {
+  const d = [...base];
+  for (const len of [base.length, base.length + 1]) {
+    const w = weights(len);
+    const sum = d.slice(0, len).reduce((acc, n, i) => acc + n * w[i], 0);
+    const rest = sum % 11;
+    d.push(rest < 2 ? 0 : 11 - rest);
+  }
+  return d.join('');
+}
+export const validCpf = () => checkDigits(Array.from({ length: 9 }, (_, i) => (i === 0 ? 1 + Math.floor(Math.random() * 9) : Math.floor(Math.random() * 10))), (len) => Array.from({ length: len }, (_, i) => len + 1 - i));
+export const validCnpj = () =>
+  checkDigits([...Array.from({ length: 8 }, () => Math.floor(Math.random() * 10)), 0, 0, 0, 1], (len) => (len === 12 ? [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2] : [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]));
+
 export async function registerUser(app: INestApplication, name = 'Pessoa Teste', accountType: 'ARTIST' | 'CONTRACTOR' = 'ARTIST'): Promise<Client> {
   const c = new Client(app);
   const email = uniqueEmail(name.split(' ')[0].toLowerCase());
-  const res = await c.post('/auth/register', { accountType, name, email, password: TEST_PASSWORD, passwordConfirmation: TEST_PASSWORD, acceptTerms: true });
+  const res = await c.post('/auth/register', { accountType, name, cpf: validCpf(), email, password: TEST_PASSWORD, passwordConfirmation: TEST_PASSWORD, acceptTerms: true });
   if (res.status !== 201) throw new Error(`register falhou: ${res.status} ${JSON.stringify(res.body)}`);
   c.user = { id: res.body.session.user.id, email, name };
   return c;
@@ -68,7 +83,7 @@ export async function createPublicMusician(c: Client, name: string) {
 }
 
 export async function createVenue(c: Client, name = 'Casa Teste') {
-  const res = await c.post('/organizations', { name, city: 'Maceió', venueKind: 'Casa de show', capacity: 300 });
+  const res = await c.post('/organizations', { name, city: 'Maceió', venueKind: 'Casa de show', capacity: 300, cnpj: validCnpj() });
   if (res.status !== 201) throw new Error(`casa falhou: ${res.status} ${JSON.stringify(res.body)}`);
   return res.body as { id: string; slug: string };
 }

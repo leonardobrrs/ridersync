@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Booking, BookingSide, BookingStatus } from '@prisma/client';
+import { Booking, BookingSide, BookingStatus, Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { conflict, notFound, unprocessable } from '../../common/errors';
 import { moneyCents, optionalText, text } from '../../common/validation';
@@ -83,8 +83,13 @@ export const DirectProposalSchema = z
   })
   .strict();
 
+/**
+ * Selecionar candidatura. Sem `offer`, a negociação começa com as condições publicadas do evento (data, duração,
+ * cachê e condições) — o contratante não precisa redigitar o cachê que já ofereceu. `offer` só é necessário quando o
+ * evento não tem cachê definido ("a combinar") e o artista não fez contraproposta.
+ */
 export const FromApplicationSchema = z
-  .object({ title: text(3, 120, 'Título').optional(), offer: OfferSchema, message: z.string().trim().max(2000).optional() })
+  .object({ title: text(3, 120, 'Título').optional(), offer: OfferSchema.optional(), message: z.string().trim().max(2000).optional() })
   .strict();
 
 export const MessageSchema = z.object({ body: text(1, 2000, 'Mensagem') }).strict();
@@ -92,6 +97,18 @@ export const CancelSchema = z.object({ reason: z.string().trim().max(500).option
 export const PerformanceSchema = z.object({ notes: z.string().trim().max(1000).default('') }).strict();
 
 type OfferInput = z.infer<typeof OfferSchema>;
+type OfferData = Omit<Prisma.BookingOfferUncheckedCreateInput, 'bookingId' | 'authorId' | 'authorSide' | 'previousOfferId' | 'status'>;
+interface OfferStep {
+  side: BookingSide;
+  authorId: string | null;
+  data: OfferData;
+  status?: 'PENDING' | 'SUPERSEDED';
+}
+
+/** Termos publicados do evento como oferta (campos de contrato ficam para a negociação). */
+function offerFromEvent(event: { startsAt: Date; durationMinutes: number | null; feeCents: number | null; conditions: string }, feeCents: number): OfferData {
+  return { performanceAt: event.startsAt, durationMinutes: event.durationMinutes ?? 60, feeCents, terms: event.conditions };
+}
 
 @Injectable()
 export class BookingsService {
@@ -153,17 +170,38 @@ export class BookingsService {
     tx: Tx,
     userId: string,
     data: { origin: 'DIRECT' | 'APPLICATION'; organizationId: string; artistId: string; eventId: string | null; applicationId: string | null; title: string },
-    offer: OfferInput,
+    offers: OfferStep[],
     message?: string,
   ) {
     const booking = await tx.booking.create({ data: { ...data, createdById: userId, status: 'NEGOTIATING' } });
     await this.logStatus(tx, booking.id, null, 'NEGOTIATING', userId, 'VENUE', data.origin === 'DIRECT' ? 'Proposta direta' : 'Iniciada a partir de candidatura');
-    await tx.bookingOffer.create({ data: { bookingId: booking.id, authorId: userId, authorSide: 'VENUE', ...offer } });
+    let previousOfferId: string | null = null;
+    const base = Date.now();
+    for (const [i, o] of offers.entries()) {
+      const created: { id: string } = await tx.bookingOffer.create({
+        data: {
+          bookingId: booking.id,
+          authorId: o.authorId,
+          authorSide: o.side,
+          previousOfferId,
+          ...o.data,
+          status: o.status ?? 'PENDING',
+          // Horários crescentes explícitos: a ordem do histórico não depende de empate no mesmo milissegundo.
+          createdAt: new Date(base + i),
+          ...(o.status === 'SUPERSEDED' ? { respondedAt: new Date(base + i + 1) } : {}),
+        },
+        select: { id: true },
+      });
+      previousOfferId = created.id;
+    }
     if (message) await tx.bookingMessage.create({ data: { bookingId: booking.id, authorId: userId, authorSide: 'VENUE', body: message } });
+    const awaitingVenue = offers[offers.length - 1]?.side === 'ARTIST';
     await this.notifySide(tx, booking, 'ARTIST', userId, {
-      type: 'PROPOSAL_RECEIVED',
-      title: 'Nova proposta de contratação',
-      body: `Você recebeu a proposta "${data.title}". Responda, aceite ou envie uma contraproposta.`,
+      type: awaitingVenue ? 'APPLICATION_SELECTED' : 'PROPOSAL_RECEIVED',
+      title: awaitingVenue ? 'Candidatura selecionada' : 'Nova proposta de contratação',
+      body: awaitingVenue
+        ? `Sua candidatura em "${data.title}" foi selecionada. O contratante vai responder à sua contraproposta de cachê.`
+        : `Você recebeu a proposta "${data.title}". Responda, aceite ou envie uma contraproposta.`,
       dedupeKey: `proposal:${booking.id}`,
     });
     return booking.id;
@@ -200,7 +238,7 @@ export class BookingsService {
           applicationId: null,
           title: input.title ?? (eventTitle ? `${eventTitle} — ${artist.name}` : `${org.name} × ${artist.name}`),
         },
-        input.offer,
+        [{ side: 'VENUE', authorId: userId, data: input.offer }],
         input.message,
       );
       if (input.eventId) await this.lifecycle.applySlotChange(tx, await tx.event.findUniqueOrThrow({ where: { id: input.eventId } }));
@@ -222,6 +260,8 @@ export class BookingsService {
         id: true,
         status: true,
         artistId: true,
+        proposedFeeCents: true,
+        submittedById: true,
         artist: { select: { name: true } },
         event: { select: { id: true, title: true, organizerId: true } },
         booking: { select: { id: true } },
@@ -245,6 +285,19 @@ export class BookingsService {
       } else if (fresh.status !== 'ACCEPTED') {
         throw conflict('APPLICATION_NOT_ACCEPTED', 'Esta candidatura não está mais em análise.');
       }
+      if (event.startsAt.getTime() <= Date.now()) throw conflict('EVENT_NOT_ACTIVE', 'A data deste evento já passou.');
+      // Ofertas iniciais: proposta digitada pelo contratante; senão, as condições publicadas do evento. Se o artista
+      // enviou contraproposta na candidatura, ela vem em seguida e é a oferta pendente — quem responde é o contratante.
+      const offers: OfferStep[] = [];
+      if (input.offer) offers.push({ side: 'VENUE', authorId: userId, data: input.offer });
+      else if (event.feeCents != null) offers.push({ side: 'VENUE', authorId: userId, data: offerFromEvent(event, event.feeCents) });
+      if (app.proposedFeeCents != null && !input.offer) {
+        if (offers.length) offers[0].status = 'SUPERSEDED';
+        offers.push({ side: 'ARTIST', authorId: app.submittedById, data: offerFromEvent(event, app.proposedFeeCents) });
+      }
+      if (!offers.length) {
+        throw unprocessable('OFFER_REQUIRED', 'O evento não tem cachê definido: informe a proposta (data, duração e cachê) para iniciar a negociação.');
+      }
       return this.createBooking(
         tx,
         userId,
@@ -256,7 +309,7 @@ export class BookingsService {
           applicationId: app.id,
           title: input.title ?? `${app.event.title} — ${app.artist.name}`,
         },
-        input.offer,
+        offers,
         input.message,
       );
     });
@@ -273,9 +326,12 @@ export class BookingsService {
   async hireFromApplication(userId: string, applicationId: string) {
     const app = await this.prisma.eventApplication.findUnique({
       where: { id: applicationId },
-      select: { id: true, status: true, artistId: true, artist: { select: { name: true } }, event: { select: { id: true, title: true, organizerId: true } }, booking: { select: { id: true } } },
+      select: { id: true, status: true, artistId: true, proposedFeeCents: true, artist: { select: { name: true } }, event: { select: { id: true, title: true, organizerId: true } }, booking: { select: { id: true } } },
     });
     if (!app) throw notFound('Candidatura não encontrada.');
+    if (app.proposedFeeCents != null) {
+      throw conflict('APPLICATION_HAS_COUNTER_OFFER', 'O artista enviou uma contraproposta de cachê. Use "Selecionar e negociar" para responder a ela.');
+    }
     await this.access.assertOrgMember(userId, app.event.organizerId);
     if (!['PENDING', 'ACCEPTED'].includes(app.status)) throw conflict('APPLICATION_NOT_ACCEPTED', 'Esta candidatura não está mais em análise.');
     if (app.booking) throw conflict('BOOKING_EXISTS', 'Já existe uma negociação para esta candidatura.');

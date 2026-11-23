@@ -100,7 +100,13 @@ export const NeedSchema = z
   .refine((n) => !!n.catalogItemId !== !!n.customName, { message: 'Informe um item do catálogo ou um item personalizado.' });
 export type Need = z.infer<typeof NeedSchema>;
 export const ApplySchema = z
-  .object({ artistId: z.uuid(), message: z.string().trim().max(1500).default(''), needs: z.array(NeedSchema).max(60).default([]) })
+  .object({
+    artistId: z.uuid(),
+    message: z.string().trim().max(1500).default(''),
+    needs: z.array(NeedSchema).max(60).default([]),
+    /** Contraproposta de cachê já na candidatura (centavos). Ausente/nulo = aceita o cachê publicado. */
+    proposedFeeCents: moneyCents.nullish().transform((v) => v ?? null),
+  })
   .strict();
 export const DecisionSchema = z.object({ note: z.string().trim().max(500).optional() }).strict();
 
@@ -353,6 +359,7 @@ export class EventsService {
             status: true,
             message: true,
             needs: true,
+            proposedFeeCents: true,
             createdAt: true,
             decidedAt: true,
             decisionNote: true,
@@ -604,7 +611,7 @@ export class EventsService {
   async apply(userId: string, eventId: string, input: z.infer<typeof ApplySchema>) {
     await this.access.assertCanManageArtist(userId, input.artistId);
     const [event, artist] = await Promise.all([
-      this.prisma.event.findUnique({ where: { id: eventId }, select: { id: true, title: true, status: true, visibility: true, applicationDeadline: true, organizerId: true } }),
+      this.prisma.event.findUnique({ where: { id: eventId }, select: { id: true, title: true, status: true, visibility: true, applicationDeadline: true, organizerId: true, feeCents: true } }),
       this.prisma.artist.findUniqueOrThrow({ where: { id: input.artistId }, select: { visibility: true, name: true } }),
     ]);
     if (!event || event.status === 'DRAFT') throw notFound('Oportunidade não encontrada.');
@@ -617,6 +624,8 @@ export class EventsService {
     if (artist.visibility !== 'PUBLIC') {
       throw unprocessable('PROFILE_NOT_PUBLIC', 'Publique o perfil artístico antes de se candidatar — o contratante precisa conseguir vê-lo.');
     }
+    // Contraproposta igual ao cachê publicado não é contraproposta.
+    const proposedFeeCents = input.proposedFeeCents !== null && input.proposedFeeCents === event.feeCents ? null : input.proposedFeeCents;
     const needIds = [...new Set(input.needs.map((n) => n.catalogItemId).filter((x): x is string => !!x))];
     if (needIds.length && (await this.prisma.equipmentCatalogItem.count({ where: { id: { in: needIds }, active: true } })) !== needIds.length) {
       throw unprocessable('UNKNOWN_CATALOG_ITEM', 'Há um equipamento inválido na lista do que você precisa.');
@@ -633,14 +642,14 @@ export class EventsService {
         assertApplicationTransition('WITHDRAWN', 'PENDING');
         const res = await tx.eventApplication.updateMany({
           where: { id: existing.id, status: 'WITHDRAWN' },
-          data: { status: 'PENDING', message: input.message, needs: input.needs, submittedById: userId, withdrawnAt: null, decidedAt: null, decidedById: null, decisionNote: null },
+          data: { status: 'PENDING', message: input.message, needs: input.needs, proposedFeeCents, submittedById: userId, withdrawnAt: null, decidedAt: null, decidedById: null, decisionNote: null },
         });
         if (res.count !== 1) throw conflict('DUPLICATE_APPLICATION', 'Esta identidade artística já se candidatou a esta oportunidade.');
         applicationId = existing.id;
       } else {
         // Unicidade (eventId, artistId) garantida pelo banco; P2002 vira 409.
         const created = await tx.eventApplication.create({
-          data: { eventId, artistId: input.artistId, submittedById: userId, message: input.message, needs: input.needs },
+          data: { eventId, artistId: input.artistId, submittedById: userId, message: input.message, needs: input.needs, proposedFeeCents },
           select: { id: true },
         });
         applicationId = created.id;
@@ -649,7 +658,7 @@ export class EventsService {
         category: 'APPLICATIONS',
         type: 'APPLICATION_RECEIVED',
         title: `Nova candidatura: ${event.title}`,
-        body: `${artist.name} se candidatou ao evento.`,
+        body: proposedFeeCents !== null ? `${artist.name} se candidatou ao evento com uma contraproposta de cachê.` : `${artist.name} se candidatou ao evento.`,
         link: `/painel/eventos/${event.id}`,
         dedupeKey: `application-received:${applicationId}:${Date.now()}`,
       });
@@ -673,12 +682,13 @@ export class EventsService {
         id: true,
         status: true,
         message: true,
+        proposedFeeCents: true,
         createdAt: true,
         decidedAt: true,
         decisionNote: true,
         withdrawnAt: true,
         artist: { select: { id: true, name: true, slug: true, kind: true } },
-        event: { select: { id: true, title: true, startsAt: true, applicationDeadline: true, status: true, visibility: true, organizer: { select: orgPublicSelect } } },
+        event: { select: { id: true, title: true, startsAt: true, applicationDeadline: true, status: true, visibility: true, feeCents: true, organizer: { select: orgPublicSelect } } },
         booking: { select: { id: true, status: true } },
       },
     });
@@ -762,7 +772,7 @@ export class EventsService {
     const ids = await this.access.managedArtistIds(userId);
     return this.prisma.eventApplication.findMany({
       where: { eventId, artistId: { in: ids } },
-      select: { id: true, artistId: true, status: true, booking: { select: { id: true, status: true } } },
+      select: { id: true, artistId: true, status: true, proposedFeeCents: true, booking: { select: { id: true, status: true } } },
     });
   }
 }

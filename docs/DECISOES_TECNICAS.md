@@ -367,3 +367,34 @@ schema genérico; as diferenças abaixo vêm do modelo real do repositório e s�
   são justificadas). O que falta, quem preenche e como aparece só no cartão do contrato na negociação ("O que falta
   preencher", por seção: com você / com a outra parte / com as duas partes). Anexo de pendências de contratos gerados na
   versão anterior é descartado na impressão.
+
+## Reunião de 22/11 (2026-11-23)
+
+1. **CPF obrigatório no cadastro** (`RegisterSchema.cpf`, dígitos verificadores, guardado só com dígitos, nunca em
+   respostas públicas nem no `/auth/me`). Quem entra pelo Google não passa pelo formulário: `user.needsCpf` faz o
+   `AccountGate` pedir o CPF no primeiro acesso (`POST /account/cpf`). Contas antigas sem CPF continuam funcionando
+   (completam em "Conta › Dados para contrato"); depois de informado, o CPF pode ser corrigido mas não removido.
+   Não há unicidade de CPF entre contas (não foi pedido; avaliar se necessário).
+2. **CNPJ obrigatório para casas de show** na criação; na edição pode ser trocado, não removido. Casas já existentes
+   sem CNPJ continuam válidas até a próxima edição.
+3. **Negociação a partir da candidatura começa com o cachê publicado.** `POST /applications/:id/booking` sem `offer`
+   cria a oferta inicial com data, duração, cachê e condições do evento. `offer` só é exigido quando o evento é
+   "a combinar" e o artista não fez contraproposta (`422 OFFER_REQUIRED`).
+4. **Contraproposta já na candidatura** (`EventApplication.proposedFeeCents`, migration aditiva
+   `20261123113235_candidatura_contraproposta` com CHECK ≥ 0). Ao selecionar, a negociação registra a oferta do evento
+   (substituída) e a contraproposta do artista como oferta pendente para o contratante responder. "Contratar nas
+   condições" é recusado com contraproposta (`409 APPLICATION_HAS_COUNTER_OFFER`). Contraproposta igual ao cachê
+   publicado é ignorada.
+5. **Tempo real sem infraestrutura nova:** `GET /me/pulse` devolve uma assinatura (uma consulta SQL) de negociações,
+   ofertas, mensagens, contratos, candidaturas, eventos, notificações e convites do usuário. O frontend consulta a cada
+   5 s com a aba visível (e ao voltar para a aba) e, quando muda, recarrega as consultas abertas. Sem WebSocket/SSE,
+   Redis ou fila — funciona igual com várias instâncias serverless na Vercel. Custo: 1 consulta leve por usuário ativo
+   a cada 5 s.
+6. **Histórico de negociações:** abas "Em andamento / Histórico / Todas" e filtro "Pessoais × Como banda".
+7. **Histórico de shows no perfil público:** `showHistory` = contratações confirmadas já realizadas (total + 12 mais
+   recentes); eventos privados aparecem apenas como "Evento privado".
+8. **Confirmações de ações:** candidatura (etapa "Você está se candidatando…"), retirada, contraproposta, proposta
+   direta, seleção de candidatura e registro de apresentação, além das que já existiam (aceitar, recusar, confirmar,
+   cancelar).
+9. **Tema claro/escuro:** botão no topo; escolha salva em `localStorage` (`rs-theme`), aplicada em `<html data-theme>`
+   antes da primeira pintura; sem escolha, segue o sistema. Os tokens de cor já existiam em `global.css`.

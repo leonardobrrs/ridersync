@@ -67,6 +67,24 @@ export const optionalCpf = z
   .nullish()
   .transform((v) => (v ? v : null));
 
+/** CPF obrigatório (cadastro): aceita máscara, valida os dígitos verificadores e guarda só os 11 dígitos. */
+export const requiredCpf = z
+  .string({ error: 'Informe o CPF.' })
+  .trim()
+  .min(1, 'Informe o CPF.')
+  .max(14)
+  .refine(isValidCpf, 'CPF inválido.')
+  .transform(onlyDigits);
+
+/** CNPJ obrigatório (casa de show): aceita máscara, valida os dígitos verificadores e guarda só os 14 dígitos. */
+export const requiredCnpj = z
+  .string({ error: 'Informe o CNPJ.' })
+  .trim()
+  .min(1, 'Informe o CNPJ.')
+  .max(18)
+  .refine(isValidCnpj, 'CNPJ inválido.')
+  .transform(onlyDigits);
+
 /** CNPJ opcional: aceita máscara, valida os dígitos verificadores e guarda só os 14 dígitos. Vazio vira null. */
 export const optionalCnpj = z
   .union([z.literal(''), z.string().trim().max(18).refine(isValidCnpj, 'CNPJ inválido.').transform(onlyDigits)])

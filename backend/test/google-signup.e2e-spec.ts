@@ -64,7 +64,15 @@ describe('Cadastro com Google sem escolha prévia de perfil (integração)', () 
     expect(location).toBe('/painel');
     const me = await c.get('/auth/me');
     expect(me.status).toBe(200);
-    expect(me.body.user).toMatchObject({ email, accountType: null, needsTermsAcceptance: true, googleLinked: true, emailVerified: true });
+    expect(me.body.user).toMatchObject({ email, accountType: null, needsTermsAcceptance: true, needsCpf: true, googleLinked: true, emailVerified: true });
+    // CPF é obrigatório no cadastro: quem entra pelo Google informa no primeiro acesso.
+    expect((await c.post('/account/cpf', { cpf: '111.111.111-11' })).status).toBe(400);
+    const withCpf = await c.post('/account/cpf', { cpf: '529.982.247-25' });
+    expect(withCpf.status).toBe(201);
+    expect(withCpf.body.user.needsCpf).toBe(false);
+    expect((await prisma.user.findUniqueOrThrow({ where: { email } })).cpf).toBe('52998224725');
+    // e não pode ser removido depois (só corrigido)
+    expect((await c.put('/account/legal-profile', { legalName: 'Pessoa Google', cpf: '' })).body.code).toBe('CPF_REQUIRED');
     // Pendências resolvidas pelo fluxo existente (AccountGate).
     await c.post('/account/account-type', { accountType: 'ARTIST' }).expect(201);
     const { privacyPolicyVersion } = (await c.get('/auth/config')).body;

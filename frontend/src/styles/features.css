@@ -395,3 +395,29 @@ body:has(.chat-dock) #root{padding-bottom:calc(var(--tabbar-h) + env(safe-area-i
 .pending-sec li{display:grid;gap:2px;font-size:14px}
 .pending-sec li .hint{font-size:13px}
 .pending-legacy{margin:0;font-size:14px;padding:8px 10px;border-radius:8px;background:var(--surface);border:1px dashed var(--line)}
+
+/* Botão de tema (claro/escuro) no topo */
+.theme-btn{display:inline-grid;place-items:center;width:40px;height:40px;padding:0;border:0;border-radius:999px;background:transparent;color:inherit;cursor:pointer}
+.theme-btn:hover{background:var(--case-2)}
+.theme-btn:focus-visible{outline:2px solid var(--cue);outline-offset:2px}
+.seg .count{display:inline-block;min-width:20px;margin-left:4px;padding:0 6px;border-radius:999px;background:var(--sunk);font-size:12px;font-weight:700}
+.wrap-row{flex-wrap:wrap}
+.counter-note{margin-top:6px;padding:6px 10px;border-radius:10px;background:var(--warn-bg);color:var(--warn);font-size:14px}
+.fee-choice{display:grid;gap:8px;border:1px solid var(--line);border-radius:12px;padding:10px 14px}
+.fee-choice legend{padding:0 6px;font-weight:700}
+.opp-acts{display:flex;gap:8px;padding:0 14px 14px;flex-wrap:wrap}
+.opp-acts .btn{flex:1}
+.show-total{font-size:15px;margin-bottom:6px}
+.show-total b{font-family:var(--stencil);font-size:30px;line-height:1;margin-right:4px}
+.dates.past .dt{background:var(--sunk);color:var(--ink)}
+.dates.past .dt small{color:var(--muted)}
+/* Card de oportunidade com ações (Candidatar-se / Contraproposta) abaixo do link */
+.opp-card{display:flex;flex-direction:column}
+.opp-card>a{height:auto;flex:1;align-content:start}
+.opp-card .opp-acts{margin-top:auto}
+/* Modais: textos longos (títulos de evento, nomes) quebram em vez de alargar o conteúdo */
+dialog{overflow-wrap:anywhere;overflow-x:hidden}
+dialog .dlg-h h2{min-width:0}
+dialog :where(.btn,.chip,.st,input,select){overflow-wrap:normal}
+dialog .dlg{grid-template-columns:minmax(0,1fr);min-width:0}
+dialog .dlg>*{min-width:0}

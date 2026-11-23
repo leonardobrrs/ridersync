@@ -22,11 +22,26 @@ export async function openSignupModal(page: Page, kind: AccountKind) {
   return dialog;
 }
 
+/** CPF/CNPJ válidos e aleatórios (dígitos verificadores corretos) — dados fictícios de teste. */
+function checkDigits(base: number[], weights: (len: number) => number[]) {
+  const d = [...base];
+  for (const len of [base.length, base.length + 1]) {
+    const w = weights(len);
+    const rest = d.slice(0, len).reduce((acc, n, i) => acc + n * w[i], 0) % 11;
+    d.push(rest < 2 ? 0 : 11 - rest);
+  }
+  return d.join('');
+}
+export const validCpf = () => checkDigits([1 + Math.floor(Math.random() * 9), ...Array.from({ length: 8 }, () => Math.floor(Math.random() * 10))], (len) => Array.from({ length: len }, (_, i) => len + 1 - i));
+export const validCnpj = () =>
+  checkDigits([...Array.from({ length: 8 }, () => Math.floor(Math.random() * 10)), 0, 0, 0, 1], (len) => (len === 12 ? [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2] : [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]));
+
 export async function fillRegistration(page: Page, opts: { name: string; email: string; kind: AccountKind; password?: string }) {
   const password = opts.password ?? PASSWORD;
   await page.goto('/cadastro');
   const dialog = await openSignupModal(page, opts.kind);
   await dialog.getByLabel('Nome', { exact: true }).fill(opts.name);
+  await dialog.getByLabel('CPF', { exact: true }).fill(validCpf());
   await dialog.getByLabel('E-mail', { exact: true }).fill(opts.email);
   await dialog.getByLabel('Senha', { exact: true }).fill(password);
   await dialog.getByLabel('Confirme a senha').fill(password);

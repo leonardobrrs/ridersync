@@ -9,7 +9,7 @@ import { AuthModule } from '../auth/auth.module';
 import { AuthService } from '../auth/auth.service';
 import { SessionService } from '../auth/session.service';
 import { AccountDeletionService, DeleteAccountSchema } from './account-deletion.service';
-import { AcceptTermsSchema, AccountService, AccountTypeSchema, ChangePasswordSchema, LegalProfileSchema, UpdateAccountSchema } from './account.service';
+import { AcceptTermsSchema, AccountService, AccountTypeSchema, ChangePasswordSchema, CpfSchema, LegalProfileSchema, UpdateAccountSchema } from './account.service';
 
 const sensitiveLimit = { default: { limit: 10, ttl: 60_000 } };
 
@@ -49,6 +49,13 @@ export class AccountController {
   @ApiZodBody(ChangePasswordSchema)
   async changePassword(@CurrentUser() user: AuthUser, @ZBody(ChangePasswordSchema) body: z.infer<typeof ChangePasswordSchema>) {
     await this.account.changePassword(user, body);
+  }
+
+  @Post('cpf')
+  @ApiZodBody(CpfSchema)
+  async setCpf(@CurrentUser() user: AuthUser, @ZBody(CpfSchema) body: z.infer<typeof CpfSchema>) {
+    await this.account.setCpf(user.id, body);
+    return this.auth.me(user.id);
   }
 
   @Post('account-type')
