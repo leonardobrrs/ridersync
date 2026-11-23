@@ -9,7 +9,7 @@ import { ErrorState, Loading } from '../../components/States';
 import { Tabs } from '../../components/Tabs';
 import { useToast } from '../../components/Toast';
 import { api, errorMessage } from '../../lib/api';
-import { dateTime, dayMonth, money, PORTFOLIO_KIND } from '../../lib/format';
+import { date, dateTime, dayMonth, money, PORTFOLIO_KIND } from '../../lib/format';
 import { ReviewsSummary } from '../../components/Stars';
 import { useMe } from '../../lib/hooks';
 import type { BookingDetail, OrgEventRow, PastShow, PortfolioItem, PublicArtist, Rider, UpcomingEvent } from '../../lib/types';
@@ -108,23 +108,32 @@ export function UpcomingEvents({ items }: { items: UpcomingEvent[] }) {
   );
 }
 
-/** Histórico de shows realizados (privados aparecem só como "Evento privado"). */
+/** Histórico de shows realizados: recolhido por padrão (total sempre visível), mesmo selo de data dos próximos eventos. */
 export function ShowHistory({ total, items }: { total: number; items: PastShow[] }) {
   if (total === 0) return <p className="muted">Nenhum show realizado pela plataforma ainda.</p>;
   return (
-    <>
-      <p className="show-total">
-        <b>{total}</b> {total === 1 ? 'show realizado' : 'shows realizados'} pelo RiderSync
-      </p>
+    <details className="show-history">
+      <summary>
+        <span className="show-total">
+          <b>{total}</b> {total === 1 ? 'show realizado' : 'shows realizados'} pelo RiderSync
+        </span>
+        <span className="show-toggle" aria-hidden="true">
+          <span className="when-closed">Ver histórico</span>
+          <span className="when-open">Ocultar</span>
+          <Icon name="chevronDown" size={16} />
+        </span>
+      </summary>
       <ul className="dates past">
         {items.map((e, i) => {
-          const d = new Date(e.performedAt);
-          const label = d.toLocaleDateString('pt-BR', { timeZone: 'America/Maceio', day: '2-digit', month: 'short', year: 'numeric' });
+          const d = dayMonth(e.performedAt);
+          const year = new Date(e.performedAt).toLocaleDateString('pt-BR', { timeZone: 'America/Maceio', year: 'numeric' });
+          const label = date(e.performedAt);
           return (
             <li key={`${e.performedAt}-${i}`}>
-              <span className="dt">
-                <b>{d.toLocaleDateString('pt-BR', { timeZone: 'America/Maceio', day: '2-digit' })}</b>
-                <small>{d.toLocaleDateString('pt-BR', { timeZone: 'America/Maceio', month: 'short', year: '2-digit' }).replace('.', '')}</small>
+              <span className="dt" aria-hidden="true">
+                <b>{d.day}</b>
+                <small>{d.month}</small>
+                <small className="yr">{year}</small>
               </span>
               {e.private ? (
                 <span>
@@ -145,7 +154,7 @@ export function ShowHistory({ total, items }: { total: number; items: PastShow[]
         })}
       </ul>
       {total > items.length && <p className="hint">Mostrando os {items.length} mais recentes.</p>}
-    </>
+    </details>
   );
 }
 

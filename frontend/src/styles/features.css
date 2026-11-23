@@ -436,3 +436,14 @@ dialog .dlg>*{min-width:0}
 .contact-list a{overflow:hidden}
 .field-with-check{display:grid;gap:6px;align-content:start;min-width:0}
 .check.sm{font-size:13px;color:var(--muted)}
+/* Histórico de shows recolhível */
+.show-history>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;cursor:pointer;list-style:none;padding:4px 0;border-radius:10px}
+.show-history>summary::-webkit-details-marker{display:none}
+.show-history>summary:focus-visible{outline:2px solid var(--ink);outline-offset:4px}
+.show-history .show-total{margin:0}
+.show-toggle{display:inline-flex;align-items:center;gap:4px;font-size:14px;font-weight:700;color:var(--teal)}
+.show-toggle svg{transition:transform .15s}
+.show-history[open] .show-toggle svg{transform:rotate(180deg)}
+.show-history:not([open]) .when-open,.show-history[open] .when-closed{display:none}
+.show-history[open]>.dates{margin-top:10px}
+.dates.past .dt .yr{color:var(--muted);font-size:9px;letter-spacing:.04em;margin-top:2px}
