@@ -10,6 +10,17 @@ import { ArtistProfileForm } from './ArtistProfileForm';
 import { EquipmentEditor, type EquipmentInput } from './EquipmentEditor';
 import { PortfolioEditor } from './PortfolioEditor';
 
+/** Quando o rider passou a significar "o que o artista precisa" (antes: "o que possui"). */
+export const RIDER_CONCEPT_CHANGED_AT = '2026-11-23T20:00:00-03:00';
+
+/**
+ * Rider salvo antes da mudança de conceito: os itens foram cadastrados como "o que você possui" e agora são lidos como
+ * "o que você precisa", com "Já possuo" zerado. Pede revisão até o próximo salvamento.
+ */
+export function riderNeedsReview(r: Pick<Rider, 'items' | 'updatedAt'>) {
+  return r.items.length > 0 && !!r.updatedAt && new Date(r.updatedAt).getTime() < new Date(RIDER_CONCEPT_CHANGED_AT).getTime();
+}
+
 export function RiderTab({ artistId, canManage }: { artistId: string; canManage: boolean }) {
   const q = useQuery({ queryKey: ['rider', artistId], queryFn: () => api.get<Rider>(`/artists/${artistId}/rider`) });
   const save = useAction((p: { items: EquipmentInput[]; notes: string }) => api.put<Rider>(`/artists/${artistId}/rider`, p), {
@@ -20,6 +31,15 @@ export function RiderTab({ artistId, canManage }: { artistId: string; canManage:
   if (q.error) return <ErrorState error={q.error} retry={q.refetch} />;
   return (
     <div className="stack">
+      {canManage && riderNeedsReview(q.data!) && (
+        <div className="notice warn" role="status">
+          <p style={{ margin: 0 }}>
+            <strong>Revise seu rider.</strong> Ele foi cadastrado quando o rider significava “o que você possui”. Agora ele é o que você{' '}
+            <strong>precisa</strong> para tocar: confira as quantidades, preencha “Já possuo” em cada item e salve. Este aviso some depois que você
+            salvar.
+          </p>
+        </div>
+      )}
       <div className="notice">
         <p style={{ margin: 0 }}>
           O rider lista o que você <strong>precisa</strong> para tocar (instrumentos, amplificação, microfones…). Em cada item, informe

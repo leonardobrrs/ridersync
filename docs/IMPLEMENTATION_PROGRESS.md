@@ -202,4 +202,5 @@ Antes de publicar no staging: aplicar a migration nova (`npm run db:migrate:neon
 - Perfil público da casa com abas **Sobre/Rider**; ao abrir **Rider**, o artista logado vê a comparação automática (escolhe a identidade se tiver mais de uma). Visitante vê convite para entrar.
 - Candidatura sem "necessidades" (`needs` descontinuada; `NeedsPicker` removido): o modal mostra a comparação do rider com a casa do evento; a casa compara o rider na análise e na negociação.
 - Migration `20261123140000_rider_quantidade_possuida` (aditiva).
+- Riders salvos antes da mudança (`updatedAt` < 23/11 20:00, Maceió) mostram o aviso “Revise seu rider” no painel até o próximo salvamento (`riderNeedsReview`), porque os itens cadastrados como “o que você possui” passam a valer como “o que você precisa”.
 - Validação (já sobre a `feat/evolucao-ridersync`): backend 362 testes passando (36 suítes, incl. 9 unitários e 3 de integração novos do rider) contra `ridersync_test` local; frontend 52 (6 novos); Playwright 32 (desktop, tablet, celular); lint, typecheck e build ok.

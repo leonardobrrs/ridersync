@@ -521,6 +521,7 @@ legend{font-size:14px;font-weight:600;padding:0;margin-bottom:6px}
 .dl dt{color:var(--muted)}
 .dl dd{margin:0;font-weight:600}
 .notice{display:flex;gap:10px;font-size:14px;background:var(--info-bg);color:var(--info);border-radius:12px;padding:12px 14px}
+.notice.warn{background:var(--warn-bg);color:var(--warn)}
 .hero{background:var(--case);color:var(--case-ink);border-radius:16px;padding:22px 24px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
 .hero h2{font-family:var(--stencil);font-weight:900;text-transform:uppercase;font-size:clamp(28px,4vw,40px);line-height:.95}
 .hero p{color:var(--case-muted)}
