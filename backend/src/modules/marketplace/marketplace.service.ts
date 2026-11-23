@@ -132,6 +132,7 @@ export class MarketplaceService {
         ...publicArtistCardSelect,
         bio: true,
         contactEmail: true,
+        showContactEmail: true,
         contactPhone: true,
         instagram: true,
         website: true,
@@ -172,13 +173,14 @@ export class MarketplaceService {
       this.reviews.forArtist(a.id),
       this.agenda.artistHistory(a.id),
     ]);
-    const { band, musicianProfile, portfolioItems, bio, contactEmail, contactPhone, instagram, website, publishedAt } = a;
+    const { band, musicianProfile, portfolioItems, bio, contactEmail, showContactEmail, contactPhone, instagram, website, publishedAt } = a;
     const members = band?.members ?? [];
     return {
       ...toArtistCard(a),
       bio,
       publishedAt,
-      contacts: { email: contactEmail, phone: contactPhone, instagram, website },
+      // E-mail só quando o dono marcou como contato público.
+      contacts: { email: showContactEmail ? contactEmail : null, phone: contactPhone, instagram, website },
       portfolio: portfolioItems.map(toPortfolioItem),
       rider: { notes: rider.notes, items: rider.items },
       upcomingEvents: upcoming,
@@ -241,8 +243,8 @@ export class MarketplaceService {
       }),
       this.agenda.venueUpcoming(org.id),
     ]);
-    const { photoId, createdAt: _c, updatedAt: _u, type: _t, ...rest } = org;
+    const { photoId, createdAt: _c, updatedAt: _u, type: _t, contactEmail, showContactEmail, ...rest } = org;
     const reviews = await this.reviews.forOrganization(org.id);
-    return { ...rest, photoUrl: mediaUrl(photoId), photoThumbUrl: mediaThumbUrl(photoId), equipment: equipment.items, openEvents: events, upcomingShows, reviews };
+    return { ...rest, contactEmail: showContactEmail ? contactEmail : null, photoUrl: mediaUrl(photoId), photoThumbUrl: mediaThumbUrl(photoId), equipment: equipment.items, openEvents: events, upcomingShows, reviews };
   }
 }

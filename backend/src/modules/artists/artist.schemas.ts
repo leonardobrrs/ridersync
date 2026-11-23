@@ -29,6 +29,8 @@ export const ArtistProfileFields = {
   careerStartYear: z.number().int().min(1940, 'Ano inválido.').max(currentYear, 'Ano não pode estar no futuro.').nullable(),
   baseFeeCents: moneyCents.nullable(),
   contactEmail: optionalEmail,
+  /** Exibir o e-mail de contato no perfil público (opt-in explícito). */
+  showContactEmail: z.boolean(),
   contactPhone: optionalPhone,
   instagram: optionalInstagram,
   website: optionalExternalUrl,

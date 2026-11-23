@@ -22,6 +22,7 @@ import { LocalStorageDriver, StorageDriver, VercelBlobStorageDriver } from '../m
 import { PRIVACY_POLICY_VERSION } from '../modules/auth/auth.service';
 import { hashPassword } from '../modules/auth/password';
 import { DEMO_PASSWORD, runDemoSeed } from './demo-seed';
+import { runEnrichSeed } from './enrich-seed';
 import { fakeCnpj, fakeCpf } from './fake-documents';
 
 if (existsSync('.env')) process.loadEnvFile('.env');
@@ -636,6 +637,36 @@ export async function runShowcaseSeed(prisma: PrismaClient, imageDir: string) {
   }
   console.warn(`Documentos fictícios: ${demoUsers.length} conta(s) com CPF e ${demoVenues.length} casa(s) com CNPJ preenchidos.`);
 
+  // ─────────── Contatos públicos fictícios (ícones no perfil) ───────────
+  // Domínio reservado example.com (RFC 2606): nunca pertence a ninguém. Sem telefone: qualquer número fictício
+  // pode existir de verdade.
+  const demoOwned = { email: { endsWith: '@demo.ridersync.local' } };
+  const demoArtists = await prisma.artist.findMany({
+    where: { OR: [{ musicianProfile: { user: demoOwned } }, { band: { members: { some: { role: 'OWNER', status: 'ACTIVE', user: demoOwned } } } }] },
+    select: { id: true, slug: true, website: true, contactEmail: true },
+  });
+  for (const a of demoArtists) {
+    if (a.website && a.contactEmail) continue;
+    await prisma.artist.update({
+      where: { id: a.id },
+      data: { website: a.website ?? `https://example.com/ridersync/${a.slug}`, contactEmail: a.contactEmail ?? `contato+${a.slug}@example.com` },
+    });
+  }
+  const contactVenues = await prisma.organization.findMany({
+    where: { type: 'VENUE', members: { some: { role: 'OWNER', status: 'ACTIVE', user: demoOwned } } },
+    select: { id: true, slug: true, website: true, contactEmail: true, showContactEmail: true },
+  });
+  for (const o of contactVenues) {
+    const email = o.contactEmail ?? `contato+${o.slug}@example.com`;
+    // Casas: e-mail fictício marcado como contato público (demonstra a opção). Artistas: oculto (padrão).
+    const show = o.showContactEmail || email.endsWith('@example.com');
+    if (o.website && o.contactEmail && show === o.showContactEmail) continue;
+    await prisma.organization.update({
+      where: { id: o.id },
+      data: { website: o.website ?? `https://example.com/ridersync/${o.slug}`, contactEmail: email, showContactEmail: show },
+    });
+  }
+
   // ─────────── Imagens nos registros que ainda não têm ───────────
   const instTag: Record<string, string[]> = {
     Voz: ['mic'], Violão: ['guitar'], Guitarra: ['eguitar'], Baixo: ['bass'], Bateria: ['drums'], Teclado: ['keys'], Sanfona: ['accordion'],
@@ -717,6 +748,8 @@ if (require.main === module) {
   (async () => {
     if (process.argv.includes('--with-demo')) await runDemoSeed(prisma);
     await runShowcaseSeed(prisma, dir);
+    // Mais histórico: shows realizados com avaliações, próximos shows, negociações encerradas, conversas.
+    await runEnrichSeed(prisma);
   })()
     .catch((e) => {
       console.error(e);

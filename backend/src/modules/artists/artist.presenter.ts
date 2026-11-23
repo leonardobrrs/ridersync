@@ -81,6 +81,7 @@ export const managedArtistSelect = {
   careerStartYear: true,
   baseFeeCents: true,
   contactEmail: true,
+  showContactEmail: true,
   contactPhone: true,
   instagram: true,
   website: true,

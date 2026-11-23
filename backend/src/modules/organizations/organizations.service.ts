@@ -34,6 +34,8 @@ const OrgFields = {
   state: uf,
   capacity: z.number().int().min(1, 'Capacidade inválida.').max(200_000).nullable(),
   contactEmail: optionalEmail,
+  /** Exibir o e-mail de contato na página pública (opt-in explícito). */
+  showContactEmail: z.boolean(),
   contactPhone: optionalPhone,
   instagram: optionalInstagram,
   website: optionalExternalUrl,
@@ -65,6 +67,7 @@ export const orgManageSelect = {
   state: true,
   capacity: true,
   contactEmail: true,
+  showContactEmail: true,
   contactPhone: true,
   instagram: true,
   website: true,

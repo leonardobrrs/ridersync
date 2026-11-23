@@ -34,6 +34,7 @@ export const ProfileFormSchema = z.object({
     .trim()
     .refine((v) => v === '' || /^\d+([.,]\d{1,2})?$/.test(v), 'Valor inválido (ex.: 600 ou 600,00).'),
   contactEmail: z.string().trim().refine((v) => v === '' || z.email().safeParse(v).success, 'E-mail inválido.'),
+  showContactEmail: z.boolean(),
   contactPhone: z.string().trim().max(20).refine(isValidPhoneBR, 'Telefone incompleto. Use DDD + número, ex.: (82) 99999-9999.'),
   instagram: z.string().trim().max(31),
   website: optionalUrl,
@@ -54,6 +55,7 @@ export function toFormValues(a?: Partial<ManagedArtist>): ProfileFormValues {
     careerStartYear: a?.careerStartYear ? String(a.careerStartYear) : '',
     baseFee: reaisFromCents(a?.baseFeeCents),
     contactEmail: a?.contactEmail ?? '',
+    showContactEmail: a?.showContactEmail ?? false,
     contactPhone: formatPhone(a?.contactPhone),
     instagram: a?.instagram ?? '',
     website: a?.website ?? '',
@@ -75,6 +77,7 @@ export function toArtistPayload(v: ProfileFormValues) {
     careerStartYear: v.careerStartYear ? Number(v.careerStartYear) : null,
     baseFeeCents: centsFromReais(v.baseFee),
     contactEmail: v.contactEmail || null,
+    showContactEmail: !!v.contactEmail && v.showContactEmail,
     contactPhone: v.contactPhone || null,
     instagram: v.instagram || null,
     website: v.website || null,
@@ -135,9 +138,16 @@ export function ProfileFields({ form, solo }: { form: ReturnType<typeof useForm<
         error={e.baseFee}
       />
       <fieldset>
-        <legend>Contatos públicos (aparecem no perfil público)</legend>
+        <legend>Contatos do perfil</legend>
+        <p className="hint">Instagram, telefone e site aparecem no perfil público. O e-mail só aparece se você marcar a opção abaixo dele.</p>
         <div className="row2">
-          <TextField label="E-mail de contato" type="email" {...form.register('contactEmail')} error={e.contactEmail} />
+          <div className="field-with-check">
+            <TextField label="E-mail de contato" type="email" {...form.register('contactEmail')} error={e.contactEmail} />
+            <label className="check sm">
+              <input type="checkbox" {...form.register('showContactEmail')} />
+              <span>Mostrar este e-mail no perfil público</span>
+            </label>
+          </div>
           <PhoneField label="Telefone/WhatsApp" {...form.register('contactPhone')} error={e.contactPhone} />
           <TextField label="Instagram" placeholder="@usuario" {...form.register('instagram')} error={e.instagram} />
           <TextField label="Site" placeholder="https://" {...form.register('website')} error={e.website} />

@@ -209,6 +209,8 @@ model Artist {
   careerStartYear Int?
   baseFeeCents    Int? /// "cachê a partir de" — referência; pagamentos são externos
   contactEmail    String? /// contato público escolhido pelo artista (não é o e-mail da conta)
+  /// E-mail de contato só aparece no perfil público quando o dono marca explicitamente (padrão: oculto).
+  showContactEmail Boolean @default(false)
   contactPhone    String?
   instagram       String?
   website         String?
@@ -322,6 +324,8 @@ model Organization {
   state        String           @default("AL") @db.Char(2)
   capacity     Int?
   contactEmail String? /// contato público do estabelecimento
+  /// E-mail de contato só aparece na página pública quando marcado explicitamente (padrão: oculto).
+  showContactEmail Boolean @default(false)
   contactPhone String?
   instagram    String?
   website      String?

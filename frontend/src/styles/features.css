@@ -421,3 +421,18 @@ dialog .dlg-h h2{min-width:0}
 dialog :where(.btn,.chip,.st,input,select){overflow-wrap:normal}
 dialog .dlg{grid-template-columns:minmax(0,1fr);min-width:0}
 dialog .dlg>*{min-width:0}
+
+/* Contatos com ícones minimalistas */
+.contact-icons{display:flex;flex-wrap:wrap;gap:6px;list-style:none;padding:0;margin:4px 0 0}
+.contact-icons a{display:grid;place-items:center;width:34px;height:34px;border-radius:999px;border:1px solid var(--line);color:var(--muted);text-decoration:none;transition:color .15s,border-color .15s,background .15s}
+.contact-icons a:hover{color:var(--ink);border-color:var(--ink)}
+.contact-icons a:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.contact-list{display:grid;gap:4px;list-style:none;padding:0;margin:0}
+.contact-list a{display:flex;align-items:center;gap:10px;min-height:40px;padding:4px 6px;border-radius:10px;color:var(--ink);text-decoration:none;min-width:0}
+.contact-list a:hover{background:var(--sunk)}
+.contact-list .ci-ico{display:grid;place-items:center;flex:none;width:30px;height:30px;border-radius:999px;background:var(--sunk);color:var(--muted)}
+.contact-list .ci-txt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}
+.contact-list li{min-width:0}
+.contact-list a{overflow:hidden}
+.field-with-check{display:grid;gap:6px;align-content:start;min-width:0}
+.check.sm{font-size:13px;color:var(--muted)}

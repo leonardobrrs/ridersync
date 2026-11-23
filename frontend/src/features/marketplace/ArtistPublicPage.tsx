@@ -10,12 +10,12 @@ import { Tabs } from '../../components/Tabs';
 import { useToast } from '../../components/Toast';
 import { api, errorMessage } from '../../lib/api';
 import { dateTime, dayMonth, money, PORTFOLIO_KIND } from '../../lib/format';
-import { formatPhone, phoneDigits } from '../../lib/phone';
 import { ReviewsSummary } from '../../components/Stars';
 import { useMe } from '../../lib/hooks';
 import type { BookingDetail, OrgEventRow, PastShow, PortfolioItem, PublicArtist, Rider, UpcomingEvent } from '../../lib/types';
 import { OfferForm, type OfferPayload } from '../bookings/OfferForm';
 import { InstrumentLabel } from '../../components/InstrumentLabel';
+import { ContactIcons, ContactList } from '../../components/ContactLinks';
 
 export function PortfolioGrid({ items }: { items: PortfolioItem[] }) {
   if (items.length === 0) return <p className="muted">Nenhum material publicado.</p>;
@@ -325,6 +325,7 @@ export function ArtistPublicPage() {
               <Link className="handle" to={`/artistas/${a.slug}`}>
                 @{a.slug}
               </Link>
+              <ContactIcons contacts={{ instagram: a.contacts.instagram, email: a.contacts.email, phone: a.contacts.phone, website: a.contacts.website }} />
               {a.headline && <p className="muted">{a.headline}</p>}
               <div className="chips">
                 {a.genres.map((g) => (
@@ -467,43 +468,7 @@ export function ArtistPublicPage() {
           </section>
           <section className="box">
             <h2 className="lbl">Contatos públicos</h2>
-            <dl className="contact">
-              {a.contacts.instagram && (
-                <div>
-                  <dt>Instagram</dt>
-                  <dd>
-                    <a className="link" href={`https://instagram.com/${a.contacts.instagram}`} target="_blank" rel="noopener noreferrer">
-                      @{a.contacts.instagram}
-                    </a>
-                  </dd>
-                </div>
-              )}
-              {a.contacts.email && (
-                <div>
-                  <dt>E-mail</dt>
-                  <dd>{a.contacts.email}</dd>
-                </div>
-              )}
-              {a.contacts.phone && (
-                <div>
-                  <dt>Telefone</dt>
-                  <dd>
-                    <a className="link" href={`tel:+55${phoneDigits(a.contacts.phone)}`}>{formatPhone(a.contacts.phone)}</a>
-                  </dd>
-                </div>
-              )}
-              {a.contacts.website && (
-                <div>
-                  <dt>Site</dt>
-                  <dd>
-                    <a className="link" href={a.contacts.website} target="_blank" rel="noopener noreferrer">
-                      Abrir site
-                    </a>
-                  </dd>
-                </div>
-              )}
-              {!Object.values(a.contacts).some(Boolean) && <p className="hint">Nenhum contato público informado.</p>}
-            </dl>
+            <ContactList contacts={{ instagram: a.contacts.instagram, email: a.contacts.email, phone: a.contacts.phone, website: a.contacts.website }} />
           </section>
         </aside>
       </div>

@@ -114,6 +114,25 @@ describe('Reunião 22/11 (integração)', () => {
     expect((await new Client(app).get('/me/pulse')).status).toBe(401);
   });
 
+  it('e-mail de contato só aparece no perfil/página pública quando marcado como contato', async () => {
+    const pub = () => new Client(app).get(`/public/artists/${art.slug}`);
+    await artist.patch(`/artists/${art.id}`, { contactEmail: 'contato@exemplo.dev' }).expect(200);
+    expect((await pub()).body.contacts.email).toBeNull();
+    await artist.patch(`/artists/${art.id}`, { showContactEmail: true }).expect(200);
+    expect((await pub()).body.contacts.email).toBe('contato@exemplo.dev');
+    await artist.patch(`/artists/${art.id}`, { showContactEmail: false }).expect(200);
+    expect((await pub()).body.contacts.email).toBeNull();
+
+    const venuePub = () => new Client(app).get(`/public/venues/${venue.slug}`);
+    await owner.patch(`/organizations/${venue.id}`, { contactEmail: 'casa@exemplo.dev' }).expect(200);
+    expect((await venuePub()).body.contactEmail).toBeNull();
+    expect(JSON.stringify((await venuePub()).body)).not.toContain('casa@exemplo.dev');
+    await owner.patch(`/organizations/${venue.id}`, { showContactEmail: true }).expect(200);
+    expect((await venuePub()).body.contactEmail).toBe('casa@exemplo.dev');
+    // o dono continua vendo o e-mail e a opção na gestão
+    expect((await owner.get(`/organizations/${venue.id}/manage`)).body).toMatchObject({ contactEmail: 'casa@exemplo.dev', showContactEmail: true });
+  });
+
   it('perfil público mostra o total e o histórico de shows realizados', async () => {
     const before = (await new Client(app).get(`/public/artists/${art.slug}`)).body.showHistory;
     expect(before).toMatchObject({ total: 0, items: [] });

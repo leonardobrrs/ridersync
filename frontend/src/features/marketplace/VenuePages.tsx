@@ -6,12 +6,12 @@ import { Avatar, Poster } from '../../components/Poster';
 import { Empty, ErrorState, Loading } from '../../components/States';
 import { api, qs } from '../../lib/api';
 import { dateTime, dayMonth } from '../../lib/format';
-import { formatPhone, phoneDigits } from '../../lib/phone';
 import { ReviewsSummary } from '../../components/Stars';
 import { useMeta } from '../../lib/hooks';
 import type { PublicVenue, VenueCard } from '../../lib/types';
 import { RiderList } from './ArtistPublicPage';
 import { VenueAd } from './MarketplacePage';
+import { ContactIcons, ContactList } from '../../components/ContactLinks';
 
 /** Visitantes descobrem e pesquisam casas de show (nome, @handle, bairro, tipo e cidade). */
 export function VenuesPage() {
@@ -112,6 +112,7 @@ export function VenuePublicPage() {
               <Link className="handle" to={`/casas/${v.slug}`}>
                 @{v.slug}
               </Link>
+              <ContactIcons contacts={{ instagram: v.instagram, email: v.contactEmail, phone: v.contactPhone, website: v.website }} />
               <p className="muted">{v.venueKind}</p>
             </div>
             <dl className="attrs">
@@ -195,43 +196,7 @@ export function VenuePublicPage() {
           </section>
           <section className="box">
             <h2 className="lbl">Contatos públicos</h2>
-            <dl className="contact">
-              {v.instagram && (
-                <div>
-                  <dt>Instagram</dt>
-                  <dd>
-                    <a className="link" href={`https://instagram.com/${v.instagram}`} target="_blank" rel="noopener noreferrer">
-                      @{v.instagram}
-                    </a>
-                  </dd>
-                </div>
-              )}
-              {v.contactEmail && (
-                <div>
-                  <dt>E-mail</dt>
-                  <dd>{v.contactEmail}</dd>
-                </div>
-              )}
-              {v.contactPhone && (
-                <div>
-                  <dt>Telefone</dt>
-                  <dd>
-                    <a className="link" href={`tel:+55${phoneDigits(v.contactPhone)}`}>{formatPhone(v.contactPhone)}</a>
-                  </dd>
-                </div>
-              )}
-              {v.website && (
-                <div>
-                  <dt>Site</dt>
-                  <dd>
-                    <a className="link" href={v.website} target="_blank" rel="noopener noreferrer">
-                      Abrir site
-                    </a>
-                  </dd>
-                </div>
-              )}
-              {!v.instagram && !v.contactEmail && !v.contactPhone && !v.website && <p className="hint">Nenhum contato público informado.</p>}
-            </dl>
+            <ContactList contacts={{ instagram: v.instagram, email: v.contactEmail, phone: v.contactPhone, website: v.website }} />
           </section>
         </aside>
       </div>

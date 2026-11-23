@@ -32,6 +32,7 @@ const OrgSchema = z.object({
   state: z.string().length(2),
   capacity: z.string().trim().refine((v) => v === '' || (/^\d+$/.test(v) && Number(v) > 0), 'Capacidade inválida.'),
   contactEmail: z.string().trim().refine((v) => v === '' || z.email().safeParse(v).success, 'E-mail inválido.'),
+  showContactEmail: z.boolean(),
   contactPhone: z.string().trim().max(20).refine(isValidPhoneBR, 'Telefone incompleto. Use DDD + número, ex.: (82) 99999-9999.'),
   instagram: z.string().trim().max(31),
   website: z.string().trim().refine((v) => v === '' || /^https:\/\/[^\s]+\.[^\s]+/.test(v), 'Use um link começando com https://'),
@@ -51,6 +52,7 @@ const toOrgValues = (o?: Partial<OrgDetail>): OrgValues => ({
   state: o?.state ?? 'AL',
   capacity: o?.capacity ? String(o.capacity) : '',
   contactEmail: o?.contactEmail ?? '',
+  showContactEmail: o?.showContactEmail ?? false,
   contactPhone: formatPhone(o?.contactPhone),
   instagram: o?.instagram ?? '',
   website: o?.website ?? '',
@@ -67,6 +69,7 @@ const toOrgPayload = (v: OrgValues) => ({
   state: v.state,
   capacity: v.capacity ? Number(v.capacity) : null,
   contactEmail: v.contactEmail || null,
+  showContactEmail: !!v.contactEmail && v.showContactEmail,
   contactPhone: v.contactPhone || null,
   instagram: v.instagram || null,
   website: v.website || null,
@@ -96,9 +99,16 @@ function OrgFields({ form }: { form: ReturnType<typeof useForm<OrgValues>> }) {
         <TextField label="Capacidade (pessoas)" inputMode="numeric" {...form.register('capacity')} error={e.capacity} />
       </div>
       <fieldset>
-        <legend>Contatos públicos do estabelecimento</legend>
+        <legend>Contatos do estabelecimento</legend>
+        <p className="hint">Instagram, telefone e site aparecem na página pública. O e-mail só aparece se você marcar a opção abaixo dele.</p>
         <div className="row2">
-          <TextField label="E-mail" type="email" {...form.register('contactEmail')} error={e.contactEmail} />
+          <div className="field-with-check">
+            <TextField label="E-mail" type="email" {...form.register('contactEmail')} error={e.contactEmail} />
+            <label className="check sm">
+              <input type="checkbox" {...form.register('showContactEmail')} />
+              <span>Mostrar este e-mail no página pública da casa</span>
+            </label>
+          </div>
           <PhoneField label="Telefone/WhatsApp" {...form.register('contactPhone')} error={e.contactPhone} />
           <TextField label="Instagram" {...form.register('instagram')} error={e.instagram} />
           <TextField label="Site" {...form.register('website')} error={e.website} />

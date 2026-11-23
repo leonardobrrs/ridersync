@@ -203,6 +203,8 @@ export interface ManagedArtist {
   careerStartYear: number | null;
   baseFeeCents: number | null;
   contactEmail: string | null;
+  /** E-mail de contato só aparece publicamente quando marcado. */
+  showContactEmail?: boolean;
   contactPhone: string | null;
   instagram: string | null;
   website: string | null;
@@ -266,6 +268,8 @@ export interface Organization {
   state: string;
   capacity: number | null;
   contactEmail: string | null;
+  /** E-mail de contato só aparece publicamente quando marcado. */
+  showContactEmail?: boolean;
   contactPhone: string | null;
   instagram: string | null;
   website: string | null;

@@ -44,6 +44,7 @@ export class ArtistsService {
       careerStartYear: input.careerStartYear ?? null,
       baseFeeCents: input.baseFeeCents ?? null,
       contactEmail: input.contactEmail ?? null,
+      showContactEmail: input.showContactEmail ?? false,
       contactPhone: input.contactPhone ?? null,
       instagram: input.instagram ?? null,
       website: input.website ?? null,
