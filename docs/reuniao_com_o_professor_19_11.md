@@ -3,6 +3,8 @@
 ## Correções Gerais
 
 ### Rider
+> **Revisto em 23/11:** esta leitura foi desfeita — o rider é o que o artista **precisa** para tocar (ver `DECISOES_TECNICAS.md`, "Correção do conceito de rider"). Texto original mantido abaixo como histórico.
+
 * O *rider* cadastrado na plataforma pelo artista passa a representar os equipamentos que ele já possui.
 * No momento da candidatura, o artista informa o que precisa que a casa de show disponibilize (podendo selecionar manualmente ou marcar automaticamente de acordo com o que já tem cadastrado no perfil).
 

@@ -60,7 +60,7 @@ export class RidersController {
     return this.riders.compare(user.id, artistId, orgId);
   }
 
-  /** Necessidades informadas na candidatura × inventário da casa do evento. */
+  /** Rider do artista da candidatura × inventário da casa do evento. */
   @ApiCookieAuth()
   @Get('applications/:applicationId/compatibility')
   compareApplication(@CurrentUser() user: AuthUser, @Param('applicationId', ParseUUIDPipe) applicationId: string) {

@@ -415,7 +415,7 @@ function InventoryTab({ orgId }: { orgId: string }) {
   if (q.error) return <ErrorState error={q.error} retry={q.refetch} />;
   return (
     <div className="stack">
-      <div className="notice">O inventário pertence à casa e é usado na comparação com riders. Ele nunca altera riders de artistas ou bandas.</div>
+      <div className="notice">O inventário é o que a casa oferece. Ele é comparado automaticamente com o rider dos artistas (o que eles precisam para tocar) e nunca altera riders de artistas ou bandas.</div>
       <EquipmentEditor key={JSON.stringify(q.data!.items.map((i) => [i.id, i.quantity]))} mode="inventory" items={q.data!.items} saving={save.isPending} onSave={(p) => save.mutate(p)} />
     </div>
   );

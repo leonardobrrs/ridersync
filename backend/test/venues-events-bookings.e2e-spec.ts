@@ -98,6 +98,35 @@ describe('Casas, inventário, comparação, eventos, candidaturas e bookings (in
       expect(res.body.venueCustomItems).toHaveLength(1);
     });
 
+    it('quantidade que o artista já possui entra na comparação e fica evidente quanto ele deve levar', async () => {
+      // precisa de 2 amplificadores e já possui 1; a casa tem 1 → 1 da casa + 1 do artista
+      await artistUser
+        .put(`/artists/${artist.id}/rider`, { notes: '', items: [{ catalogItemId: 'amp-gtr', quantity: 2, ownedQuantity: 1 }, { catalogItemId: 'mic-din', quantity: 2 }] })
+        .expect(200);
+      const saved = await artistUser.get(`/artists/${artist.id}/rider`);
+      expect(saved.body.items.find((i: { catalogItemId: string }) => i.catalogItemId === 'amp-gtr')).toMatchObject({ quantity: 2, ownedQuantity: 1 });
+      await venueOwner
+        .put(`/organizations/${venue.id}/equipment`, { items: [{ catalogItemId: 'amp-gtr', quantity: 1 }, { catalogItemId: 'mic-din', quantity: 6 }] })
+        .expect(200);
+      const res = await artistUser.get(`/artists/${artist.id}/compatibility/${venue.id}`);
+      expect(res.status).toBe(200);
+      const amp = res.body.items.find((i: { catalogItemId: string }) => i.catalogItemId === 'amp-gtr');
+      expect(amp).toMatchObject({ status: 'COMPATIBLE', required: 2, owned: 1, available: 1, venueProvides: 1, artistProvides: 1, missing: 0 });
+      expect(amp.reason).toContain('artista precisa levar 1 un');
+      expect(res.body.fullyCompatible).toBe(true);
+      expect(res.body.artistSuppliedItems).toBe(1);
+      // sem possuir nenhum, o mesmo item fica parcial
+      await artistUser.put(`/artists/${artist.id}/rider`, { notes: '', items: [{ catalogItemId: 'amp-gtr', quantity: 2 }] }).expect(200);
+      const semPosse = await artistUser.get(`/artists/${artist.id}/compatibility/${venue.id}`);
+      expect(semPosse.body.items[0]).toMatchObject({ status: 'PARTIALLY_AVAILABLE', artistProvides: 0, missing: 1 });
+    });
+
+    it('não aceita possuir mais do que o rider pede nem quantidade possuída negativa', async () => {
+      await artistUser.put(`/artists/${artist.id}/rider`, { notes: '', items: [{ catalogItemId: 'amp-gtr', quantity: 1, ownedQuantity: 2 }] }).expect(400);
+      await artistUser.put(`/artists/${artist.id}/rider`, { notes: '', items: [{ catalogItemId: 'amp-gtr', quantity: 1, ownedQuantity: -1 }] }).expect(400);
+      await artistUser.put(`/artists/${artist.id}/rider`, { notes: '', items: [{ customName: 'Pedal', quantity: 2, ownedQuantity: 3 }] }).expect(400);
+    });
+
     it('inventário não altera o rider do artista', async () => {
       const before = await artistUser.get(`/artists/${artist.id}/rider`);
       await venueOwner.put(`/organizations/${venue.id}/equipment`, { items: [{ catalogItemId: 'bateria', quantity: 2 }] }).expect(200);

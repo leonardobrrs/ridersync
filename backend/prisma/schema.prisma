@@ -458,6 +458,8 @@ model TechnicalRider {
 }
 
 /// Item catalogado (catalogItemId) OU personalizado (customName) — CHECK exatamente um; quantidade > 0.
+/// `quantity` = o que o artista PRECISA para tocar; `ownedQuantity` = quanto disso ele já possui e leva
+/// (CHECK 0 ≤ ownedQuantity ≤ quantity). A casa só precisa cobrir quantity − ownedQuantity.
 model RiderItem {
   id            String                @id @default(uuid()) @db.Uuid
   riderId       String                @db.Uuid
@@ -467,6 +469,7 @@ model RiderItem {
   customName    String?
   customUnit    String?
   quantity      Int
+  ownedQuantity Int                   @default(0)
   notes         String                @default("")
   createdAt     DateTime              @default(now())
 
@@ -583,7 +586,7 @@ model EventApplication {
   submittedById    String?           @db.Uuid
   submittedBy      User?             @relation("ApplicationSubmitter", fields: [submittedById], references: [id], onDelete: SetNull)
   message          String            @default("")
-  /// O que o artista precisa que a casa disponibilize: [{ catalogItemId, customName, quantity, notes }].
+  /// DESCONTINUADA: não é mais lida nem gravada. As necessidades técnicas vêm do rider (RiderItem).
   needs            Json              @default("[]")
   /// Contraproposta de cachê enviada junto com a candidatura (centavos). Nulo = aceita o cachê publicado.
   proposedFeeCents Int?

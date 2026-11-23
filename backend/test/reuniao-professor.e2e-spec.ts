@@ -58,28 +58,34 @@ describe('Reunião 19/11 (integração)', () => {
     expect(JSON.stringify((await visitor.get('/public/shows')).body)).not.toContain('Evento Oculto Prof');
   });
 
-  it('candidatura informa o que o artista precisa da casa; a comparação usa essas necessidades', async () => {
-    const ev = await newEvent({ title: 'Evento Necessidades' });
-    const bad = await artistA.post(`/events/${ev.id}/applications`, { artistId: artA.id, needs: [{ catalogItemId: 'nao-existe', quantity: 1 }] });
-    expect(bad.status).toBe(422);
-    const ap = await artistA.post(`/events/${ev.id}/applications`, {
-      artistId: artA.id,
-      message: 'Levo meus instrumentos.',
-      needs: [
-        { catalogItemId: 'mic-din', quantity: 3 },
-        { catalogItemId: 'di', quantity: 1 },
-        { customName: 'Pedal de expressão', quantity: 1 },
-      ],
-    });
+  it('a comparação da candidatura usa o rider do artista (necessário − o que ele já possui) × inventário da casa', async () => {
+    // Rider = o que o artista PRECISA; ownedQuantity = quanto disso ele já possui e leva.
+    await artistA
+      .put(`/artists/${artA.id}/rider`, {
+        notes: '',
+        items: [
+          { catalogItemId: 'mic-din', quantity: 3 }, // casa tem 2, artista não possui → faltam 1
+          { catalogItemId: 'di', quantity: 3, ownedQuantity: 2 }, // casa tem 1 + artista leva 2 → compatível
+          { customName: 'Pedal de expressão', quantity: 1 },
+        ],
+      })
+      .expect(200);
+    const ev = await newEvent({ title: 'Evento Rider' });
+    // `needs` foi descontinuado: o corpo da candidatura aceita só artista e mensagem.
+    await artistA.post(`/events/${ev.id}/applications`, { artistId: artA.id, needs: [] }).expect(400);
+    const ap = await artistA.post(`/events/${ev.id}/applications`, { artistId: artA.id, message: 'Levo meus instrumentos.' });
     expect(ap.status).toBe(201);
     const cmp = await owner.get(`/applications/${ap.body.id}/compatibility`);
     expect(cmp.status).toBe(200);
-    const status = Object.fromEntries(cmp.body.items.map((i: { name: string; status: string }) => [i.name, i.status]));
-    expect(status).toMatchObject({ 'Microfone dinâmico': 'PARTIALLY_AVAILABLE', 'Caixa direta (DI)': 'COMPATIBLE', 'Pedal de expressão': 'NEEDS_CHECK' });
+    const byName = Object.fromEntries(cmp.body.items.map((i: { name: string }) => [i.name, i]));
+    expect(byName['Microfone dinâmico']).toMatchObject({ status: 'PARTIALLY_AVAILABLE', venueProvides: 2, artistProvides: 0, missing: 1 });
+    expect(byName['Caixa direta (DI)']).toMatchObject({ status: 'COMPATIBLE', required: 3, owned: 2, venueProvides: 1, artistProvides: 2, missing: 0 });
+    expect(byName['Pedal de expressão']).toMatchObject({ status: 'NEEDS_CHECK' });
+    expect(cmp.body.artistSuppliedItems).toBe(1);
     expect((await artistA.get(`/applications/${ap.body.id}/compatibility`)).status).toBe(200);
     await artistB.get(`/applications/${ap.body.id}/compatibility`).expect(404);
     const manage = await owner.get(`/events/${ev.id}/manage`);
-    expect(manage.body.applications[0].needs).toHaveLength(3);
+    expect(manage.body.applications[0]).not.toHaveProperty('needs');
   });
 
   it('contratar direto nas condições do evento: confirma na hora e ocupa a vaga; sem cachê definido, exige negociação', async () => {

@@ -14,11 +14,10 @@ import { Empty, ErrorState, Loading, Status } from '../../components/States';
 import { useToast } from '../../components/Toast';
 import { api, errorMessage } from '../../lib/api';
 import { APPLICATION_STATUS, BOOKING_STATUS, centsFromReais, date, dateTime, duration, EVENT_STATUS, fromLocalInput, money, reaisFromCents, toLocalInput } from '../../lib/format';
-import { useCatalog, useMe, useMeta } from '../../lib/hooks';
+import { useMe, useMeta } from '../../lib/hooks';
 import type { BookingDetail, EventManage, EventVisibility, OrgEventRow } from '../../lib/types';
 import { CompatibilityView } from '../artist/Compatibility';
 import { OfferForm, type OfferPayload } from '../bookings/OfferForm';
-import { needLabel } from '../opportunities/NeedsPicker';
 import { InviteArtists, sendInvites, type InvitedArtist } from './InviteArtists';
 
 const EventFormSchema = (independent: boolean) =>
@@ -422,7 +421,6 @@ export function EventManagePage() {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [invites, setInvites] = useState<InvitedArtist[]>([]);
   const [inviting, setInviting] = useState(false);
-  const { data: catalog } = useCatalog();
 
   if (q.isLoading) return <Loading />;
   if (q.error) return <ErrorState error={q.error} retry={q.refetch} />;
@@ -659,25 +657,12 @@ export function EventManagePage() {
                     </p>
                   )}
                   {a.message && <p style={{ marginTop: 6, fontSize: 14 }}>“{a.message}”</p>}
-                  {a.needs.length > 0 ? (
-                    <div className="needs-view">
-                      <small className="lbl">Precisa que a casa disponibilize</small>
-                      <ul className="chips">
-                        {a.needs.map((n, i) => (
-                          <li className="chip" key={i}>
-                            {needLabel(n, catalog)}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ) : (
-                    <small className="hint">Não pediu equipamentos à casa.</small>
-                  )}
+                  {!independent && <small className="hint">O rider do artista é comparado automaticamente com o inventário da casa.</small>}
                 </div>
                 <div className="acts">
                   {!independent && (
-                    <button className="btn sm ghost" type="button" onClick={() => setCompare(a.id)} disabled={a.needs.length === 0}>
-                      Comparar necessidades
+                    <button className="btn sm ghost" type="button" onClick={() => setCompare(a.id)}>
+                      Comparar rider
                     </button>
                   )}
                   {a.status === 'PENDING' && (
@@ -692,7 +677,7 @@ export function EventManagePage() {
                               ? 'Defina o cachê do evento para contratar direto.'
                               : undefined
                         }
-                        confirm={`Contratar ${a.artist.name} nas condições do evento: ${dateTime(ev.startsAt)}, ${duration(ev.durationMinutes ?? 60)}, cachê ${money(ev.feeCents)}${a.needs.length ? `, fornecendo: ${a.needs.map((n) => needLabel(n, catalog)).join('; ')}` : ''}. A contratação é confirmada na hora e ocupa uma vaga.`}
+                        confirm={`Contratar ${a.artist.name} nas condições do evento: ${dateTime(ev.startsAt)}, ${duration(ev.durationMinutes ?? 60)}, cachê ${money(ev.feeCents)}. A contratação é confirmada na hora e ocupa uma vaga.`}
                         confirmLabel="Contratar agora"
                         onConfirm={async () => {
                           try {
@@ -768,7 +753,7 @@ export function EventManagePage() {
         </div>
       </Dialog>
       <Dialog open={!!compare} onClose={() => setCompare(null)} title="Compatibilidade técnica" wide>
-        {compare && <CompatibilityView applicationId={compare} />}
+        {compare && <CompatibilityView applicationId={compare} perspective="VENUE" />}
       </Dialog>
       <TextPromptDialog
         open={prompt === 'cancel'}

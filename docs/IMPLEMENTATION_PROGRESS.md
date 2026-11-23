@@ -157,7 +157,7 @@ Migration aplicada só nos bancos locais.
 Verificação: backend 237 testes; frontend 28; Playwright 24 (desktop, tablet, celular); lint e typecheck ok.
 
 ## Reunião com o professor (19/11) — concluída
-- Rider = equipamentos que o artista possui; necessidades por candidatura (`needs`) e comparação por candidatura.
+- ~~Rider = equipamentos que o artista possui; necessidades por candidatura (`needs`)~~ — **revisto em 23/11** (ver abaixo): o rider é o que o artista precisa.
 - Evento oculto, criação única de evento com convites, "Observações", aba e página de eventos encerrados, eventos clicáveis.
 - Contratar nas condições do evento; avaliações 0–5 estrelas pós-show (dois lados), médias nos perfis públicos.
 - Home sem "Casas de show" no topo, busca ao digitar, redirecionamento após candidatura, sem quebra de palavras no meio.
@@ -194,3 +194,12 @@ histórico e total de shows no perfil público e botão de tema claro/escuro. De
 | `npm run build` | API e SPA ok |
 
 Antes de publicar no staging: aplicar a migration nova (`npm run db:migrate:neon:staging`).
+
+## Correção do conceito de rider (23/11) — branch `feat/rider-update`
+- Rider = o que o artista **precisa** para tocar; inventário da casa = o que a casa **oferece**. Textos, ajudas, guia rápido e docs corrigidos (a decisão de 19/11 tinha invertido o conceito).
+- Novo `RiderItem.ownedQuantity` (quanto o artista já possui; CHECK 0..necessário). Editor do rider com a coluna "Já possuo" (catálogo e itens personalizados), limitada ao necessário.
+- Comparação (`compareRider`): a casa cobre o que tem; o resto só conta se o artista já possui. Ex.: precisa de 2, possui 1, a casa tem 1 → **compatível**, com 1 da casa e 1 do artista, e aviso "Você precisa levar 1 un" (voz do contratante: "O artista vai levar").
+- Perfil público da casa com abas **Sobre/Rider**; ao abrir **Rider**, o artista logado vê a comparação automática (escolhe a identidade se tiver mais de uma). Visitante vê convite para entrar.
+- Candidatura sem "necessidades" (`needs` descontinuada; `NeedsPicker` removido): o modal mostra a comparação do rider com a casa do evento; a casa compara o rider na análise e na negociação.
+- Migration `20261123140000_rider_quantidade_possuida` (aditiva).
+- Validação (já sobre a `feat/evolucao-ridersync`): backend 362 testes passando (36 suítes, incl. 9 unitários e 3 de integração novos do rider) contra `ridersync_test` local; frontend 52 (6 novos); Playwright 32 (desktop, tablet, celular); lint, typecheck e build ok.

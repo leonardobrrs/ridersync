@@ -191,11 +191,11 @@ export function HelpPage() {
         <h2>Para artistas</h2>
         <ol>
           <li>Crie uma conta de artista e confirme o e-mail.</li>
-          <li>Em “Meu perfil”, preencha os dados, a foto, o portfólio e o rider (os equipamentos que você já possui). Ao se candidatar, informe o que a casa precisa disponibilizar.</li>
+          <li>Em “Meu perfil”, preencha os dados, a foto, o portfólio e o rider (o que você precisa para tocar e, em cada item, quanto você já possui). Ao abrir o perfil de uma casa de show, a aba “Rider” compara o seu rider com a estrutura da casa automaticamente.</li>
           <li>Publique o perfil para aparecer no marketplace e poder se candidatar.</li>
           <li>Crie ou entre em bandas pelos convites. Cada banda tem perfil, portfólio e rider próprios.</li>
           <li>Em “Oportunidades”, candidate-se a eventos. Eventos privados aparecem só para contas de artista.</li>
-          <li>Responda propostas em “Negociações”: aceite, recuse ou envie contraproposta. Compare seu rider com o inventário da casa durante a negociação.</li>
+          <li>Responda propostas em “Negociações”: aceite, recuse ou envie contraproposta. Na negociação, compare o seu rider com o inventário da casa: o que você já possui entra na conta e a plataforma avisa o que você precisa levar.</li>
         </ol>
 
         <h2>Para contratantes</h2>

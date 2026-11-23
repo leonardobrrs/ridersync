@@ -86,9 +86,7 @@ Marque ✔/✘ e anote o problema.
 - [ ] Filtros laterais (desktop) e painel "Filtros" (celular) com marcadores: marcar 2 estilos mostra artistas de qualquer um deles; 2 cidades idem; estilo + cidade combinam (os dois). "Outra cidade…" encontra municípios sem acento (ex.: "pao" → Pão de Açúcar); "limpar" zera o grupo; recarregar a página mantém as marcações.
 
 ## Reunião com o professor (19/11)
-- [ ] Rider do perfil descrito como "equipamentos que você já possui".
-- [ ] Candidatura: "O que você precisa que a casa disponibilize" — vem marcado o inventário da casa, menos o que já está no rider ("você já tem"); adicionar do catálogo, item livre, quantidade, "Desmarcar o que já tenho no rider".
-- [ ] Casa: candidatura mostra as necessidades e "Comparar necessidades" com o inventário.
+- [ ] (Substituído em 23/11 — ver "Rider: o que o artista precisa" abaixo.) Candidatura: após enviar, vai para "Minhas candidaturas".
 - [ ] Topo sem "Casas de show"; digitar na busca da página inicial filtra sem apertar Enter.
 - [ ] Eventos clicáveis: card de show na home, "Próximos shows" da casa, "Próximos eventos" do artista, agenda e negociação.
 - [ ] Oportunidades → aba "Encerrados"; evento fechado mostra aviso, todas as informações e as atrações confirmadas.
@@ -98,4 +96,13 @@ Marque ✔/✘ e anote o problema.
 - [ ] Registrar apresentação como realizada abre a avaliação (0 a 5 estrelas + comentário); o outro lado recebe o pedido; notas aparecem no perfil do artista e na página da casa.
 - [ ] Celular: textos da tela de negociação não quebram palavras no meio.
 
-- [ ] Rider: o editor pede "Quantidade que você tem"; "Comparar rider" mostra "os dois têm / a casa tem menos / só no rider" (informativo).
+## Rider: o que o artista precisa (23/11)
+- [ ] Aba "Rider técnico" do perfil descreve o rider como o que o artista **precisa** para tocar, com a coluna "Já possuo" em cada item (catálogo e "outros").
+- [ ] "Já possuo" não passa de "Quantidade necessária" (digitar 9 com necessário 3 vira 3; reduzir o necessário reduz o possuído). Salvar e recarregar mantém os dois valores.
+- [ ] Perfil público do artista: aba "Rider técnico" mostra "Já possui N" nos itens em que isso foi informado.
+- [ ] Caso do amplificador: rider com 2 amplificadores e "Já possuo" = 1; casa com inventário de 1 amplificador → perfil da casa › aba **Rider** (logado como artista) mostra "Compatível", "A casa tem 1", "Você leva 1" e o aviso "Você precisa levar 1 un · Amplificador…".
+- [ ] Mesmo rider com "Já possuo" = 0: o amplificador fica "Parcialmente disponível" (faltam 1).
+- [ ] A comparação aparece sozinha ao abrir a aba **Rider** da casa; com perfil individual e banda, o seletor troca a identidade e refaz a comparação.
+- [ ] Visitante sem login na aba **Rider** da casa vê só a estrutura e o convite "Entre com sua conta de artista"; conta de contratante não vê comparação.
+- [ ] Candidatura: o modal não pede mais "necessidades"; mostra "Seu rider × [casa]" automaticamente (evento sem casa mostra a orientação de combinar na negociação).
+- [ ] Casa: na candidatura, "Comparar rider" mostra o resultado na voz do contratante ("O artista vai levar 1 un …"); o mesmo na negociação.

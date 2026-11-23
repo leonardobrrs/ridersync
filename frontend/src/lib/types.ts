@@ -165,7 +165,10 @@ export interface RiderItem {
   unit: string;
   category: string | null;
   isCustom: boolean;
+  /** Rider: o que o artista PRECISA. Inventário da casa: o que a casa tem. */
   quantity: number;
+  /** Somente no rider: quanto dessa quantidade o artista já possui e leva (0 a quantity). */
+  ownedQuantity?: number;
   notes: string;
 }
 
@@ -365,7 +368,6 @@ export interface EventManage extends EventPublic {
     id: string;
     status: ApplicationStatus;
     message: string;
-    needs: Need[];
     /** Contraproposta de cachê enviada com a candidatura (centavos); nulo = aceitou o cachê publicado. */
     proposedFeeCents: number | null;
     createdAt: string;
@@ -513,8 +515,17 @@ export interface CompatibilityResult {
     name: string;
     category: string | null;
     unit: string;
+    /** Necessário para tocar (rider). */
     required: number;
+    /** Quanto o artista declarou possuir. */
+    owned: number;
+    /** Quantidade registrada pela casa (null = item personalizado, sem correspondência). */
     available: number | null;
+    /** Quanto a casa fornece neste show. */
+    venueProvides: number | null;
+    /** Quanto o artista precisa levar para o item ficar coberto. */
+    artistProvides: number;
+    /** Quanto continua sem cobertura (null = desconhecido). */
     missing: number | null;
     status: CompatStatus;
     reason: string;
@@ -523,6 +534,8 @@ export interface CompatibilityResult {
   }[];
   summary: Record<CompatStatus, number> & { total: number };
   fullyCompatible: boolean;
+  /** Itens que só ficam atendidos porque o artista leva parte (ou tudo). */
+  artistSuppliedItems: number;
 }
 
 export interface Invitations {
@@ -559,14 +572,6 @@ export interface Dashboard {
   hasMusicianProfile: boolean;
   managesBands: boolean;
   managesVenues: boolean;
-}
-
-/** Item que o artista precisa que a casa disponibilize (informado na candidatura). */
-export interface Need {
-  catalogItemId: string | null;
-  customName: string | null;
-  quantity: number;
-  notes?: string;
 }
 
 export interface ReviewEntry {

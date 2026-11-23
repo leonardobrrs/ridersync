@@ -4,11 +4,13 @@ import { Link, useParams, useSearchParams } from 'react-router';
 import { ProfilePhoto } from '../../components/Media';
 import { Avatar, Poster } from '../../components/Poster';
 import { Empty, ErrorState, Loading } from '../../components/States';
+import { Tabs } from '../../components/Tabs';
 import { api, qs } from '../../lib/api';
 import { dateTime, dayMonth } from '../../lib/format';
 import { ReviewsSummary } from '../../components/Stars';
-import { useMeta } from '../../lib/hooks';
+import { useMe, useMeta } from '../../lib/hooks';
 import type { PublicVenue, VenueCard } from '../../lib/types';
+import { CompatibilityView } from '../artist/Compatibility';
 import { RiderList } from './ArtistPublicPage';
 import { VenueAd } from './MarketplacePage';
 import { ContactIcons, ContactList } from '../../components/ContactLinks';
@@ -76,9 +78,81 @@ export function VenuesPage() {
   );
 }
 
+const VENUE_TABS = ['sobre', 'rider'] as const;
+type VenueTab = (typeof VENUE_TABS)[number];
+
+/**
+ * Aba "Rider" da casa: a estrutura técnica que a casa oferece e, para artista logado, a comparação AUTOMÁTICA do rider
+ * dele (o que ele precisa, descontado o que já possui) com esse inventário. A comparação só roda ao abrir a aba.
+ */
+function VenueRiderTab({ v }: { v: PublicVenue }) {
+  const { data: me } = useMe();
+  const identities = [
+    ...(me?.musician ? [{ id: me.musician.id, label: `${me.musician.name} (perfil individual)` }] : []),
+    ...(me?.bands.map((b) => ({ id: b.artist.id, label: `${b.artist.name} (banda)` })) ?? []),
+  ];
+  const [picked, setPicked] = useState('');
+  const artistId = identities.some((i) => i.id === picked) ? picked : (identities[0]?.id ?? '');
+  const isArtist = me?.user.accountType === 'ARTIST';
+  return (
+    <div className="stack">
+      {isArtist && identities.length > 0 && (
+        <section className="box stack" aria-label="Comparação com o seu rider">
+          <div className="row between">
+            <h2>Seu rider nesta casa</h2>
+            {identities.length > 1 && (
+              <label className="field" style={{ minWidth: 220 }}>
+                <span className="sr-only">Comparar como</span>
+                <select className="input" value={artistId} onChange={(e) => setPicked(e.target.value)}>
+                  {identities.map((i) => (
+                    <option key={i.id} value={i.id}>
+                      {i.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+          </div>
+          <p className="hint">
+            Comparação automática do seu rider (o que você precisa para tocar, descontado o que você já possui) com a estrutura de {v.name}.
+          </p>
+          <CompatibilityView key={artistId} artistId={artistId} organizationId={v.id} embedded />
+        </section>
+      )}
+      {isArtist && identities.length === 0 && (
+        <section className="box">
+          <p className="hint">
+            Para ver como o seu rider se compara com esta casa, <Link className="link" to="/painel/perfil">crie seu perfil</Link> ou entre numa banda e cadastre o rider.
+          </p>
+        </section>
+      )}
+      {!me && (
+        <section className="box">
+          <p className="hint">
+            <Link className="link" to="/entrar">Entre com sua conta de artista</Link> para ver, automaticamente, como o seu rider se compara com a estrutura desta casa.
+          </p>
+        </section>
+      )}
+      <section className="box sec">
+        <h2>Estrutura técnica da casa</h2>
+        <p className="hint">Equipamentos e recursos que a casa oferece aos artistas.</p>
+        <RiderList rider={{ notes: '', items: v.equipment }} empty="A casa ainda não informou sua estrutura técnica." />
+      </section>
+    </div>
+  );
+}
+
 export function VenuePublicPage() {
   const { slug } = useParams();
+  const [params, setParams] = useSearchParams();
   const q = useQuery({ queryKey: ['venue', slug], queryFn: () => api.get<PublicVenue>(`/public/venues/${slug}`) });
+  const tab: VenueTab = VENUE_TABS.includes(params.get('aba') as VenueTab) ? (params.get('aba') as VenueTab) : 'sobre';
+  const setTab = (t: string) => {
+    const n = new URLSearchParams(params);
+    if (t === 'sobre') n.delete('aba');
+    else n.set('aba', t);
+    setParams(n, { replace: true });
+  };
   if (q.isLoading) return <Loading />;
   if (q.error)
     return (
@@ -133,6 +207,17 @@ export function VenuePublicPage() {
             </dl>
             {v.description && <p className="prose">{v.description}</p>}
           </section>
+          <Tabs
+            label="Seções do perfil da casa"
+            active={tab}
+            onChange={setTab}
+            tabs={[
+              { id: 'sobre', label: 'Sobre' },
+              { id: 'rider', label: 'Rider', count: v.equipment.length },
+            ]}
+          >
+            {tab === 'sobre' && (
+              <div className="stack">
           <section className="box sec">
             <h2>Próximos shows</h2>
             {v.upcomingShows.length === 0 ? (
@@ -169,10 +254,10 @@ export function VenuePublicPage() {
             <h2>Avaliações de artistas</h2>
             <ReviewsSummary r={v.reviews} empty="Ainda sem avaliações." />
           </section>
-          <section className="box sec">
-            <h2>Estrutura técnica</h2>
-            <RiderList rider={{ notes: '', items: v.equipment }} empty="A casa ainda não informou sua estrutura técnica." />
-          </section>
+              </div>
+            )}
+            {tab === 'rider' && <VenueRiderTab v={v} />}
+          </Tabs>
         </div>
         <aside className="side">
           <section className="box">

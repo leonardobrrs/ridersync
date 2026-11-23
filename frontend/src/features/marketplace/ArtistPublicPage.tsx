@@ -59,6 +59,11 @@ export function RiderList({ rider, empty = 'Rider ainda não informado.' }: { ri
                 <span className="ch">{i.isCustom ? 'outro' : ''}</span>
                 <span>
                   {i.name}
+                  {i.ownedQuantity ? (
+                    <small>
+                      {i.ownedQuantity >= i.quantity ? 'Já possui todas as unidades' : `Já possui ${i.ownedQuantity} ${i.unit}`}
+                    </small>
+                  ) : null}
                   {i.notes && <small>{i.notes}</small>}
                 </span>
                 <span className="qty">
@@ -459,7 +464,10 @@ export function ArtistPublicPage() {
             {tab === 'rider' && (
               <section className="box sec">
                 <h2>Rider técnico</h2>
-                <p className="hint">Equipamentos que o artista já possui e leva para os shows. O que a casa precisa fornecer é combinado em cada candidatura ou negociação.</p>
+                <p className="hint">
+                  O que o artista precisa para se apresentar (instrumentos, amplificação, microfones…). Quando ele já possui parte dos itens, isso aparece em cada linha —
+                  a casa só precisa cobrir o restante.
+                </p>
                 <RiderList rider={a.rider} />
               </section>
             )}

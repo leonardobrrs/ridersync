@@ -12,6 +12,8 @@ Guia para agentes trabalhando neste repositório. Leia também a skill `.claude/
 - Evolução de 2026-11-18 (`requisitos_ridersync.md`, decisões em `docs/DECISOES_TECNICAS.md`) **substitui** regras da skill:
   contas separadas por `User.accountType` (ARTIST × CONTRACTOR), eventos sem casa via `Organization` `INDIVIDUAL`,
   eventos públicos/privados, estados `FILLED`/`POSTPONED`, candidatura `CANCELLED`. Localidade restrita a Alagoas.
+- **Rider = o que o artista PRECISA para tocar** (não o que possui). `RiderItem.ownedQuantity` diz quanto ele já tem; a casa só cobre a
+  diferença (`riders/compatibility.ts`). `EventApplication.needs` está descontinuada. Detalhes em `docs/DECISOES_TECNICAS.md` (23/11).
 - Ordem de autoridade: decisões explícitas recentes do usuário → `docs/INSTRUCOES_IMPLEMENTACAO_RIDERSYNC_v1.1.txt` →
   skill `ridersync-domain` → `docs/references/Arquitetura_*.md` → protótipos HTML (só referência visual).
 

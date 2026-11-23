@@ -464,12 +464,12 @@ export function BookingPage() {
             {b.canCompareRider && b.mySide && (
               <div className="row" style={{ justifyContent: 'flex-start' }}>
                 <button type="button" className="btn sm ghost" onClick={() => setCompareOpen(true)}>
-                  {b.applicationId ? 'Comparar o pedido à casa com o inventário' : 'Ver rider do artista × inventário da casa'}
+                  Comparar rider com a casa
                 </button>
               </div>
             )}
             <Dialog open={compareOpen} onClose={() => setCompareOpen(false)} title="Compatibilidade técnica" wide>
-              {compareOpen && <CompatibilityView applicationId={b.applicationId} artistId={b.artistId} organizationId={b.organizationId} />}
+              {compareOpen && <CompatibilityView applicationId={b.applicationId} artistId={b.artistId} organizationId={b.organizationId} perspective={b.mySide === 'ARTIST' ? 'ARTIST' : 'VENUE'} />}
             </Dialog>
           </section>
         </div>

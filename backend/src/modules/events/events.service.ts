@@ -88,22 +88,10 @@ export const RescheduleSchema = z
   .refine(deadlineBeforeStart, deadlineMsg)
   .refine((v) => v.startsAt.getTime() > Date.now(), { path: ['startsAt'], message: 'A nova data deve estar no futuro.' });
 
-/** Item que o artista precisa que a casa disponibilize (catálogo ou item livre). */
-export const NeedSchema = z
-  .object({
-    catalogItemId: z.string().trim().min(1).max(40).nullable().default(null),
-    customName: z.string().trim().max(80).nullable().default(null),
-    quantity: z.number().int().min(1).max(999),
-    notes: z.string().trim().max(200).default(''),
-  })
-  .strict()
-  .refine((n) => !!n.catalogItemId !== !!n.customName, { message: 'Informe um item do catálogo ou um item personalizado.' });
-export type Need = z.infer<typeof NeedSchema>;
 export const ApplySchema = z
   .object({
     artistId: z.uuid(),
     message: z.string().trim().max(1500).default(''),
-    needs: z.array(NeedSchema).max(60).default([]),
     /** Contraproposta de cachê já na candidatura (centavos). Ausente/nulo = aceita o cachê publicado. */
     proposedFeeCents: moneyCents.nullish().transform((v) => v ?? null),
   })
@@ -358,7 +346,6 @@ export class EventsService {
             id: true,
             status: true,
             message: true,
-            needs: true,
             proposedFeeCents: true,
             createdAt: true,
             decidedAt: true,
@@ -626,10 +613,6 @@ export class EventsService {
     }
     // Contraproposta igual ao cachê publicado não é contraproposta.
     const proposedFeeCents = input.proposedFeeCents !== null && input.proposedFeeCents === event.feeCents ? null : input.proposedFeeCents;
-    const needIds = [...new Set(input.needs.map((n) => n.catalogItemId).filter((x): x is string => !!x))];
-    if (needIds.length && (await this.prisma.equipmentCatalogItem.count({ where: { id: { in: needIds }, active: true } })) !== needIds.length) {
-      throw unprocessable('UNKNOWN_CATALOG_ITEM', 'Há um equipamento inválido na lista do que você precisa.');
-    }
     const id = await this.prisma.$transaction(async (tx) => {
       // Revalida com o evento bloqueado: uma confirmação concorrente pode ter esgotado o evento.
       const locked = await this.lifecycle.lock(tx, eventId);
@@ -642,14 +625,14 @@ export class EventsService {
         assertApplicationTransition('WITHDRAWN', 'PENDING');
         const res = await tx.eventApplication.updateMany({
           where: { id: existing.id, status: 'WITHDRAWN' },
-          data: { status: 'PENDING', message: input.message, needs: input.needs, proposedFeeCents, submittedById: userId, withdrawnAt: null, decidedAt: null, decidedById: null, decisionNote: null },
+          data: { status: 'PENDING', message: input.message, proposedFeeCents, submittedById: userId, withdrawnAt: null, decidedAt: null, decidedById: null, decisionNote: null },
         });
         if (res.count !== 1) throw conflict('DUPLICATE_APPLICATION', 'Esta identidade artística já se candidatou a esta oportunidade.');
         applicationId = existing.id;
       } else {
         // Unicidade (eventId, artistId) garantida pelo banco; P2002 vira 409.
         const created = await tx.eventApplication.create({
-          data: { eventId, artistId: input.artistId, submittedById: userId, message: input.message, needs: input.needs, proposedFeeCents },
+          data: { eventId, artistId: input.artistId, submittedById: userId, message: input.message, proposedFeeCents },
           select: { id: true },
         });
         applicationId = created.id;

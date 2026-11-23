@@ -124,6 +124,7 @@ Ratings/reviews are visible in the prototypes but are not sufficiently specified
 
 - Keep each musician's rider and each band's rider independent.
 - `TechnicalRider` belongs to one professional artist identity (individual profile or band), and `RiderItem` records catalog item, required quantity, unit/category, and notes.
+- The rider is what the artist **needs** to perform, never what the artist owns. `RiderItem.ownedQuantity` (0..required) records how much of the required quantity the artist already owns and brings; the venue only has to cover the difference.
 - `VenueEquipmentItem` records a venue's available catalog item and quantity. It is separate from rider data.
 - Prefer stable catalog identifiers for comparable equipment. Do not compare only display strings and do not infer that different equipment types are substitutes.
 - Run compatibility calculation on demand in a backend domain service. It must be deterministic and explainable.
@@ -132,7 +133,8 @@ Ratings/reviews are visible in the prototypes but are not sufficiently specified
   - `PARTIALLY_AVAILABLE`: available quantity is greater than zero but below required quantity.
   - `UNAVAILABLE`: item is absent from the venue inventory or available quantity is zero.
 - Custom/out-of-catalog items must not be auto-matched. Mark them for manual confirmation (for example, `NEEDS_CHECK`) and explain why.
-- Return, per item, the needed quantity, available quantity where known, unit, status, and reason. Never present missing inventory data as confirmed compatibility.
+- With owned quantity O, venue quantity V and required quantity R: the venue provides min(V, R); the shortfall must come from the artist. Shortfall 0 → `COMPATIBLE`; 0 < shortfall ≤ O → `COMPATIBLE` with `artistProvides` = shortfall (e.g. R=2, O=1, V=1: one from the venue, one from the artist, and the UI must say so); shortfall > O → `PARTIALLY_AVAILABLE` (`UNAVAILABLE` when V=0 and O=0). A custom item is `NEEDS_CHECK` unless the artist brings all of it.
+- Return, per item, the needed quantity, available quantity where known, unit, status, and reason. Never present missing inventory data as confirmed compatibility. Also return `owned`, `venueProvides` and `artistProvides`.
 - Do not create a generic compatibility engine. Keep this rule in the rider domain.
 
 ## 6. Data model decisions that remain open

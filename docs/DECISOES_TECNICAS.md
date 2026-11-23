@@ -289,13 +289,9 @@ Decisões do responsável que **substituem** regras anteriores (ordem de autorid
 
 ## Reunião com o professor (19/11) — `docs/reuniao_com_o_professor_19_11.md`
 
-- **Rider = o que o artista possui.** As necessidades (o que a casa deve disponibilizar) são informadas em cada
-  candidatura (`EventApplication.needs`). Revisado em 2026-11-23 (coerência): em evento numa casa, vem marcado o que a
-  casa oferece **exceto o que já está no rider** (o artista leva o próprio) — é a "marcação automática de acordo com o
-  que já tem no perfil"; "Desmarcar o que já tenho no rider" refaz isso. A comparação na análise da candidatura e na
-  negociação usa o **pedido à casa** (`GET /applications/:id/compatibility`, colunas "Pedido à casa × Disponível").
-  A comparação do rider com uma casa ("Comparar rider" e negociações diretas) é informativa — "os dois têm / a casa tem
-  menos / só no rider" — e nunca trata o rider como exigência. O editor do rider pede "Quantidade que você tem".
+- ~~**Rider = o que o artista possui.**~~ **Substituída em 23/11** (ver "Correção do conceito de rider" abaixo): essa leitura
+  inverteu o conceito e foi desfeita. `EventApplication.needs` está descontinuada. Permanece válido: sem casa de show (evento
+  particular) não há inventário para comparar.
 - **Evento oculto** (`HIDDEN`): fora de todas as listagens, da página inicial e da agenda pública (aparece só como
   "Evento privado" no perfil do artista); detalhe e imagem só para o organizador e artistas com convite/candidatura;
   não aceita candidaturas (`INVITE_ONLY`). Convites na criação: o evento é publicado e cada artista recebe uma proposta
@@ -401,3 +397,28 @@ schema genérico; as diferenças abaixo vêm do modelo real do repositório e s�
    cancelar).
 9. **Tema claro/escuro:** botão no topo; escolha salva em `localStorage` (`rs-theme`), aplicada em `<html data-theme>`
    antes da primeira pintura; sem escolha, segue o sistema. Os tokens de cor já existiam em `global.css`.
+
+## Correção do conceito de rider (23/11)
+
+- **Rider técnico = o que o artista PRECISA para tocar** (instrumentos, amplificação, microfones…), nunca o que ele possui.
+  O inventário da casa (`VenueEquipmentItem`) é o que a casa OFERECE. A comparação confronta um com o outro.
+  Isso substitui a decisão da reunião de 19/11 ("rider = o que o artista possui" + necessidades por candidatura).
+- **Quanto o artista já possui** é um atributo de cada item do rider: `RiderItem.ownedQuantity` (0 ≤ possuída ≤ necessária;
+  CHECK `RiderItem_owned_within_quantity`; validado também no Zod). Ex.: precisa de 2 amplificadores e já tem 1.
+- **Regra de comparação** (`riders/compatibility.ts`), com V = casa, R = necessário, O = possuído:
+  a casa fornece min(V, R); a falta (R − min(V, R)) precisa vir do artista. Falta 0 → `COMPATIBLE`; 0 < falta ≤ O →
+  `COMPATIBLE` **com `artistProvides` = falta** (ex.: R=2, O=1, V=1 → 1 da casa + 1 do artista); falta > O →
+  `PARTIALLY_AVAILABLE` (ou `UNAVAILABLE` se V = 0 e O = 0). Item personalizado continua `NEEDS_CHECK`, exceto se o artista
+  leva tudo (O ≥ R). O que sobrar na casa não é "devolvido": o artista só leva o que falta.
+  A resposta traz, por item, `owned`, `venueProvides` e `artistProvides`, e `artistSuppliedItems` no total.
+- **Texto na primeira ou terceira pessoa:** a API explica em terceira pessoa ("o artista precisa levar 1 un"); a tela do
+  artista troca por "você" (`reasonFor`). O aviso "Você precisa levar …" fica em destaque acima da tabela.
+- **Comparação automática:** a página pública da casa ganhou abas (**Sobre** / **Rider**). Ao abrir **Rider**, o artista
+  logado (conta ARTIST; escolhe entre perfil individual e bandas se tiver mais de um) vê a comparação do rider dele com a
+  estrutura da casa, sem clicar em nada (`GET /artists/:artistId/compatibility/:orgId`, exige sessão). Visitante vê um convite
+  para entrar; contratante não vê comparação. A mesma comparação aparece no modal de candidatura (casa do evento) e, na voz do
+  contratante, na análise da candidatura e na negociação.
+- **Candidatura sem "necessidades":** `POST /events/:id/applications` aceita só `artistId` e `message` (corpo estrito: enviar
+  `needs` devolve 400). A coluna `EventApplication.needs` foi mantida (sem apagar dados) como DESCONTINUADA, sem leitura nem
+  escrita. Migration `20261123140000_rider_quantidade_possuida` (aditiva).
+- O rider público do artista mostra "Já possui N" por item; o inventário da casa não tem esse campo.

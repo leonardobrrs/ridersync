@@ -362,15 +362,10 @@ body:has(.chat-dock) #root{padding-bottom:calc(var(--tabbar-h) + env(safe-area-i
 .reviews .review-list{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:10px}
 .reviews .review-list li{border-top:1px solid var(--line);padding-top:10px}
 .review-box{display:grid;gap:8px;margin-top:12px}
-/* Necessidades técnicas, convites e abas de eventos */
+/* Comparação de rider na candidatura, convites e abas de eventos */
 .needs{border:0;margin:0;padding:0;display:grid;gap:8px}
 .needs legend{font-weight:700;margin-bottom:2px}
-.needs-list{list-style:none;margin:0;padding:0;display:grid;gap:6px}
-.needs-list li{display:grid;grid-template-columns:minmax(0,1fr) 80px auto;gap:8px;align-items:center}
-.needs-list .qty{min-height:38px}
-.needs-add{display:grid;gap:8px}
-.needs-add .row{flex-wrap:nowrap}
-.needs-view{margin-top:8px;display:grid;gap:4px}
+.cmp-bring{display:block;line-height:1.5}
 .invite{display:grid;gap:6px}
 .invite-results{list-style:none;margin:0;padding:4px;display:grid;gap:2px;border:1px solid var(--line);border-radius:12px;max-height:280px;overflow-y:auto}
 .chip-x{border:0;background:none;padding:0 0 0 4px;cursor:pointer;display:inline-grid;place-items:center;color:inherit}
@@ -378,9 +373,6 @@ body:has(.chat-dock) #root{padding-bottom:calc(var(--tabbar-h) + env(safe-area-i
 .ev-tabs button{flex:1}
 .lineup{list-style:none;margin:0;padding:0;display:grid;gap:8px}
 .lineup li{display:grid;gap:2px}
-.needs-offered{display:grid;gap:6px}
-.needs-sub{font-size:14px;margin-top:4px}
-.needs-list .fchk{display:flex;gap:8px;align-items:center;min-width:0}
 /* Cartão do contrato (negociação): situação, ações em grade e o que falta preencher */
 .contract-card{display:grid;gap:12px}
 .contract-card .lbl{margin:0}

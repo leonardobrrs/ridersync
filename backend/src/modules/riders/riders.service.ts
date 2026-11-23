@@ -15,9 +15,18 @@ const itemBase = {
 const exactlyOne = (v: { catalogItemId?: string | null; customName?: string | null }) => !!v.catalogItemId !== !!v.customName;
 const exactlyOneMsg = { message: 'Informe um item do catálogo OU um item personalizado (“outros”).' };
 
+/**
+ * Item do rider: `quantity` é o que o artista PRECISA para tocar; `ownedQuantity`, quanto disso ele já possui e leva
+ * (0 a `quantity`). A casa só precisa cobrir a diferença.
+ */
 export const RiderItemSchema = z
-  .object({ ...itemBase, quantity: z.number().int().min(1, 'Quantidade mínima: 1.').max(999) })
-  .refine(exactlyOne, exactlyOneMsg);
+  .object({
+    ...itemBase,
+    quantity: z.number().int().min(1, 'Quantidade mínima: 1.').max(999),
+    ownedQuantity: z.number().int().min(0, 'A quantidade que você possui não pode ser negativa.').max(999).default(0),
+  })
+  .refine(exactlyOne, exactlyOneMsg)
+  .refine((v) => v.ownedQuantity <= v.quantity, { message: 'Você não pode possuir mais do que o rider pede: aumente a quantidade necessária.', path: ['ownedQuantity'] });
 export const PutRiderSchema = z
   .object({ notes: z.string().trim().max(2000).default(''), items: z.array(RiderItemSchema).max(80) })
   .strict();
@@ -39,12 +48,17 @@ const itemSelect = {
   catalogItem: { select: { name: true, unit: true, category: true } },
 } as const;
 
+/** O rider também informa quanto o artista já possui; o inventário da casa não tem esse campo. */
+const riderItemSelect = { ...itemSelect, ownedQuantity: true } as const;
+
 type ItemRow = {
   id: string;
   catalogItemId: string | null;
   customName: string | null;
   customUnit: string | null;
   quantity: number;
+  /** Presente somente em itens de rider. */
+  ownedQuantity?: number;
   notes: string;
   catalogItem: { name: string; unit: string; category: string } | null;
 };
@@ -59,6 +73,7 @@ export function toItem(r: ItemRow) {
     category: r.catalogItem?.category ?? null,
     isCustom: !r.catalogItemId,
     quantity: r.quantity,
+    ...(r.ownedQuantity === undefined ? {} : { ownedQuantity: r.ownedQuantity }),
     notes: r.notes,
   };
 }
@@ -99,7 +114,7 @@ export class RidersService {
         updatedAt: true,
         items: {
           where: { OR: [{ catalogItemId: null }, { catalogItem: { artistRequirement: true } }] },
-          select: itemSelect,
+          select: riderItemSelect,
           orderBy: { createdAt: 'asc' },
         },
       },
@@ -128,6 +143,7 @@ export class RidersService {
             customName: i.catalogItemId ? null : i.customName,
             customUnit: i.catalogItemId ? null : i.customUnit,
             quantity: i.quantity,
+            ownedQuantity: i.ownedQuantity,
             notes: i.notes,
           })),
         });
@@ -177,9 +193,9 @@ export class RidersService {
 
   /**
    * Comparação sob demanda, somente em contextos autorizados:
-   *  - quem participa da identidade artística (perfil pessoal), contra qualquer casa de show;
+   *  - quem participa da identidade artística (perfil pessoal ou banda), contra qualquer casa de show (alimenta a aba "Rider" do perfil da casa);
    *  - responsável da casa apenas no contexto de negociação/candidatura com aquele artista.
-   * O perfil público não oferece comparação.
+   * Visitantes sem login não recebem comparação (a rota exige sessão).
    */
   async compare(userId: string, artistId: string, organizationId: string) {
     const [artistAccess, org] = await Promise.all([
@@ -206,11 +222,18 @@ export class RidersService {
         throw forbidden('A comparação de rider fica disponível na negociação ou na análise de candidaturas.');
       }
     }
-    const rider = await this.getRider(artistId);
-    const inventory = await this.prisma.venueEquipmentItem.findMany({
-      where: { organizationId },
-      select: { catalogItemId: true, customName: true, customUnit: true, quantity: true, notes: true },
-    });
+    return this.compareWithVenue(artistId, org);
+  }
+
+  /** Núcleo determinístico, sem autorização: quem chama já validou o acesso. */
+  private async compareWithVenue(artistId: string, org: { id: string; name: string; slug: string }) {
+    const [rider, inventory] = await Promise.all([
+      this.getRider(artistId),
+      this.prisma.venueEquipmentItem.findMany({
+        where: { organizationId: org.id },
+        select: { catalogItemId: true, customName: true, customUnit: true, quantity: true, notes: true },
+      }),
+    ]);
     const result = compareRider(
       rider.items.map((i) => ({
         riderItemId: i.id,
@@ -219,6 +242,7 @@ export class RidersService {
         category: i.category,
         unit: i.unit,
         quantity: i.quantity,
+        owned: i.ownedQuantity,
         notes: i.notes,
       })),
       inventory.filter((i) => i.catalogItemId).map((i) => ({ catalogItemId: i.catalogItemId!, quantity: i.quantity, notes: i.notes })),
@@ -235,14 +259,13 @@ export class RidersService {
   }
 
   /**
-   * Comparação técnica de uma candidatura: o que o artista disse precisar da casa (necessidades informadas na
-   * candidatura) × inventário da casa de show do evento. O rider do perfil representa o que o artista já possui.
+   * Comparação técnica de uma candidatura: rider do artista que se candidatou × inventário da casa de show do evento.
    * Acesso: artista que se candidatou ou responsáveis do organizador.
    */
   async compareApplication(userId: string, applicationId: string) {
     const app = await this.prisma.eventApplication.findUnique({
       where: { id: applicationId },
-      select: { artistId: true, needs: true, event: { select: { organizerId: true, venueId: true, organizer: { select: { type: true } } } } },
+      select: { artistId: true, event: { select: { organizerId: true, venueId: true, organizer: { select: { type: true } } } } },
     });
     if (!app) throw notFound('Candidatura não encontrada.');
     const [artistAccess, role] = await Promise.all([this.access.artistAccess(userId, app.artistId), this.access.orgRole(userId, app.event.organizerId)]);
@@ -250,41 +273,7 @@ export class RidersService {
     const venueId = app.event.venueId ?? (app.event.organizer.type === 'VENUE' ? app.event.organizerId : null);
     if (!venueId) throw unprocessable('NO_VENUE_INVENTORY', 'Evento sem casa de show: não há inventário para comparar. Combine os equipamentos na negociação.');
     const org = await this.prisma.organization.findUniqueOrThrow({ where: { id: venueId }, select: { id: true, name: true, slug: true } });
-    const needs = (Array.isArray(app.needs) ? app.needs : []) as { catalogItemId: string | null; customName: string | null; quantity: number; notes?: string }[];
-    const catalog = await this.prisma.equipmentCatalogItem.findMany({
-      where: { id: { in: needs.map((n) => n.catalogItemId).filter((x): x is string => !!x) } },
-      select: { id: true, name: true, unit: true, category: true },
-    });
-    const byId = new Map(catalog.map((c) => [c.id, c]));
-    const inventory = await this.prisma.venueEquipmentItem.findMany({
-      where: { organizationId: venueId },
-      select: { catalogItemId: true, customName: true, customUnit: true, quantity: true, notes: true },
-    });
-    const result = compareRider(
-      needs.map((n, idx) => {
-        const c = n.catalogItemId ? byId.get(n.catalogItemId) : undefined;
-        return {
-          riderItemId: `need-${idx}`,
-          catalogItemId: c ? c.id : null,
-          name: c?.name ?? n.customName ?? 'Item',
-          category: c?.category ?? null,
-          unit: c?.unit ?? 'un',
-          quantity: n.quantity,
-          notes: n.notes ?? '',
-        };
-      }),
-      inventory.filter((i) => i.catalogItemId).map((i) => ({ catalogItemId: i.catalogItemId!, quantity: i.quantity, notes: i.notes })),
-    );
-    return {
-      organization: org,
-      riderNotes: '',
-      source: 'APPLICATION' as const,
-      inventoryRegistered: inventory.length > 0,
-      venueCustomItems: inventory
-        .filter((i) => !i.catalogItemId)
-        .map((i) => ({ name: i.customName, unit: i.customUnit ?? 'un', quantity: i.quantity, notes: i.notes })),
-      ...result,
-    };
+    return this.compareWithVenue(app.artistId, org);
   }
 }
 

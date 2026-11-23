@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
-import { NeedsPicker } from './NeedsPicker';
+import { CompatibilityView } from '../artist/Compatibility';
 import { FormError } from '../../components/Fields';
 import { ConfirmButton, Dialog } from '../../components/Dialog';
 import { Poster } from '../../components/Poster';
@@ -11,7 +11,7 @@ import { useToast } from '../../components/Toast';
 import { api, errorMessage, qs } from '../../lib/api';
 import { APPLICATION_STATUS, centsFromReais, dateTime, duration, EVENT_STATUS, money } from '../../lib/format';
 import { useMe, useMeta } from '../../lib/hooks';
-import type { ApplicationStatus, EventPublic, Need } from '../../lib/types';
+import type { ApplicationStatus, EventPublic } from '../../lib/types';
 
 /** Área do artista: "Oportunidades de apresentação" (o mesmo Event que a casa chama de publicação). */
 export function OpportunitiesPage() {
@@ -112,7 +112,6 @@ export function OpportunityPage() {
   ];
   const [artistId, setArtistId] = useState('');
   const [message, setMessage] = useState('');
-  const [needs, setNeeds] = useState<Need[]>([]);
   const navigate = useNavigate();
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -165,9 +164,8 @@ export function OpportunityPage() {
     setErr(null);
     setBusy(true);
     try {
-      await api.post(`/events/${e.id}/applications`, { artistId: selected, message, needs, proposedFeeCents: counterCents });
+      await api.post(`/events/${e.id}/applications`, { artistId: selected, message, proposedFeeCents: counterCents });
       setMessage('');
-      setNeeds([]);
       setCounterFee('');
       setReviewing(false);
       setApplyOpen(false);
@@ -191,6 +189,8 @@ export function OpportunityPage() {
     }
   };
   const place = e.location;
+  // Mesma regra do backend: a casa do evento (local físico) ou, se o organizador é uma casa, ele mesmo.
+  const venueId = e.venue?.id ?? (e.organizer.type === 'VENUE' ? e.organizer.id : null);
 
   return (
     <div className="wrap page">
@@ -396,7 +396,6 @@ export function OpportunityPage() {
                       <>, com cachê a combinar.</>
                     )}
                   </div>
-                  {needs.length > 0 && <p className="hint">Você pediu {needs.length} item(ns) de equipamento à casa.</p>}
                   <p className="hint">O contratante recebe sua candidatura e pode selecioná-la para negociar ou contratar. A candidatura sozinha não confirma a contratação.</p>
                   <div className="actions">
                     <button className="btn ghost" type="button" onClick={() => setReviewing(false)} disabled={busy}>
@@ -444,7 +443,18 @@ export function OpportunityPage() {
                       </label>
                     )}
                   </fieldset>
-                  {selected && <NeedsPicker artistId={selected} venueSlug={e.location.venueSlug} value={needs} onChange={setNeeds} />}
+                  {selected && venueId && (
+                    <fieldset className="needs">
+                      <legend>Seu rider × {e.venue?.name ?? e.organizer.name}</legend>
+                      <small className="hint">
+                        A comparação é automática: usa o rider do perfil escolhido (o que você precisa, descontado o que já possui). Atualize o rider no seu perfil para mudar o resultado.
+                      </small>
+                      <CompatibilityView key={selected} artistId={selected} organizationId={venueId} embedded />
+                    </fieldset>
+                  )}
+                  {selected && !venueId && (
+                    <p className="hint">Este evento não é numa casa com estrutura cadastrada: combine os equipamentos do seu rider na negociação.</p>
+                  )}
                   <label className="field">
                     <span>Mensagem para a casa</span>
                     <textarea className="input" maxLength={1500} value={message} onChange={(x) => setMessage(x.target.value)} style={{ minHeight: 90 }} />

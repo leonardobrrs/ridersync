@@ -11,6 +11,7 @@ Fonte de verdade: `backend/prisma/schema.prisma`. CHECKs que o Prisma não expre
 | `20261118200000_imagem_do_evento` | `Event.imageId` (opcional, único, FK para `MediaAsset` com `SET NULL`): imagem exibida no card do evento. Aditiva. |
 | `20261118210000_leitura_de_mensagens` | Tabela `BookingRead` (negociação × pessoa → última leitura) para o contador de mensagens não lidas. Aditiva. |
 | `20261119120000_reuniao_professor` | `EventVisibility.HIDDEN` (evento oculto), `EventApplication.needs` (JSON: o que o artista precisa da casa, CHECK de array), tabela `Review` (0–5 estrelas, uma por lado, CHECK de faixa). `Event.notes` usa a coluna existente `requirements` (`@map`). Aditiva. |
+| `20261123140000_rider_quantidade_possuida` | `RiderItem.ownedQuantity` (padrão 0, CHECK `0 ≤ ownedQuantity ≤ quantity`). `EventApplication.needs` fica DESCONTINUADA (mantida, sem uso). Aditiva. |
 
 ## Entidades
 
@@ -26,7 +27,7 @@ Fonte de verdade: `backend/prisma/schema.prisma`. CHECKs que o Prisma não expre
 - **Artist** — identidade comum (SOLO ou BAND) com FK explícita para `MusicianProfile` **ou** `Band` (CHECK `Artist_exactly_one_subtype`).
 - **MusicianProfile**, **Band**, **BandMember** (`role` OWNER/ADMIN/MEMBER = permissão; `instrument` = função/cargo, lista fechada).
 - **PortfolioItem** — link externo **ou** arquivo (CHECK); `thumbnailUrl` calculada no servidor (YouTube/Vimeo).
-- **TechnicalRider**, **RiderItem** — rider de uma identidade; itens de catálogo com `artistRequirement=false` são recusados.
+- **TechnicalRider**, **RiderItem** — rider de uma identidade: o que o artista PRECISA para tocar (`quantity`) e quanto disso ele já possui (`ownedQuantity`, CHECK 0 ≤ possuída ≤ necessária); itens de catálogo com `artistRequirement=false` são recusados.
 
 ### Contratantes
 - **Organization** — `VENUE` (casa de show, pública, com inventário) ou `INDIVIDUAL` (perfil de contratação de pessoa física,

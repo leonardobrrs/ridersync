@@ -22,8 +22,10 @@ export function RiderTab({ artistId, canManage }: { artistId: string; canManage:
     <div className="stack">
       <div className="notice">
         <p style={{ margin: 0 }}>
-          Liste aqui os equipamentos que você <strong>já possui</strong> e leva para os shows. O que a casa precisa fornecer você informa
-          em cada candidatura. Riders de bandas e de integrantes são independentes.
+          O rider lista o que você <strong>precisa</strong> para tocar (instrumentos, amplificação, microfones…). Em cada item, informe
+          também quanto você <strong>já possui</strong> e leva: a casa só precisa cobrir a diferença. Exemplo: você precisa de 2 amplificadores e
+          já tem 1 — se a casa tiver 1, a comparação dá positivo e avisa que o outro é por sua conta. Riders de bandas e de integrantes são
+          independentes.
           {canManage && (
             <>
               {' '}
@@ -53,7 +55,7 @@ export function ArtistWorkspace({ artist, queryKey, extraTabs = [] }: { artist: 
     { id: 'perfil', label: 'Perfil' },
     ...extraTabs.map(({ id, label }) => ({ id, label })),
     { id: 'portfolio', label: `Portfólio (${artist.portfolio.length})` },
-    { id: 'rider', label: 'Rider (equipamentos)' },
+    { id: 'rider', label: 'Rider técnico' },
   ];
   const [tab, setTab] = useState('perfil');
   return (
