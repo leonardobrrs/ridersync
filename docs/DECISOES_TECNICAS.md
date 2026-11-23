@@ -290,9 +290,12 @@ Decisões do responsável que **substituem** regras anteriores (ordem de autorid
 ## Reunião com o professor (19/11) — `docs/reuniao_com_o_professor_19_11.md`
 
 - **Rider = o que o artista possui.** As necessidades (o que a casa deve disponibilizar) são informadas em cada
-  candidatura (`EventApplication.needs`), manualmente ou com "Preencher a partir do meu perfil" (copia os itens do rider
-  como ponto de partida). A comparação técnica na análise da candidatura e na negociação usa essas necessidades
-  (`GET /applications/:id/compatibility`); sem casa de show (evento particular) não há inventário para comparar.
+  candidatura (`EventApplication.needs`). Revisado em 2026-11-23 (coerência): em evento numa casa, vem marcado o que a
+  casa oferece **exceto o que já está no rider** (o artista leva o próprio) — é a "marcação automática de acordo com o
+  que já tem no perfil"; "Desmarcar o que já tenho no rider" refaz isso. A comparação na análise da candidatura e na
+  negociação usa o **pedido à casa** (`GET /applications/:id/compatibility`, colunas "Pedido à casa × Disponível").
+  A comparação do rider com uma casa ("Comparar rider" e negociações diretas) é informativa — "os dois têm / a casa tem
+  menos / só no rider" — e nunca trata o rider como exigência. O editor do rider pede "Quantidade que você tem".
 - **Evento oculto** (`HIDDEN`): fora de todas as listagens, da página inicial e da agenda pública (aparece só como
   "Evento privado" no perfil do artista); detalhe e imagem só para o organizador e artistas com convite/candidatura;
   não aceita candidaturas (`INVITE_ONLY`). Convites na criação: o evento é publicado e cada artista recebe uma proposta

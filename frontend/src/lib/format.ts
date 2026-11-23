@@ -78,6 +78,13 @@ export const COMPAT_STATUS: Record<CompatStatus, [string, Tone]> = {
   UNAVAILABLE: ['Indisponível', 'falta'],
   NEEDS_CHECK: ['Conferir com a casa', 'conferir'],
 };
+/** Comparação do RIDER (o que o artista tem e leva) com o inventário da casa: informativa, não é exigência. */
+export const RIDER_VS_VENUE: Record<CompatStatus, [string, Tone]> = {
+  COMPATIBLE: ['Os dois têm', 'ok'],
+  PARTIALLY_AVAILABLE: ['A casa tem menos', 'info'],
+  UNAVAILABLE: ['Só no rider', 'neutral'],
+  NEEDS_CHECK: ['Conferir com a casa', 'conferir'],
+};
 export const ROLE_LABEL: Record<string, string> = { OWNER: 'Proprietário', ADMIN: 'Administrador', MEMBER: 'Integrante' };
 export const SIDE_LABEL = { VENUE: 'Contratante', ARTIST: 'Artista' } as const;
 export const PORTFOLIO_KIND: Record<string, string> = { AUDIO: 'Áudio', VIDEO: 'Vídeo', PHOTO: 'Foto', DOCUMENT: 'Documento', LINK: 'Link' };

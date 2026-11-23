@@ -23,7 +23,8 @@ interface CustomRow {
 
 /**
  * Editor de itens técnicos baseado no catálogo (IDs estáveis) + itens personalizados ("outros").
- * mode="rider": quantidades necessárias (≥1) · mode="inventory": quantidades disponíveis (≥0).
+ * mode="rider": o que o artista TEM e leva para os shows (≥1) · mode="inventory": o que a casa tem disponível (≥0).
+ * O que o artista precisa que a casa forneça não fica no rider: é informado em cada candidatura.
  */
 export function EquipmentEditor({
   mode,
@@ -84,7 +85,7 @@ export function EquipmentEditor({
     });
   };
 
-  const qtyLabel = mode === 'rider' ? 'Quantidade necessária' : 'Quantidade disponível';
+  const qtyLabel = mode === 'rider' ? 'Quantidade que você tem' : 'Quantidade disponível';
 
   return (
     <div className="stack">

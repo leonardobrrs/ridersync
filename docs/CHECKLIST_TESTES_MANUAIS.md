@@ -87,7 +87,7 @@ Marque ✔/✘ e anote o problema.
 
 ## Reunião com o professor (19/11)
 - [ ] Rider do perfil descrito como "equipamentos que você já possui".
-- [ ] Candidatura: "O que você precisa que a casa disponibilize" — adicionar do catálogo, item livre, quantidade, "Preencher a partir do meu perfil"; após enviar, vai para "Minhas candidaturas".
+- [ ] Candidatura: "O que você precisa que a casa disponibilize" — vem marcado o inventário da casa, menos o que já está no rider ("você já tem"); adicionar do catálogo, item livre, quantidade, "Desmarcar o que já tenho no rider".
 - [ ] Casa: candidatura mostra as necessidades e "Comparar necessidades" com o inventário.
 - [ ] Topo sem "Casas de show"; digitar na busca da página inicial filtra sem apertar Enter.
 - [ ] Eventos clicáveis: card de show na home, "Próximos shows" da casa, "Próximos eventos" do artista, agenda e negociação.
@@ -97,3 +97,5 @@ Marque ✔/✘ e anote o problema.
 - [ ] "Contratar nas condições": confirma na hora com data/duração/cachê do evento; sem cachê definido fica indisponível.
 - [ ] Registrar apresentação como realizada abre a avaliação (0 a 5 estrelas + comentário); o outro lado recebe o pedido; notas aparecem no perfil do artista e na página da casa.
 - [ ] Celular: textos da tela de negociação não quebram palavras no meio.
+
+- [ ] Rider: o editor pede "Quantidade que você tem"; "Comparar rider" mostra "os dois têm / a casa tem menos / só no rider" (informativo).

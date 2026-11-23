@@ -42,11 +42,12 @@ test('MVP: perfil, banda, convite e transferência, casa, evento, vagas, negocia
   await ana.page.getByRole('tab', { name: 'Rider (equipamentos)' }).click();
   await expect(ana.page.getByRole('checkbox', { name: 'Incluir Ponto de energia 220V' })).toHaveCount(0);
   await expect(ana.page.getByRole('checkbox', { name: 'Incluir Área de palco' })).toHaveCount(0);
+  // Rider = o que a artista já TEM e leva (não é lista de exigências).
+  await expect(ana.page.getByText('já possui')).toBeVisible();
   await ana.page.getByRole('checkbox', { name: 'Incluir Microfone dinâmico' }).check();
-  await ana.page.getByLabel('Quantidade necessária de Microfone dinâmico').fill('2');
+  await ana.page.getByLabel('Quantidade que você tem de Microfone dinâmico').fill('2');
   await ana.page.getByRole('checkbox', { name: 'Incluir Caixa direta (DI)' }).check();
-  await ana.page.getByLabel('Quantidade necessária de Caixa direta (DI)').fill('3');
-  await ana.page.getByRole('checkbox', { name: 'Incluir Bateria completa' }).check();
+  await ana.page.getByLabel('Quantidade que você tem de Caixa direta (DI)').fill('1');
   await ana.page.getByRole('button', { name: 'Adicionar item personalizado' }).click();
   await ana.page.getByLabel('Nome do item personalizado').fill('Pedal looper');
   await ana.page.getByRole('button', { name: 'Salvar rider' }).click();
@@ -166,14 +167,26 @@ test('MVP: perfil, banda, convite e transferência, casa, evento, vagas, negocia
   await ana.page.getByRole('button', { name: /^Candidatar-se por R\$/ }).click();
   await expect(ana.page.getByRole('dialog', { name: `Candidatura — ${eventTitle}` })).toBeVisible();
   await ana.page.getByLabel('Candidatar-se como').selectOption({ label: `${artistName} (Perfil individual)` });
-  // O que a artista precisa que a casa disponibilize: preenchido a partir do perfil (rider) e ajustável.
+  // O que a artista precisa que a casa disponibilize. O rider é o que ela já tem: o que está no rider NÃO vem
+  // marcado (ela leva o próprio); o resto do inventário da casa vem marcado.
   const needs = ana.page.getByRole('group', { name: 'O que você precisa que a casa disponibilize' });
-  // O inventário da casa já vem marcado; a artista ajusta a quantidade e completa com o perfil.
-  await expect(needs.getByRole('checkbox', { name: /Microfone dinâmico/ })).toBeChecked();
-  await expect(needs.getByRole('checkbox', { name: /Caixa direta/ })).toBeChecked();
+  const mic = needs.getByRole('checkbox', { name: /Microfone dinâmico/ });
+  await expect(mic).not.toBeChecked();
+  await expect(needs.getByText(/Microfone dinâmico.*você já tem/)).toBeVisible();
+  const di = needs.getByRole('checkbox', { name: /Caixa direta/ });
+  await expect(di).not.toBeChecked();
+  // Ela tem 1 DI e precisa de 3: pede à casa.
+  await di.check();
   await needs.getByLabel('Quantidade de Caixa direta (DI)').fill('3');
-  await needs.getByRole('button', { name: 'Preencher a partir do meu perfil' }).click();
-  await expect(needs.getByText('Pedal looper')).toBeVisible();
+  // "Desmarcar o que já tenho no rider" tira o DI de novo; ela volta a pedir.
+  await needs.getByRole('button', { name: 'Desmarcar o que já tenho no rider' }).click();
+  await expect(di).not.toBeChecked();
+  await di.check();
+  await needs.getByLabel('Quantidade de Caixa direta (DI)').fill('3');
+  await needs.getByLabel('Adicionar equipamento').selectOption({ label: 'Bateria completa' });
+  await needs.getByPlaceholder('Outro item (ex.: pedal looper)').fill('Cabo P10 extra');
+  await needs.getByRole('button', { name: 'Adicionar', exact: true }).click();
+  await expect(needs.getByText('Cabo P10 extra')).toBeVisible();
   await ana.page.getByLabel('Mensagem para a casa').fill('Tenho repertório autoral para a noite.');
   await expect(ana.page.getByRole('radio', { name: /Aceito o cachê publicado/ })).toBeChecked();
   await ana.page.getByRole('button', { name: 'Revisar e enviar' }).click();
@@ -192,10 +205,12 @@ test('MVP: perfil, banda, convite e transferência, casa, evento, vagas, negocia
   await expect(vera.page.getByText('Precisa que a casa disponibilize')).toBeVisible();
   await vera.page.getByRole('button', { name: 'Comparar necessidades' }).click();
   const cmp = vera.page.getByRole('dialog', { name: 'Compatibilidade técnica' });
-  await expect(cmp.getByRole('row', { name: /Microfone dinâmico.*Compatível/ })).toBeVisible();
+  // Compara só o que foi PEDIDO à casa (o microfone ela leva: não aparece).
+  await expect(cmp.locator('th', { hasText: /pedido à casa/i })).toBeVisible();
+  await expect(cmp.getByRole('row', { name: /Microfone dinâmico/ })).toHaveCount(0);
   await expect(cmp.getByRole('row', { name: /Caixa direta.*Parcialmente disponível/ })).toBeVisible();
   await expect(cmp.getByRole('row', { name: /Bateria completa.*Indisponível/ })).toBeVisible();
-  await expect(cmp.getByRole('row', { name: /Pedal looper.*Conferir com a casa/ })).toBeVisible();
+  await expect(cmp.getByRole('row', { name: /Cabo P10 extra.*Conferir com a casa/ })).toBeVisible();
   await cmp.getByRole('button', { name: 'Fechar' }).click();
 
   // Selecionar abre a negociação já com o cachê publicado (sem redigitar) e NÃO ocupa a vaga.
@@ -218,7 +233,7 @@ test('MVP: perfil, banda, convite e transferência, casa, evento, vagas, negocia
   await expect(ana.page.getByText('Nova proposta de contratação').first()).toBeVisible();
   await ana.page.goto(bookingUrl.replace(/^https?:\/\/[^/]+/, ''));
   await expect(ana.page.locator('.offer').first()).toContainText('800');
-  await ana.page.getByRole('button', { name: 'Comparar rider com o inventário da casa' }).click();
+  await ana.page.getByRole('button', { name: 'Comparar o pedido à casa com o inventário' }).click();
   await expect(ana.page.getByRole('dialog', { name: 'Compatibilidade técnica' })).toBeVisible();
   await ana.page.getByRole('dialog', { name: 'Compatibilidade técnica' }).getByRole('button', { name: 'Fechar' }).click();
   await ana.page.getByRole('button', { name: 'Contraproposta' }).click();

@@ -464,7 +464,7 @@ export function BookingPage() {
             {b.canCompareRider && b.mySide && (
               <div className="row" style={{ justifyContent: 'flex-start' }}>
                 <button type="button" className="btn sm ghost" onClick={() => setCompareOpen(true)}>
-                  Comparar rider com o inventário da casa
+                  {b.applicationId ? 'Comparar o pedido à casa com o inventário' : 'Ver rider do artista × inventário da casa'}
                 </button>
               </div>
             )}

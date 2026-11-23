@@ -3,14 +3,15 @@ import { useSearchParams } from 'react-router';
 import { PageHead } from '../../components/Layout';
 import { Empty, ErrorState, Loading, Status } from '../../components/States';
 import { api } from '../../lib/api';
-import { COMPAT_STATUS } from '../../lib/format';
+import { COMPAT_STATUS, RIDER_VS_VENUE } from '../../lib/format';
 import { useMe } from '../../lib/hooks';
 import type { CompatibilityResult, VenueCard } from '../../lib/types';
 
 /**
- * Resultado da comparação determinística feita no backend, item a item, com justificativa.
- * Com applicationId: compara o que o artista disse precisar da casa na candidatura (reunião 19/11 — o rider do
- * perfil representa o que ele já possui). Sem: compara o rider do perfil com a casa.
+ * Comparação determinística feita no backend, item a item.
+ * Com applicationId: o que o artista PEDIU à casa na candidatura × inventário (atende / falta).
+ * Sem: o RIDER (o que o artista tem e leva) × inventário — informativo: mostra o que a casa também tem (o artista
+ * pode combinar de usar o da casa) e o que só ele tem (leva o próprio). Não há "necessário" nesse modo.
  */
 export function CompatibilityView({ artistId, organizationId, applicationId }: { artistId?: string; organizationId?: string; applicationId?: string | null }) {
   const byApplication = !!applicationId;
@@ -19,34 +20,44 @@ export function CompatibilityView({ artistId, organizationId, applicationId }: {
     queryFn: () =>
       api.get<CompatibilityResult>(byApplication ? `/applications/${applicationId}/compatibility` : `/artists/${artistId}/compatibility/${organizationId}`),
   });
-  if (q.isLoading) return <Loading label="Comparando rider e inventário…" />;
+  if (q.isLoading) return <Loading label={byApplication ? 'Comparando o pedido com o inventário…' : 'Comparando rider e inventário…'} />;
   if (q.error) return <ErrorState error={q.error} retry={q.refetch} />;
   const r = q.data!;
+  const labels = byApplication ? COMPAT_STATUS : RIDER_VS_VENUE;
+  /** No modo rider, o motivo é informativo (quem leva o quê), não falta de algo exigido. */
+  const riderReason = (i: (typeof r.items)[number]) =>
+    i.status === 'COMPATIBLE'
+      ? `A casa também tem (${i.available} ${i.unit}): dá para combinar de usar o da casa.`
+      : i.status === 'PARTIALLY_AVAILABLE'
+        ? `A casa tem ${i.available} ${i.unit}; você tem ${i.required}.`
+        : i.status === 'UNAVAILABLE'
+          ? 'A casa não tem: leve o seu.'
+          : i.reason;
   return (
     <section className="box" aria-label="Resultado da comparação">
       <div className="row between">
-        <h2 style={{ fontSize: 18, fontWeight: 800 }}>{byApplication ? 'Necessidades do artista' : 'Rider'} × {r.organization.name}</h2>
+        <h2 style={{ fontSize: 18, fontWeight: 800 }}>{byApplication ? 'Pedido à casa' : 'Rider (o que o artista leva)'} × {r.organization.name}</h2>
         <div className="sum">
           {(['COMPATIBLE', 'PARTIALLY_AVAILABLE', 'UNAVAILABLE', 'NEEDS_CHECK'] as const).map((s) => (
-            <span key={s} className={`st ${COMPAT_STATUS[s][1]}`}>
-              {r.summary[s]} {COMPAT_STATUS[s][0].toLowerCase()}
+            <span key={s} className={`st ${labels[s][1]}`}>
+              {r.summary[s]} {labels[s][0].toLowerCase()}
             </span>
           ))}
         </div>
       </div>
       {!r.inventoryRegistered && <div className="inline-msg info">Esta casa ainda não cadastrou inventário: os itens aparecem como indisponíveis até confirmação.</div>}
       {r.items.length === 0 ? (
-        <Empty title={byApplication ? 'Nada pedido à casa' : 'Rider vazio'}>{byApplication ? 'O artista não pediu equipamentos à casa nesta candidatura.' : 'Cadastre itens no rider para comparar.'}</Empty>
+        <Empty title={byApplication ? 'Nada pedido à casa' : 'Rider vazio'}>{byApplication ? 'O artista não pediu equipamentos à casa nesta candidatura.' : 'Cadastre no rider os equipamentos que você tem para comparar.'}</Empty>
       ) : (
         <div className="tscroll">
           <table>
             <thead>
               <tr>
                 <th>Item</th>
-                <th>Necessário</th>
-                <th>Disponível</th>
-                <th>Resultado</th>
-                <th>Motivo</th>
+                <th>{byApplication ? 'Pedido à casa' : 'No rider'}</th>
+                <th>{byApplication ? 'Disponível na casa' : 'Na casa'}</th>
+                <th>{byApplication ? 'Resultado' : 'Situação'}</th>
+                <th>{byApplication ? 'Motivo' : 'Observação'}</th>
               </tr>
             </thead>
             <tbody>
@@ -62,10 +73,10 @@ export function CompatibilityView({ artistId, organizationId, applicationId }: {
                   </td>
                   <td className="n">{i.available == null ? '—' : `${i.available} ${i.unit}`}</td>
                   <td>
-                    <Status value={i.status} map={COMPAT_STATUS} />
+                    <Status value={i.status} map={labels} />
                   </td>
                   <td>
-                    {i.reason}
+                    {byApplication ? i.reason : riderReason(i)}
                     {i.venueNotes && <small className="hint" style={{ display: 'block' }}>Casa: {i.venueNotes}</small>}
                   </td>
                 </tr>
@@ -86,7 +97,11 @@ export function CompatibilityView({ artistId, organizationId, applicationId }: {
           </ul>
         </div>
       )}
-      <p className="note">Comparação apenas por itens do catálogo com correspondência exata. Nenhum equipamento é considerado substituto de outro.</p>
+      <p className="note">
+        {byApplication
+          ? 'Comparação apenas por itens do catálogo com correspondência exata. Nenhum equipamento é considerado substituto de outro.'
+          : 'O rider é o que o artista já tem e leva. O que ele precisa que a casa forneça é informado em cada candidatura. Comparação por itens do catálogo com correspondência exata.'}
+      </p>
     </section>
   );
 }
@@ -109,7 +124,10 @@ export function ComparePage() {
   };
   return (
     <>
-      <PageHead title="Comparar rider" subtitle="Veja, item a item, o que uma casa de show tem disponível para o seu rider." />
+      <PageHead
+        title="Comparar rider"
+        subtitle="Veja, item a item, o que você já leva e o que a casa também tem — ajuda a decidir o que pedir à casa na candidatura."
+      />
       {identities.length === 0 ? (
         <Empty title="Você ainda não tem um perfil artístico">Crie seu perfil individual ou uma banda para cadastrar um rider.</Empty>
       ) : (

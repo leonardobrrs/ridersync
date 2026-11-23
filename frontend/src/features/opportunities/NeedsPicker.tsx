@@ -15,9 +15,10 @@ export function needLabel(n: Need, catalog: { id: string; name: string; unit: st
 }
 
 /**
- * Candidatura: o que o artista precisa que a casa disponibilize. O rider do perfil representa o que ele já possui;
- * aqui ele informa o que falta para este evento — escolhendo manualmente ou preenchendo a partir do perfil.
- * Em evento numa casa de show, o inventário da casa já vem marcado (o artista desmarca o que não vai usar).
+ * Candidatura: o que o artista precisa que a casa disponibilize. O rider do perfil é o que ele JÁ TEM e leva.
+ * Em evento numa casa de show, vem marcado o que a casa oferece, exceto o que já está no rider do artista
+ * (ele leva o próprio) — a marcação automática "de acordo com o que já tem no perfil" (reunião 19/11).
+ * O artista ajusta à vontade: marca o que quiser usar da casa e adiciona o que mais precisar.
  */
 export function NeedsPicker({
   artistId,
@@ -38,39 +39,37 @@ export function NeedsPicker({
   const sameItem = (n: Need, i: RiderItem) => (i.catalogItemId ? n.catalogItemId === i.catalogItemId : !n.catalogItemId && n.customName === (i.customName ?? i.name));
   const isOffered = (n: Need) => offered.some((i) => sameItem(n, i));
   const toNeed = (i: RiderItem): Need => ({ catalogItemId: i.catalogItemId, customName: i.catalogItemId ? null : (i.customName ?? i.name), quantity: Math.min(999, Math.max(1, i.quantity)) });
-  // Marca de saída o que a casa oferece (uma vez por casa), sem apagar o que o artista já escolheu.
+  const owned = rider.data?.items ?? [];
+  const ownsItem = (i: RiderItem) => owned.some((o) => (i.catalogItemId ? o.catalogItemId === i.catalogItemId : !o.catalogItemId && (o.customName ?? o.name) === (i.customName ?? i.name)));
+  const ownsNeed = (n: Need) => owned.some((o) => sameItem(n, o));
+  // Marca de saída o que a casa oferece e o artista ainda não tem (uma vez por casa e identidade), sem apagar o que
+  // ele já escolheu. Espera o rider carregar para não marcar algo que ele mesmo leva.
   const prefilled = useRef<string | null>(null);
   useEffect(() => {
-    if (!venueSlug || !venue.data || prefilled.current === venueSlug) return;
-    prefilled.current = venueSlug;
-    const missing = venue.data.equipment.filter((i) => !value.some((n) => sameItem(n, i)));
+    const key = `${venueSlug}:${artistId}`;
+    if (!venueSlug || !venue.data || (!rider.data && !rider.isError) || prefilled.current === key) return;
+    prefilled.current = key;
+    const missing = venue.data.equipment.filter((i) => !ownsItem(i) && !value.some((n) => sameItem(n, i)));
     if (missing.length) onChange([...value, ...missing.map(toNeed)]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [venueSlug, venue.data]);
+  }, [venueSlug, artistId, venue.data, rider.data, rider.isError]);
   const setQty = (n: Need, quantity: number) => onChange(value.map((x) => (x === n ? { ...x, quantity: Math.max(1, Math.min(999, quantity || 1)) } : x)));
   const others = value.filter((n) => !isOffered(n));
   const [pick, setPick] = useState('');
   const [custom, setCustom] = useState('');
   const has = (catalogItemId: string) => value.some((n) => n.catalogItemId === catalogItemId);
   const add = (n: Need) => onChange([...value, n]);
-  const fromProfile = () => {
-    const items = rider.data?.items ?? [];
-    const next = [...value];
-    for (const i of items) {
-      if (i.catalogItemId && !next.some((n) => n.catalogItemId === i.catalogItemId)) next.push({ catalogItemId: i.catalogItemId, customName: null, quantity: i.quantity });
-      if (!i.catalogItemId && i.customName && !next.some((n) => n.customName === i.customName)) next.push({ catalogItemId: null, customName: i.customName, quantity: i.quantity });
-    }
-    onChange(next);
-  };
+  /** Tira das necessidades o que já está no rider (o artista leva o próprio). */
+  const dropOwned = () => onChange(value.filter((n) => !ownsNeed(n)));
   const categories = [...new Set((catalog ?? []).map((c) => c.category))];
   return (
     <fieldset className="needs">
       <legend>O que você precisa que a casa disponibilize</legend>
-      <small className="hint">Seu rider (no perfil) mostra o que você já tem. Marque aqui o que a casa precisa fornecer para este show.</small>
+      <small className="hint">Seu rider (no perfil) é o que você já tem e leva. Aqui você marca só o que a casa precisa fornecer para este show.</small>
       {offered.length > 0 && (
         <div className="needs-offered">
           <strong className="needs-sub">Já oferecido pela casa</strong>
-          <small className="hint">Vem marcado o que {venue.data!.name} tem. Desmarque o que você não vai usar.</small>
+          <small className="hint">Vem marcado o que {venue.data!.name} tem e você não tem no rider. Ajuste conforme o show.</small>
           <ul className="needs-list">
             {offered.map((i) => {
               const n = value.find((x) => sameItem(x, i));
@@ -79,7 +78,7 @@ export function NeedsPicker({
                   <label className="fchk needs-name">
                     <input type="checkbox" checked={!!n} onChange={() => onChange(n ? value.filter((x) => x !== n) : [...value, toNeed(i)])} />
                     <span>
-                      {i.name} <small className="muted">(a casa tem {i.quantity})</small>
+                      {i.name} <small className="muted">(a casa tem {i.quantity}{ownsItem(i) ? ' · você já tem' : ''})</small>
                     </span>
                   </label>
                   {n ? (
@@ -170,8 +169,8 @@ export function NeedsPicker({
             Adicionar
           </button>
         </div>
-        <button type="button" className="btn sm ghost" onClick={fromProfile} disabled={!rider.data?.items.length}>
-          Preencher a partir do meu perfil
+        <button type="button" className="btn sm ghost" onClick={dropOwned} disabled={!value.some(ownsNeed)}>
+          Desmarcar o que já tenho no rider
         </button>
       </div>
     </fieldset>

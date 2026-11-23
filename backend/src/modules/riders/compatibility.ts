@@ -1,5 +1,7 @@
 /**
- * RiderCompatibility — comparação determinística e explicável entre rider e inventário.
+ * RiderCompatibility — comparação determinística e explicável entre uma lista de equipamentos e o inventário da casa.
+ * Usada com o que o artista PEDIU à casa na candidatura ("necessário" = pedido) e, de forma informativa, com o rider
+ * (o que o artista tem e leva) — nesse caso o frontend apresenta o resultado como "quem leva o quê".
  * Regras (por item):
  *  - item personalizado / sem ID de catálogo → NEEDS_CHECK (sem correspondência automática)
  *  - disponível >= necessário                → COMPATIBLE
@@ -80,7 +82,7 @@ export function compareRider(requirements: RiderRequirement[], inventory: Invent
         available: 0,
         missing: req.quantity,
         status: 'UNAVAILABLE',
-        reason: `Item não consta no inventário da casa. Necessário: ${fmt(req.quantity, req.unit)}.`,
+        reason: `Item não consta no inventário da casa. Pedido: ${fmt(req.quantity, req.unit)}.`,
         venueNotes: null,
       };
     }
@@ -90,7 +92,7 @@ export function compareRider(requirements: RiderRequirement[], inventory: Invent
         available: 0,
         missing: req.quantity,
         status: 'UNAVAILABLE',
-        reason: `A casa registra quantidade 0. Necessário: ${fmt(req.quantity, req.unit)}.`,
+        reason: `A casa registra quantidade 0. Pedido: ${fmt(req.quantity, req.unit)}.`,
         venueNotes: inv.notes || null,
       };
     }
@@ -100,7 +102,7 @@ export function compareRider(requirements: RiderRequirement[], inventory: Invent
         available: inv.quantity,
         missing: 0,
         status: 'COMPATIBLE',
-        reason: `Disponível ${fmt(inv.quantity, req.unit)} — atende o necessário (${fmt(req.quantity, req.unit)}).`,
+        reason: `Disponível ${fmt(inv.quantity, req.unit)} — atende o pedido (${fmt(req.quantity, req.unit)}).`,
         venueNotes: inv.notes || null,
       };
     }
@@ -110,7 +112,7 @@ export function compareRider(requirements: RiderRequirement[], inventory: Invent
       available: inv.quantity,
       missing,
       status: 'PARTIALLY_AVAILABLE',
-      reason: `Disponível ${fmt(inv.quantity, req.unit)} de ${fmt(req.quantity, req.unit)} necessários — faltam ${fmt(missing, req.unit)}.`,
+      reason: `Disponível ${fmt(inv.quantity, req.unit)} de ${fmt(req.quantity, req.unit)} pedidos — faltam ${fmt(missing, req.unit)}.`,
       venueNotes: inv.notes || null,
     };
   });
