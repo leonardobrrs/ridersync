@@ -11,13 +11,17 @@ Fonte de verdade: `backend/prisma/schema.prisma`. CHECKs que o Prisma não expre
 | `20261118200000_imagem_do_evento` | `Event.imageId` (opcional, único, FK para `MediaAsset` com `SET NULL`): imagem exibida no card do evento. Aditiva. |
 | `20261118210000_leitura_de_mensagens` | Tabela `BookingRead` (negociação × pessoa → última leitura) para o contador de mensagens não lidas. Aditiva. |
 | `20261119120000_reuniao_professor` | `EventVisibility.HIDDEN` (evento oculto), `EventApplication.needs` (JSON: o que o artista precisa da casa, CHECK de array), tabela `Review` (0–5 estrelas, uma por lado, CHECK de faixa). `Event.notes` usa a coluna existente `requirements` (`@map`). Aditiva. |
+| `20261120120000_modulo_contratos` | Dados civis para contrato (`User.legalName/cpf/rg`, `Band`/`Organization` `.legalName/cnpj`), termos de contrato na oferta (`BookingOffer`: sinal, prazos, forma de pagamento, rescisão, substituição…) e tabela `Contract` (1:1 com `Booking`). Aditiva, com CHECKs. |
+| `20261123113235_candidatura_contraproposta` | `EventApplication.proposedFeeCents` (contraproposta de cachê na candidatura; CHECK ≥ 0). Aditiva. |
+| `20261123130731_email_contato_opt_in` | `Artist.showContactEmail` e `Organization.showContactEmail` (padrão `false`): o e-mail de contato só é público quando marcado. Aditiva. |
 | `20261123140000_rider_quantidade_possuida` | `RiderItem.ownedQuantity` (padrão 0, CHECK `0 ≤ ownedQuantity ≤ quantity`). `EventApplication.needs` fica DESCONTINUADA (mantida, sem uso). Aditiva. |
 
 ## Entidades
 
 ### Conta e acesso
 - **User** — conta da pessoa. `accountType` (`ARTIST` | `CONTRACTOR`; nulo só em contas legadas, que escolhem no próximo acesso),
-  `passwordHash` (Argon2id; nulo em contas só-Google), `emailVerifiedAt`, `googleSub` (único), `avatarId` (único),
+  `passwordHash` (Argon2id; nulo em contas só-Google), `emailVerifiedAt`, `googleSub` (único), `avatarId` (legado, sem uso na interface),
+  `legalName`/`cpf`/`rg` (dados civis privados para contrato; CPF obrigatório no cadastro),
   `termsAcceptedAt`/`termsVersion` (consentimento LGPD), `failedLoginCount`/`lockedUntil`, `anonymizedAt` (conta excluída).
   CHECK `User_has_credential`: conta ativa tem senha ou Google.
 - **Session** — sessão server-side; só o hash SHA-256 do token.
@@ -32,15 +36,19 @@ Fonte de verdade: `backend/prisma/schema.prisma`. CHECKs que o Prisma não expre
 ### Contratantes
 - **Organization** — `VENUE` (casa de show, pública, com inventário) ou `INDIVIDUAL` (perfil de contratação de pessoa física,
   sem página pública e sem inventário — FK composta + CHECK `VenueEquipmentItem_venue_only`).
-- **OrganizationMember** (OWNER/ADMIN), **VenueEquipmentItem**.
+- **OrganizationMember** (OWNER/ADMIN), **VenueEquipmentItem**. Casas (`VENUE`) têm `cnpj` obrigatório na criação;
+  `showContactEmail` controla a exibição pública do e-mail de contato (o mesmo vale para `Artist`).
 
 ### Eventos e contratação
 - **Event** — `organizerId` (responsável) ≠ `venueId` (local físico, opcional). Sem `venueId`, o local fica em
   `locationName/Address/City/State` (CHECK `Event_has_location`). `visibility` (`PUBLIC`/`PRIVATE`), `status`
   (`DRAFT`,`OPEN`,`FILLED`,`CLOSED`,`POSTPONED`,`COMPLETED`,`CANCELLED`), carimbos `publishedAt`, `filledAt`,
   `closedAt`, `postponedAt`, `completedAt`, `cancelledAt`. CHECKs de vagas, prazo ≤ data e cachê.
-- **EventApplication** — única por (evento, identidade).
-- **Booking**, **BookingOffer** (histórico imutável de termos), **BookingMessage**, **BookingStatusChange** (auditoria), **Performance**.
+- **EventApplication** — única por (evento, identidade). `proposedFeeCents` = contraproposta de cachê enviada com a candidatura.
+- **Booking**, **BookingOffer** (histórico imutável de termos, inclusive os campos de contrato), **BookingMessage**,
+  **BookingRead** (última leitura por pessoa), **BookingStatusChange** (auditoria), **Performance**.
+- **Contract** — contrato gerado na confirmação (1:1 com `Booking`; conteúdo renderizado em PDF no download).
+- **Review** — avaliação pós-show, uma por lado (`VENUE`/`ARTIST`) e por negociação, 0–5 estrelas.
 
 ### Notificações
 - **Notification** — `category`, `type`, `title`, `body`, `link` (somente caminho interno — CHECK), `dedupeKey`
@@ -63,4 +71,4 @@ Fonte de verdade: `backend/prisma/schema.prisma`. CHECKs que o Prisma não expre
 
 Não há `deletedAt` genérico. Estados de negócio substituem a exclusão (`CANCELLED`, `WITHDRAWN`, `LEFT`, `REMOVED`).
 A exclusão de conta (LGPD) apaga o que não tem histórico com terceiros e **anonimiza** o restante (`User.anonymizedAt`,
-artista “Artista removido”, contratante individual “Contratante removido”) — ver `docs/LGPD.md`.
+artista “Artista removido”, contratante individual “Contratante removido”) — ver `docs/product/LGPD.md`.

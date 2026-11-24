@@ -23,20 +23,23 @@
 | Módulo | Conteúdo |
 |---|---|
 | `auth` | Cadastro (tipo de conta, senha forte, aceite LGPD), login com bloqueio por tentativas, sessões (cookie HttpOnly), confirmação de e-mail, recuperação de senha, Google OAuth (PKCE), reautenticação por senha. |
-| `account` | Nome, avatar, troca/definição de senha, tipo de conta (contas legadas), aceite de termos, exportação de dados e exclusão/anonimização (LGPD). |
+| `account` | Nome, dados civis para contrato (nome completo, CPF, RG), CPF no primeiro acesso de contas Google, troca/definição de senha, tipo de conta (contas legadas), aceite de termos, exportação de dados e exclusão/anonimização (LGPD). A foto exibida é a do perfil/casa (não há foto de conta). |
 | `access` | Autorização baseada em vínculo (`ACTIVE` + papel), tipo de conta, destinatários de notificações. |
 | `artists` | Perfil individual, gestão comum de identidade artística (solo/banda), portfólio (miniaturas de vídeo). |
 | `bands` | Banda, convites, papéis, função do integrante, transferência de propriedade com senha. |
 | `organizations` | Casas de show (VENUE) e perfil de contratação individual (INDIVIDUAL), responsáveis, convites, transferência. |
 | `events` | Eventos (públicos/privados, com casa ou independentes), candidaturas, vagas, ciclo de vida automático, agenda pública. |
-| `bookings` | Negociação (proposta direta/convite ou a partir de candidatura), contrapropostas, mensagens, confirmação, apresentação realizada. |
-| `riders` | Catálogo técnico, rider do artista (sem exigências do local), inventário da casa, comparação determinística. |
+| `bookings` | Negociação (proposta direta/convite ou a partir de candidatura — começa com o cachê do evento ou com a contraproposta enviada na candidatura), contrapropostas, mensagens, confirmação com verificação de conflito de agenda (advisory locks), apresentação realizada. |
+| `riders` | Catálogo técnico, rider do artista (o que ele precisa, com a quantidade que já possui), inventário da casa, comparação determinística (a casa cobre só a diferença). |
 | `marketplace` | Página inicial, busca de artistas e casas, perfis públicos. |
 | `notifications` | Central de notificações, preferências, outbox de e-mail, descadastro assinado. |
-| `mail` | Transporte de e-mail (Resend real / log de desenvolvimento / desativado) e templates. |
+| `mail` | Transporte de e-mail (Brevo ou Resend reais / log de desenvolvimento / desativado) e templates. |
 | `media` | Upload validado por assinatura, reprocessamento de imagens (sharp), política de acesso a arquivos. |
 | `maintenance` | Rotina diária (Cron da Vercel): transições por data, reenvio de e-mails, política de retenção. |
-| `dashboard` | Painel e agenda privada. |
+| `dashboard` | Painel, agenda privada e `GET /me/pulse` (assinatura do estado do usuário para atualização em tempo real por consulta periódica, sem WebSocket/Redis). |
+| `contracts` | Contrato em PDF gerado na confirmação (templates por tipo de contratante), prontidão dos dados e atualização. Regras puras em `contract-data.rules.ts`. |
+| `reviews` | Avaliação pós-show (0–5 estrelas, uma por lado) de contratações confirmadas já realizadas. Regras em `review.rules.ts`. |
+| `admin` | Painel de administração em `/adm` com sessão própria (credenciais `ADMIN_USERNAME`/`ADMIN_PASSWORD_HASH` do ambiente): visão geral e remoção moderada de usuários, perfis, casas, eventos e negociações. |
 
 ## Máquinas de estado
 
@@ -96,7 +99,7 @@ de senha) são enviados diretamente e **não** ficam no outbox. Categoria `ACCOU
 
 ## Segurança (resumo)
 
-Ver também `docs/LGPD.md`. Sessão server-side (cookie HttpOnly, SameSite=Lax, Secure em produção, token só como hash);
+Ver também `docs/product/LGPD.md`. Sessão server-side (cookie HttpOnly, SameSite=Lax, Secure em produção, token só como hash);
 CSRF por cabeçalho `X-Requested-With` + verificação de `Origin`; CORS por lista explícita; Argon2id (migração
 transparente do scrypt legado); bloqueio de conta após tentativas; rate limit por rota sensível; autorização por vínculo
 em todo endpoint protegido; IDs UUID; `select` explícito nas consultas públicas; erros sem detalhes internos;

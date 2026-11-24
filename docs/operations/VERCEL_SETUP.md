@@ -71,7 +71,7 @@ de rotas. Atenção: regras de projeto valem para **todos** os ambientes, inclus
 ## Publicar um Preview da versão de 2026-11-18 (evolução: contas, eventos, notificações, LGPD)
 
 Pré-requisitos já feitos: variáveis `APP_SECRET`, `CRON_SECRET` e `PUBLIC_APP_URL` criadas em Preview/Development
-(ver `docs/VARIAVEIS_DE_AMBIENTE.md`). Nada disto toca o Neon **Production**.
+(ver `docs/operations/VARIAVEIS_DE_AMBIENTE.md`). Nada disto toca o Neon **Production**.
 
 1. Ponto de restauração do staging (Neon CLI): `neon branches create --name staging-pre-evolucao --parent ridersync-staging`.
 2. Migration no staging (não destrutiva, com trava de branch): `npm run db:migrate:neon:staging -w backend`.
@@ -81,10 +81,10 @@ Pré-requisitos já feitos: variáveis `APP_SECRET`, `CRON_SECRET` e `PUBLIC_APP
    vercel deploy --project ridersync --scope projetao2 --yes
    vercel alias set <URL-da-API> ridersync-api-staging.vercel.app --scope projetao2
    ```
-4. Dados de demonstração (opcional): ver `docs/SEEDERS.md`.
+4. Dados de demonstração (opcional): ver `docs/development/SEEDERS.md`.
 5. Deploy do front (Preview): `vercel deploy --project ridersync-front --scope projetao2 --yes`.
-6. Validar com `docs/CHECKLIST_TESTES_MANUAIS.md`.
-7. Credenciais externas pendentes (Resend e Google): `docs/PROVEDORES_EXTERNOS.md`.
+6. Validar com `docs/development/CHECKLIST_TESTES_MANUAIS.md`.
+7. Credenciais externas pendentes (Resend e Google): `docs/operations/PROVEDORES_EXTERNOS.md`.
 
 Rollback: reatribuir o alias `ridersync-api-staging.vercel.app` ao deployment anterior da API e, se necessário,
 restaurar o staging a partir da branch do passo 1 (a migration não remove dados; ver `ROLLBACK.md` da migration).

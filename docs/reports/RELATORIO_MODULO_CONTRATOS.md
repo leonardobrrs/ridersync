@@ -1,6 +1,6 @@
 # Relatório — Módulo de Contratos
 
-Branch: `feat/contracts-module` · Data: 2026-11-20 · Decisões e diferenças em relação à spec: `docs/DECISOES_TECNICAS.md`.
+Branch: `feat/contracts-module` · Data: 2026-11-20 · Decisões e diferenças em relação à spec: `docs/decisions/DECISOES_TECNICAS.md`.
 
 Legenda: `[x]` feito e verificado nesta máquina · `[~]` feito, com adaptação ao modelo real (ver nota) · `[ ]` não verificado/pendente.
 

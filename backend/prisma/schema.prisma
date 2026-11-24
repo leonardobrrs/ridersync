@@ -1,5 +1,5 @@
 // RiderSync — modelo relacional do MVP.
-// Decisões documentadas em docs/DECISOES_TECNICAS.md.
+// Decisões documentadas em docs/decisions/DECISOES_TECNICAS.md.
 // Constraints que o Prisma não expressa (CHECK) são adicionadas via SQL nas migrations.
 // Editais/oportunidades culturais estão ADIADOS: não adicionar modelos relacionados.
 

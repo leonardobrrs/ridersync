@@ -1,6 +1,6 @@
 # RiderSync — Checklist de testes manuais (Preview)
 
-Use contas do seed (`docs/SEEDERS.md`, senha `Demo@RiderSync2026`) e contas novas. Teste em celular, tablet e desktop.
+Use contas do seed (`docs/development/SEEDERS.md`, senha `Demo@RiderSync2026`) e contas novas. Teste em celular, tablet e desktop.
 Marque ✔/✘ e anote o problema.
 
 ## Cadastro, acesso e conta

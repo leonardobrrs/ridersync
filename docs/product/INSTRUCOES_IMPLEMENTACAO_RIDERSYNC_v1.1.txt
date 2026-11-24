@@ -8,7 +8,7 @@ Versão: 1.1 — editais adiados para versão futura
 
 Este arquivo estabelece as decisões técnicas e as regras de execução que devem orientar o desenvolvimento da plataforma RiderSync, também descrita como Plataforma de Profissionalização Artística.
 
-Use estas instruções como referência permanente ao trabalhar no repositório com Claude Code/Claude Opus ou outro agente de programação.
+Use estas instruções como referência permanente ao trabalhar no repositório.
 
 A plataforma deve ajudar músicos independentes, bandas e casas de show/espaços culturais a organizar sua presença profissional, divulgar portfólios e riders técnicos, descobrir oportunidades de apresentação, receber candidaturas e negociar contratações. Editais/oportunidades culturais estão adiados e fora do MVP atual.
 
@@ -298,7 +298,7 @@ Regras obrigatórias:
 - Não versionar arquivos .env com segredos reais.
 - Tratar erros sem expor stack traces ou informações sensíveis ao usuário final.
 
-A escolha final de cookie/sessão ou outra estratégia deve ser registrada em docs/DECISOES_TECNICAS.md.
+A escolha final de cookie/sessão ou outra estratégia deve ser registrada em docs/decisions/DECISOES_TECNICAS.md.
 
 ====================================================================
 8. ARQUIVOS, IMAGENS E PORTFÓLIO
@@ -468,7 +468,7 @@ ETAPA 9 — Acabamento e entrega
 Não iniciar todas as etapas ao mesmo tempo. Concluir e validar uma fatia antes de expandir para a seguinte.
 
 ====================================================================
-12. COMO O AGENTE DE PROGRAMAÇÃO DEVE TRABALHAR
+12. COMO DESENVOLVER NESTE REPOSITÓRIO
 ====================================================================
 
 Antes de alterar código:

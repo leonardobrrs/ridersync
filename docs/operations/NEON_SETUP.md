@@ -45,7 +45,7 @@ Proteção no Git: `.gitignore` da raiz (`.env`, `.env.*`, `.neon`) e `backend/.
 Verificado com `git check-ignore` antes de baixar as credenciais.
 
 Driver: mantido o **Prisma Client padrão (engine nativo, TCP)** — adequado para um servidor NestJS de longa duração,
-conforme a skill `neon-postgres` (preservar ORM/driver existente; pooled para a aplicação, direta para migrations).
+seguindo as recomendações do Neon (preservar ORM/driver existente; pooled para a aplicação, direta para migrations).
 `schema.prisma`, migrations e a versão do Prisma (6.19.3) **não foram alterados**.
 
 Para regenerar as credenciais de staging:

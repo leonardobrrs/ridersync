@@ -28,14 +28,16 @@ npm run build
 E-mails nos testes: o driver `log` **não envia nada**; grava as mensagens em JSON (`MAIL_DEV_OUTBOX_DIR`), lidas pelos
 testes para obter links de confirmação/redefinição.
 
-## Cobertura (resultado da execução de 2026-11-18)
+## Cobertura (resultado da execução de 2026-11-24)
+
+Números de uma execução datada — eles mudam a cada entrega; rode as suítes para o valor atual.
 
 | Suíte | Arquivos | Resultado |
 |---|---|---|
-| Backend — unitários | `src/**/*.spec.ts` (13 arquivos) | **passando** |
-| Backend — integração | `test/*.e2e-spec.ts` (8 arquivos) | **passando** — total backend: 201 testes |
-| Frontend — unitários | `src/**/*.test.tsx?` (3 arquivos) | **13 passando** |
-| Playwright | `e2e/*.spec.ts` (4 arquivos) | **17 passando** (desktop 10, tablet 3, celular 4) |
+| Backend — unitários | `src/**/*.spec.ts` (24 arquivos) | **222 passando** |
+| Backend — integração | `test/*.e2e-spec.ts` (14 arquivos) | **146 passando** (total backend: 368) |
+| Frontend — unitários e componentes | `src/**/*.test.ts(x)` (13 arquivos) | **59 passando** |
+| Playwright | `e2e/*.spec.ts` (9 arquivos) | **33 passando** (desktop, tablet e celular) |
 
 ### O que é testado
 
@@ -62,5 +64,5 @@ testes para obter links de confirmação/redefinição.
 
 ### Não coberto automaticamente
 
-- Login com Google real e entrega real de e-mail (dependem de credenciais externas — ver `docs/PROVEDORES_EXTERNOS.md`).
+- Login com Google real e entrega real de e-mail (dependem de credenciais externas — ver `docs/operations/PROVEDORES_EXTERNOS.md`).
 - Upload contra o Vercel Blob real (o driver foi validado manualmente em 2026-11-17; os testes usam storage local).

@@ -59,4 +59,4 @@ armazenados apenas como hash e de uso único; erros sem detalhes internos.
 ## Retenção automatizada
 
 `MaintenanceService` (`backend/src/modules/maintenance/maintenance.module.ts`, constante `RETENTION`), executado pelo
-Cron diário da Vercel (somente em Production; ver `docs/PROVEDORES_EXTERNOS.md`).
+Cron diário da Vercel (somente em Production; ver `docs/operations/PROVEDORES_EXTERNOS.md`).

@@ -70,7 +70,7 @@ proposta para perfil privado, autonegociação, upload com tipo falso, link não
 
 ## Vercel Preview / staging (2026-11-17)
 
-Detalhes em `docs/VERCEL_SETUP.md`.
+Detalhes em `docs/operations/VERCEL_SETUP.md`.
 
 - API (`ridersync`): Node 22.x, `gru1`, Standard Protection mantida + segredo *Protection Bypass for Automation*.
   Variáveis Preview/Development: `COOKIE_SECURE=true`, `CORS_ORIGINS`, `STORAGE_DRIVER=vercel-blob`,
@@ -83,10 +83,10 @@ Detalhes em `docs/VERCEL_SETUP.md`.
   as variáveis de Development (registro, login, `/auth/me`, CSRF sem cabeçalho e com Origin estranha → 403,
   upload/leitura/exclusão de foto, logout → 401). Usuário sintético removido do staging; store vazio.
 
-## Evolução completa (2026-11-18) — `requisitos_ridersync.md`
+## Evolução completa (2026-11-18) — `docs/product/REQUISITOS_EVOLUCAO_2026-11-18.md`
 
-Detalhes: `docs/RELATORIO_EVOLUCAO.md` (situação de cada requisito), `docs/CHECKLIST_IMPLEMENTACAO.md`,
-`docs/CHECKLIST_TESTES_MANUAIS.md`, `docs/ARQUITETURA.md`, `docs/LGPD.md`.
+Detalhes: `docs/reports/RELATORIO_EVOLUCAO.md` (situação de cada requisito), `docs/reports/CHECKLIST_IMPLEMENTACAO.md`,
+`docs/development/CHECKLIST_TESTES_MANUAIS.md`, `docs/architecture/ARQUITETURA.md`, `docs/product/LGPD.md`.
 
 - Contas por tipo (artista × contratante), senha forte (Argon2id), confirmação de e-mail, recuperação de senha, bloqueio por
   tentativas, Google OAuth (aguarda credenciais), exportação/exclusão de conta (LGPD), política/termos versionados.
@@ -126,7 +126,7 @@ Detalhes: `docs/RELATORIO_EVOLUCAO.md` (situação de cada requisito), `docs/CHE
 | Auditoria de layout com dados extremos (7 páginas públicas + 5 do painel × 6 larguras) | 46/72 com problema antes → **0/72** depois |
 | `npm run build` | API e SPA ok |
 
-## Reunião de 18/11 (`docs/reuniao18_11.md`)
+## Reunião de 18/11 (`docs/product/reunioes/2026-11-18.md`)
 
 | Item | Situação |
 |---|---|
@@ -171,7 +171,7 @@ Verificação: backend 237 testes; frontend 28; Playwright 24 (desktop, tablet, 
 - Contrato PDF gerado automaticamente quando a contratação é confirmada (confirmação normal e "contratar nas condições do evento"), a partir dos templates `venue-artist.md` / `individual-artist.md`; download autenticado para as duas partes; geração sob demanda como recuperação.
 - Backend: módulo `contracts` (service, controller, regras puras `contract-data.rules.ts`, `fill-template`, `to-extenso`, `generate-pdf`), migration `20261120120000_modulo_contratos` (aditiva, com CHECKs), termos de contrato opcionais na oferta, dados civis (`User`), razão social/CNPJ (`Band`, `Organization`), LGPD (exportação e anonimização).
 - Frontend: seção "Condições do contrato" na proposta/contraproposta, cartão "Contrato" na negociação, "Dados para contrato" em Conta, na casa e na banda.
-- Decisões e diferenças em relação à spec: `DECISOES_TECNICAS.md` ("Módulo de contratos"). Relatório: `CONTRACT_MODULE_REPORT.md`.
+- Decisões e diferenças em relação à spec: `DECISOES_TECNICAS.md` ("Módulo de contratos"). Relatório: `docs/reports/RELATORIO_MODULO_CONTRATOS.md`.
 - Validação: backend 190 testes unitários + 127 de integração (12 suítes, incl. `contracts.e2e-spec.ts`), frontend 38, typecheck/lint/build de ambos ok; migration aplicada e conferida num banco Supabase. **Não verificados**: PDF visual (sem poppler), Playwright, e a inclusão dos templates `.md` no bundle da Vercel (conferir no Preview).
 - Revisão (21/11): atualizar contrato com dados completados depois da confirmação (até a data do show), aviso de dados faltantes por lado antes e depois de confirmar, fonte embutida no PDF (espaçamento correto em qualquer leitor), assinaturas sem quebra de página, prazo do saldo no modelo da casa, cláusula 6ª para artista solo. Testes: integração de contratos 17, componente 7, e2e `contracts.spec.ts` (confirmação → download do PDF → atualização).
 - Revisão pós-staging (21/11): atualização do contrato liberada enquanto confirmado (também após o show); notificação e e-mail às duas partes a cada geração/atualização; botão "Meus dados para contrato" para os dois lados; e2e do contratante pessoa física.

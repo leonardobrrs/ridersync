@@ -8,7 +8,7 @@ Versão: 1.0
 
 Este arquivo estabelece as decisões técnicas e as regras de execução que devem orientar o desenvolvimento da plataforma RiderSync, também descrita como Plataforma de Profissionalização Artística.
 
-Use estas instruções como referência permanente ao trabalhar no repositório com Claude Code/Claude Opus ou outro agente de programação.
+Use estas instruções como referência permanente ao trabalhar no repositório.
 
 A plataforma deve ajudar músicos independentes, bandas e casas de show/espaços culturais a organizar sua presença profissional, divulgar portfólios e riders técnicos, descobrir oportunidades, receber candidaturas e negociar apresentações.
 
@@ -481,7 +481,7 @@ ETAPA 10 — Acabamento e entrega
 Não iniciar todas as etapas ao mesmo tempo. Concluir e validar uma fatia antes de expandir para a seguinte.
 
 ====================================================================
-12. COMO O AGENTE DE PROGRAMAÇÃO DEVE TRABALHAR
+12. COMO DESENVOLVER NESTE REPOSITÓRIO
 ====================================================================
 
 Antes de alterar código:

@@ -11,7 +11,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 
 const DAY = 24 * 3600 * 1000;
 
-/** Prazos de retenção (documentados em docs/LGPD.md — Política de retenção). */
+/** Prazos de retenção (documentados em docs/product/LGPD.md — Política de retenção). */
 export const RETENTION = {
   usedOrExpiredTokensDays: 7,
   readNotificationsDays: 180,

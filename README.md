@@ -15,7 +15,7 @@
   <img alt="PostgreSQL 16" src="https://img.shields.io/badge/PostgreSQL-16-4169E1?style=flat-square&logo=postgresql&logoColor=white&labelColor=151719">
   <img alt="Prisma 6" src="https://img.shields.io/badge/Prisma-6-2D3748?style=flat-square&logo=prisma&logoColor=white&labelColor=151719">
   <img alt="Vercel" src="https://img.shields.io/badge/deploy-Vercel-000000?style=flat-square&logo=vercel&logoColor=white&labelColor=151719">
-  <img alt="Testes" src="https://img.shields.io/badge/testes-231%20passando-1E7A45?style=flat-square&labelColor=151719">
+  <img alt="Testes" src="https://img.shields.io/badge/testes-Jest%20·%20Vitest%20·%20Playwright-1E7A45?style=flat-square&labelColor=151719">
   <img alt="LGPD" src="https://img.shields.io/badge/LGPD-documentado-FFC83A?style=flat-square&labelColor=151719">
 </p>
 
@@ -47,14 +47,15 @@
 
 O RiderSync resolve um problema real da cena musical: quem toca e quem contrata conversam por mensagens soltas, sem saber
 se o palco atende ao que o show precisa. Na plataforma, cada artista mantém um perfil profissional com portfólio e
-**rider técnico**; cada casa de show cadastra o **inventário do palco**; e o sistema compara os dois item a item antes da
-contratação. Eventos, candidaturas, propostas, mensagens e a confirmação do show ficam registrados para os dois lados.
+**rider técnico** (o que precisa para tocar e quanto disso já leva); cada casa de show cadastra o **inventário do palco**;
+e o sistema compara os dois item a item antes da contratação. Eventos, candidaturas, propostas, mensagens, a confirmação
+do show, o contrato em PDF e a avaliação pós-show ficam registrados para os dois lados.
 
 | Para quem | O que faz no RiderSync |
 |---|---|
-| **Músicos** | Perfil profissional, portfólio com fotos e vídeos, rider técnico, candidaturas e negociações | 
+| **Músicos** | Perfil profissional, portfólio com fotos e vídeos, rider técnico, candidaturas (com contraproposta de cachê) e negociações |
 | **Bandas** | Perfil, portfólio e rider próprios, integrantes com função e papel, convites e transferência de propriedade |
-| **Casas de show** | Perfil do espaço, inventário técnico, eventos públicos ou privados, análise de candidaturas e contratação |
+| **Casas de show** | Perfil do espaço (com CNPJ), inventário técnico, eventos públicos, privados ou ocultos, análise de candidaturas, contratação e contrato |
 | **Contratantes independentes** | Eventos particulares sem casa de show (aniversários, casamentos, festas) e contratação direta |
 | **Visitantes** | Busca de artistas, bandas, casas e oportunidades, sem precisar de conta |
 
@@ -71,8 +72,8 @@ contratação. Eventos, candidaturas, propostas, mensagens e a confirmação do 
     <td width="50%"><img src="docs/images/readme/casa.png" alt="Perfil público de casa de show"></td>
   </tr>
   <tr>
-    <td><b>Perfil público do artista.</b> Foto, cachê de referência, estilos, portfólio e rider em abas, próximos eventos (privados aparecem só como “Evento privado”).</td>
-    <td><b>Perfil da casa de show.</b> Galeria, capacidade, endereço, contatos públicos e oportunidades abertas.</td>
+    <td><b>Perfil público do artista.</b> Foto, cachê de referência, estilos, portfólio e rider em abas, próximos eventos, histórico de shows realizados e avaliações (eventos privados aparecem só como “Evento privado”).</td>
+    <td><b>Perfil da casa de show.</b> Galeria, capacidade, endereço, contatos com ícones, próximos shows, avaliações e oportunidades abertas.</td>
   </tr>
   <tr>
     <td colspan="2"><img src="docs/images/readme/oportunidades.png" alt="Oportunidades de apresentação"></td>
@@ -85,7 +86,9 @@ contratação. Eventos, candidaturas, propostas, mensagens e a confirmação do 
 - Busca por nome, instrumento, estilo e cidade, com categorias por instrumento e filtros combináveis
 - Cidades restritas aos **102 municípios de Alagoas**, com preenchimento automático
 - Miniaturas automáticas de vídeos do YouTube e do Vimeo no portfólio
-- Perfis, integrantes, bandas e casas com `@` clicável
+- Perfis, integrantes, bandas e casas com `@` clicável e ícones de contato (Instagram, telefone, WhatsApp, site); o e-mail
+  de contato só aparece quando o dono marca a opção
+- Tema claro e escuro, com a escolha salva no navegador
 
 ### Rider técnico e compatibilidade
 
@@ -95,14 +98,14 @@ contratação. Eventos, candidaturas, propostas, mensagens e a confirmação do 
     <td width="50%"><img src="docs/images/readme/inventario.png" alt="Inventário técnico da casa"></td>
   </tr>
   <tr>
-    <td><b>Rider do artista.</b> Itens de um catálogo técnico, com quantidade e observações. Riders de banda e de integrantes são independentes.</td>
+    <td><b>Rider do artista.</b> O que o show precisa (itens de um catálogo técnico) e quanto disso o artista já leva. Riders de banda e de integrantes são independentes.</td>
     <td><b>Inventário da casa.</b> O que o palco tem e em que quantidade. Nunca altera o rider dos artistas.</td>
   </tr>
   <tr>
     <td colspan="2"><img src="docs/images/readme/comparar.png" alt="Comparação entre rider e inventário"></td>
   </tr>
   <tr>
-    <td colspan="2"><b>Comparação determinística.</b> Cada item sai como <i>compatível</i>, <i>parcialmente disponível</i>, <i>indisponível</i> ou <i>conferir com a casa</i>, com quantidades e motivo. Só há correspondência exata de catálogo: nenhum equipamento é tratado como substituto de outro.</td>
+    <td colspan="2"><b>Comparação determinística.</b> A casa só precisa cobrir a diferença entre o que o show pede e o que o artista leva. Cada item sai como <i>compatível</i>, <i>parcialmente disponível</i>, <i>indisponível</i> ou <i>conferir com a casa</i>, com quantidades e motivo. Só há correspondência exata de catálogo: nenhum equipamento é tratado como substituto de outro.</td>
   </tr>
 </table>
 
@@ -115,29 +118,35 @@ contratação. Eventos, candidaturas, propostas, mensagens e a confirmação do 
   </tr>
   <tr>
     <td><b>Painel.</b> Pendências, convites, candidaturas em análise, próximas apresentações confirmadas e progresso do perfil.</td>
-    <td><b>Negociação.</b> Proposta, contraproposta (a anterior fica no histórico), mensagens, aceite com modal próprio e confirmação explícita do contratante.</td>
+    <td><b>Negociação.</b> Começa com o cachê do evento (ou com a contraproposta enviada na candidatura); contraproposta com histórico, mensagens, aceite com confirmação e confirmação explícita do contratante, que gera o contrato em PDF.</td>
   </tr>
   <tr>
     <td colspan="2"><img src="docs/images/readme/notificacoes.png" alt="Central de notificações"></td>
   </tr>
   <tr>
-    <td colspan="2"><b>Central de notificações.</b> Sino com tudo o que precisa de atenção, preferências por categoria e e-mails com descadastro em um clique.</td>
+    <td colspan="2"><b>Central de notificações.</b> Sino com tudo o que precisa de atenção, preferências por categoria e e-mails com descadastro em um clique. As telas abertas se atualizam sozinhas quando algo muda (sem recarregar).</td>
   </tr>
 </table>
 
 ### Eventos e vagas
 
-- Eventos **públicos ou privados**, com ou sem casa de show
+- Eventos **públicos, privados ou ocultos** (só para convidados), com ou sem casa de show
 - Estados automáticos: vagas preenchidas, vaga liberada, encerrado por prazo, adiado, cancelado e realizado
 - A vaga só é ocupada quando a contratação é **confirmada**; confirmações simultâneas nunca excedem o número de vagas
+- **Sem conflito de agenda:** o mesmo artista ou o mesmo local não pode ter duas apresentações confirmadas sobrepostas
+- Contraproposta de cachê já na candidatura; contratação direta nas condições publicadas
+- Contrato em PDF para as duas partes na confirmação, avaliação de 0 a 5 estrelas depois do show e histórico completo
+  de negociações (em andamento e encerradas, pessoais ou da banda)
 - Cancelar um evento encerra candidaturas e negociações e avisa os artistas
 
 ### Contas e equipes
 
-- Conta separada por tipo: **artista/banda** ou **contratante/casa de show**
-- Senha forte com confirmação e visualização, confirmação de e-mail e recuperação de senha
+- Conta separada por tipo: **artista/banda** ou **contratante/casa de show**, com cadastro em duas etapas
+- CPF obrigatório no cadastro (também no primeiro acesso com Google) e CNPJ obrigatório para casas de show
+- Login com Google, senha forte com confirmação e visualização, confirmação de e-mail e recuperação de senha
 - Bandas e casas com papéis (proprietário, administrador, integrante), convites e **transferência de propriedade** protegida por senha
 - Exportação de dados e exclusão da conta com anonimização (LGPD)
+- Painel de administração em `/adm`, com acesso próprio configurado no ambiente
 
 ### No celular
 
@@ -155,11 +164,11 @@ flowchart LR
   E[Contratante publica<br/>um evento] --> C[Artista ou banda<br/>se candidata]
   C --> A{Contratante analisa<br/>e compara o rider}
   A -- recusa --> X[Candidatura<br/>recusada]
-  A -- seleciona --> N[Negociação<br/>proposta · contraproposta · mensagens]
+  A -- seleciona --> N[Negociação<br/>cachê do evento · contraproposta · mensagens]
   D[Proposta direta<br/>pelo perfil] --> N
   N -- termos aceitos --> AG[Acordado]
-  AG -- contratante confirma --> CF[Contratação confirmada<br/>ocupa a vaga]
-  CF -- data passa --> R[Apresentação realizada]
+  AG -- contratante confirma --> CF[Contratação confirmada<br/>ocupa a vaga · gera contrato]
+  CF -- data passa --> R[Apresentação realizada<br/>avaliação dos dois lados]
 ```
 
 <details>
@@ -184,7 +193,7 @@ stateDiagram-v2
 ```
 
 As transições automáticas rodam no backend (Cron diário e, no máximo uma vez por minuto, antes das consultas). O estado
-nunca depende do frontend. Detalhes em [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md).
+nunca depende do frontend. Detalhes em [`docs/architecture/ARQUITETURA.md`](docs/architecture/ARQUITETURA.md).
 
 </details>
 
@@ -197,6 +206,7 @@ flowchart LR
   A --> DB[(PostgreSQL<br/>Neon)]
   A --> BL[[Arquivos<br/>Vercel Blob privado]]
   A --> M[E-mail<br/>Brevo ou Resend]
+  F -. "pulso a cada 5 s<br/>(tempo real)" .-> A
   CR[Cron diário] --> A
 ```
 
@@ -205,26 +215,30 @@ flowchart LR
   `riders/compatibility.ts` (cobertas por testes unitários), infraestrutura isolada (banco, storage, imagem, e-mail).
 - Autorização sempre no backend, por **vínculo ativo + papel**. Papel ou ID vindo do cliente nunca é confiado.
 - Notificações e e-mails gravados na mesma transação da ação, com **outbox** e reenvio sem duplicidade.
+- Atualização em tempo real por consulta leve (`GET /me/pulse`), sem WebSocket nem infraestrutura extra.
 
 <details>
 <summary><b>Módulos do backend</b></summary>
 
 | Módulo | Responsabilidade |
 |---|---|
-| `auth` | Cadastro com tipo de conta e aceite LGPD, login com bloqueio por tentativas, sessões, confirmação de e-mail, recuperação de senha, Google OAuth (PKCE), reautenticação |
-| `account` | Dados da conta, senha, aceite de termos, exportação e exclusão/anonimização |
+| `auth` | Cadastro com tipo de conta, CPF e aceite LGPD, login com bloqueio por tentativas, sessões, confirmação de e-mail, recuperação de senha, Google OAuth (PKCE), reautenticação |
+| `account` | Dados da conta e dados civis para contrato, senha, aceite de termos, exportação e exclusão/anonimização |
 | `access` | Autorização por vínculo e papel, tipo de conta, destinatários de notificações |
 | `artists` | Perfil individual, identidade artística (solo ou banda), portfólio |
 | `bands` | Banda, convites, papéis, função do integrante, transferência de propriedade |
 | `organizations` | Casas de show e perfil de contratante individual, responsáveis, convites |
 | `events` | Eventos, candidaturas, vagas, ciclo de vida automático, agenda pública |
-| `bookings` | Negociação, contrapropostas, mensagens, confirmação, apresentação realizada |
-| `riders` | Catálogo técnico, rider do artista, inventário da casa, comparação |
+| `bookings` | Negociação, contrapropostas, mensagens, confirmação com verificação de agenda, apresentação realizada |
+| `contracts` | Contrato em PDF gerado na confirmação, prontidão e atualização dos dados |
+| `reviews` | Avaliação pós-show (0 a 5 estrelas, uma por lado) |
+| `riders` | Catálogo técnico, rider do artista (necessário × já possui), inventário da casa, comparação |
 | `marketplace` | Página inicial, busca e perfis públicos |
 | `notifications` · `mail` | Central de notificações, preferências, outbox e transporte de e-mail |
 | `media` | Upload validado por assinatura binária e reprocessamento de imagem (sharp → WebP) |
 | `maintenance` | Rotina diária: transições por data, reenvio de e-mails, retenção |
-| `dashboard` | Painel e agenda privada |
+| `dashboard` | Painel, agenda privada e pulso de atualização em tempo real |
+| `admin` | Painel de administração (`/adm`) com sessão própria |
 
 </details>
 
@@ -236,16 +250,26 @@ flowchart LR
 ├── backend/                 API NestJS
 │   ├── prisma/              schema.prisma + migrations (com CHECKs e catálogo técnico)
 │   ├── seed-assets/         imagens CC0/domínio público do seed de vitrine
-│   ├── src/common/          validação Zod, erros, municípios de AL, política de senha
+│   ├── scripts/             utilitários (ex.: hash da senha do painel /adm)
+│   ├── src/common/          validação Zod, erros, municípios de AL, documentos (CPF/CNPJ), senha
 │   ├── src/modules/         módulos de domínio (tabela acima)
-│   ├── src/seed/            seeds de demonstração e vitrine (somente desenvolvimento/staging)
+│   ├── src/seed/            seeds de demonstração, vitrine e enriquecimento (dados fictícios)
 │   └── test/                testes de integração (Supertest + PostgreSQL)
 ├── frontend/                SPA React
 │   ├── src/features/        telas por domínio
 │   ├── src/components/      layout, campos, estados, diálogos
 │   └── e2e/                 testes Playwright (desktop, tablet e celular)
-├── docs/                    arquitetura, dados, LGPD, testes, deploy, decisões
-└── docker-compose.yml       db + api + web
+├── docs/                    documentação (índice em docs/README.md)
+│   ├── architecture/        arquitetura e modelo de dados
+│   ├── decisions/           decisões técnicas
+│   ├── development/         guia de desenvolvimento, testes, seeds, demonstração
+│   ├── operations/          Vercel, Neon, variáveis de ambiente, provedores
+│   ├── product/             requisitos, reuniões e LGPD
+│   ├── reports/             relatórios (retratos datados)
+│   ├── references/          arquitetura original e protótipos (históricos)
+│   └── history/             instruções substituídas e setup inicial
+├── docker-compose.yml       db + api + web
+└── neon.ts                  configuração do Neon CLI
 ```
 
 </details>
@@ -323,7 +347,7 @@ Em sistemas com SELinux, o bind mount do script de init já usa o rótulo `:z`.
 </details>
 
 As variáveis de ambiente são validadas na inicialização. Lista completa em
-[`docs/VARIAVEIS_DE_AMBIENTE.md`](docs/VARIAVEIS_DE_AMBIENTE.md).
+[`docs/operations/VARIAVEIS_DE_AMBIENTE.md`](docs/operations/VARIAVEIS_DE_AMBIENTE.md).
 
 ## Contas de demonstração
 
@@ -339,17 +363,18 @@ Senha de todas: `Demo@RiderSync2026`.
 | `marina@` · `helena@demo.ridersync.local` | contratante | Casa Sururu e Teatro Ribeirinho |
 | `carla@` · `eduardo@demo.ridersync.local` | contratante | Contratantes independentes (eventos particulares) |
 
-O seed de vitrine acrescenta 17 artistas e bandas, 9 casas, 27 eventos, candidaturas, negociações e imagens
-(créditos em `backend/seed-assets/showcase/CREDITS.json`). Roteiro passo a passo em [`docs/DEMO.md`](docs/DEMO.md);
-lista completa de contas em [`docs/SEEDERS.md`](docs/SEEDERS.md).
+O seed de vitrine acrescenta artistas, bandas, casas, eventos em todos os estados, candidaturas, negociações, histórico
+de shows com avaliações e imagens (créditos em `backend/seed-assets/showcase/CREDITS.json`). Roteiro passo a passo em [`docs/development/DEMO.md`](docs/development/DEMO.md);
+lista completa de contas em [`docs/development/SEEDERS.md`](docs/development/SEEDERS.md).
 
 ## Testes
 
-| Suíte | Ferramenta | Resultado |
+| Suíte | Ferramenta | O que cobre |
 |---|---|---|
-| Backend — unitários e integração | Jest + Supertest em PostgreSQL real | **201 passando** |
-| Frontend — unitários | Vitest + Testing Library | **13 passando** |
-| End-to-end | Playwright em desktop, tablet (820 px) e celular (Pixel 7) | **17 passando** |
+| Backend — unitários | Jest | Regras puras: estados de eventos, candidaturas e negociações, agenda, compatibilidade de rider, contratos, avaliações, CPF/CNPJ |
+| Backend — integração | Jest + Supertest em PostgreSQL real | API completa: cadastro e sessão, permissões, LGPD, eventos, negociação, conflitos de agenda (inclusive concorrência), contratos |
+| Frontend | Vitest + Testing Library | Formatação, máscaras, componentes e regras de tela |
+| End-to-end | Playwright em desktop, tablet (820 px) e celular (Pixel 7) | Fluxos completos no navegador, do cadastro à contratação, e layout sem rolagem horizontal |
 
 ```bash
 npm run lint && npm run typecheck
@@ -359,20 +384,23 @@ npm run build
 ```
 
 Os testes de integração só rodam contra o banco `ridersync_test` e se recusam a usar qualquer outro. Pré-requisitos e
-o que cada suíte cobre em [`docs/TESTES.md`](docs/TESTES.md).
+o que cada suíte cobre em [`docs/development/TESTES.md`](docs/development/TESTES.md).
 
 ## Deploy
 
 | Peça | Serviço |
 |---|---|
-| API | Vercel, região `gru1` (NestJS) |
-| Interface | Vercel (Vite estático), com `/api/*` reescrito para a API no servidor |
-| Banco | Neon PostgreSQL (branch `ridersync-staging`) |
+| API | Vercel, projeto `ridersync` (Root Directory `backend`, NestJS, região `gru1`) |
+| Interface | Vercel, projeto `ridersync-front` (Root Directory `frontend`, Vite estático), com `/api/*` reescrito para a API no servidor |
+| Banco | Neon PostgreSQL (branch `ridersync-staging`, usada também por Production) |
 | Arquivos | Vercel Blob (store privado) |
-| Rotina diária | Vercel Cron |
+| Rotina diária | Vercel Cron (`/api/internal/maintenance`) |
 
-O ambiente de staging é publicado a partir da branch `feat/evolucao-ridersync` e é protegido por login na Vercel.
-Passo a passo em [`docs/VERCEL_SETUP.md`](docs/VERCEL_SETUP.md) e [`docs/NEON_SETUP.md`](docs/NEON_SETUP.md).
+Os deploys são feitos pela integração Git da Vercel: a `main` publica **Production** e as demais branches geram
+**Preview** (os endereços de staging apontam para o Preview mais recente da branch de trabalho). Migrations remotas são
+aplicadas antes do deploy, com os scripts protegidos de `backend/package.json` (`db:migrate:neon:staging`).
+Passo a passo em [`docs/operations/VERCEL_SETUP.md`](docs/operations/VERCEL_SETUP.md) e
+[`docs/operations/NEON_SETUP.md`](docs/operations/NEON_SETUP.md).
 
 ## Segurança e LGPD
 
@@ -383,27 +411,29 @@ Passo a passo em [`docs/VERCEL_SETUP.md`](docs/VERCEL_SETUP.md) e [`docs/NEON_SE
 - Uploads validados pela assinatura binária e reencodados sem metadados (EXIF/GPS)
 - Política de privacidade e termos versionados, exportação de dados, exclusão com anonimização e política de retenção
 
-Inventário de dados, bases legais e direitos do titular em [`docs/LGPD.md`](docs/LGPD.md).
+Inventário de dados, bases legais e direitos do titular em [`docs/product/LGPD.md`](docs/product/LGPD.md).
 
 ## Documentação
 
+Índice completo em [`docs/README.md`](docs/README.md).
+
 | Documento | Conteúdo |
 |---|---|
-| [`ARQUITETURA.md`](docs/ARQUITETURA.md) | Módulos, camadas, máquinas de estado, visibilidade, notificações |
-| [`MODELO_DE_DADOS.md`](docs/MODELO_DE_DADOS.md) | Entidades, migrations e índices |
-| [`DECISOES_TECNICAS.md`](docs/DECISOES_TECNICAS.md) | Decisões de modelo, permissões, estados, segurança e armazenamento |
-| [`RELATORIO_EVOLUCAO.md`](docs/RELATORIO_EVOLUCAO.md) | Situação de cada requisito, limitações conhecidas e pendências |
-| [`LGPD.md`](docs/LGPD.md) | Proteção de dados pessoais |
-| [`TESTES.md`](docs/TESTES.md) · [`CHECKLIST_TESTES_MANUAIS.md`](docs/CHECKLIST_TESTES_MANUAIS.md) | Testes automatizados e roteiro manual |
-| [`VARIAVEIS_DE_AMBIENTE.md`](docs/VARIAVEIS_DE_AMBIENTE.md) · [`PROVEDORES_EXTERNOS.md`](docs/PROVEDORES_EXTERNOS.md) | Configuração e integrações (e-mail, Google, Cron) |
-| [`VERCEL_SETUP.md`](docs/VERCEL_SETUP.md) · [`NEON_SETUP.md`](docs/NEON_SETUP.md) | Deploy e banco |
-| [`SEEDERS.md`](docs/SEEDERS.md) · [`DEMO.md`](docs/DEMO.md) | Dados de demonstração e roteiro |
+| [`ARQUITETURA.md`](docs/architecture/ARQUITETURA.md) · [`MODELO_DE_DADOS.md`](docs/architecture/MODELO_DE_DADOS.md) | Módulos, camadas, estados, entidades e migrations |
+| [`DECISOES_TECNICAS.md`](docs/decisions/DECISOES_TECNICAS.md) | Decisões vigentes e histórico de cada evolução |
+| [`LGPD.md`](docs/product/LGPD.md) · [`product/`](docs/product/) | Proteção de dados, requisitos e atas de reunião |
+| [`TESTES.md`](docs/development/TESTES.md) · [`CHECKLIST_TESTES_MANUAIS.md`](docs/development/CHECKLIST_TESTES_MANUAIS.md) | Testes automatizados e roteiro manual |
+| [`SEEDERS.md`](docs/development/SEEDERS.md) · [`DEMO.md`](docs/development/DEMO.md) | Dados de demonstração e roteiro |
+| [`VARIAVEIS_DE_AMBIENTE.md`](docs/operations/VARIAVEIS_DE_AMBIENTE.md) · [`PROVEDORES_EXTERNOS.md`](docs/operations/PROVEDORES_EXTERNOS.md) | Configuração e integrações (e-mail, Google, Cron) |
+| [`VERCEL_SETUP.md`](docs/operations/VERCEL_SETUP.md) · [`NEON_SETUP.md`](docs/operations/NEON_SETUP.md) | Deploy e banco |
+| [`GUIA_DE_DESENVOLVIMENTO.md`](docs/development/GUIA_DE_DESENVOLVIMENTO.md) | Escopo, regras de domínio, convenções, comandos e fluxo de trabalho |
 | Swagger | `http://localhost:3000/api/docs` |
 
 ## Escopo atual
 
-**Fora do escopo por decisão do projeto:** processamento de pagamentos, editais e oportunidades culturais (adiados),
-recomendações por IA, substituição automática de equipamentos e avaliações.
+**Fora do escopo por decisão do projeto:** processamento de pagamentos (valores são combinados fora da plataforma),
+editais e oportunidades culturais (adiados), recomendações por IA, substituição automática de equipamentos, agenda
+avançada e produtoras/agências.
 
 ---
 

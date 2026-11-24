@@ -1,7 +1,7 @@
 # RiderSync — Relatório da evolução (2026-11-18)
 
-Especificação: `requisitos_ridersync.md`. Checklists: `docs/CHECKLIST_IMPLEMENTACAO.md` e `docs/CHECKLIST_TESTES_MANUAIS.md`.
-Decisões e conflitos com regras anteriores: `docs/DECISOES_TECNICAS.md` (seção "Evolução de 2026-11-18").
+Especificação: `docs/product/REQUISITOS_EVOLUCAO_2026-11-18.md`. Checklists: `docs/reports/CHECKLIST_IMPLEMENTACAO.md` e `docs/development/CHECKLIST_TESTES_MANUAIS.md`.
+Decisões e conflitos com regras anteriores: `docs/decisions/DECISOES_TECNICAS.md` (seção "Evolução de 2026-11-18").
 
 ## Situação de cada requisito
 
@@ -17,7 +17,7 @@ validação manual · **P** parcialmente implementado · **N** não implementado
 | Validação de entrada, XSS, SQL Injection | T | Zod em toda entrada; Prisma/queries parametrizadas; HTML de e-mail escapado; React escapa saída. |
 | Senhas com Argon2/Bcrypt; UUIDs; controle de acesso granular | T | Argon2id com migração do scrypt; UUID em todas as entidades; autorização por vínculo. |
 | Exceções sem vazar detalhes | T | Filtro global; teste de corpo de erro. |
-| FKs, UNIQUE, transações, índices, sem N+1 | T | Ver `docs/MODELO_DE_DADOS.md`. |
+| FKs, UNIQUE, transações, índices, sem N+1 | T | Ver `docs/architecture/MODELO_DE_DADOS.md`. |
 | Soft delete para dados cruciais | P | Decisão: estados de negócio + anonimização LGPD em vez de `deletedAt` genérico (evita reter dados pessoais indevidamente). |
 | Formato de entrega (visão, árvore, código completo) | N/A | Refere-se às respostas; a documentação cobre visão e estrutura. |
 
@@ -85,12 +85,12 @@ validação manual · **P** parcialmente implementado · **N** não implementado
 ## Ambientes
 
 - Migration aplicada nos bancos locais e, em 2026-11-18, no Neon **staging** (com backup `staging-pre-evolucao` antes); diff schema × banco vazio.
-- Neon **production**: não alterado. Seed executado no staging. Preview publicado da branch `feat/evolucao-ridersync` (`ridersync-front-staging.vercel.app` → `ridersync-api-staging.vercel.app`); ver `docs/VERCEL_SETUP.md`.
+- Neon **production**: não alterado. Seed executado no staging. Preview publicado da branch `feat/evolucao-ridersync` (`ridersync-front-staging.vercel.app` → `ridersync-api-staging.vercel.app`); ver `docs/operations/VERCEL_SETUP.md`.
 - Vercel: criadas `APP_SECRET`, `CRON_SECRET` (aleatórias, secretas) e `PUBLIC_APP_URL` em Preview/Development do projeto `ridersync`.
 
 ## Pendências que dependem de você
 
-1. **Resend**: conta, domínio verificado e `RESEND_API_KEY` + `MAIL_DRIVER=resend` + `MAIL_FROM` (ver `docs/PROVEDORES_EXTERNOS.md`).
+1. **Resend**: conta, domínio verificado e `RESEND_API_KEY` + `MAIL_DRIVER=resend` + `MAIL_FROM` (ver `docs/operations/PROVEDORES_EXTERNOS.md`).
 2. **Google OAuth**: projeto no Google Cloud, redirect `https://ridersync-front-staging.vercel.app/api/auth/google/callback`, `GOOGLE_CLIENT_ID/SECRET`.
 3. **Decidir o destino do site público** `ridersync-front.vercel.app` (front antigo + API antiga + banco de staging): promover a nova versão ou dar a ele um banco próprio.
 4. **E-mail do encarregado (LGPD)** real em `PRIVACY_CONTACT_EMAIL` e revisão jurídica da política.

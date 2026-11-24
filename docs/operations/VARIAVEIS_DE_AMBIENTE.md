@@ -12,6 +12,7 @@ Modelo comentado: `backend/.env.example`. O frontend não usa variáveis em prod
 | `COOKIE_SECURE` | não | `false` | `true` em HTTPS. |
 | `SESSION_TTL_HOURS` | não | `168` | Duração da sessão. |
 | `STORAGE_DRIVER` | não | `local` | `local` (só dev), `s3` ou `vercel-blob`. Na Vercel, `local` é recusado. |
+| `STORAGE_LOCAL_DIR` | não | `./storage` | Pasta dos arquivos com o driver `local`. |
 | `BLOB_READ_WRITE_TOKEN` | com `vercel-blob` | — | Injetada ao conectar o Blob store ao projeto. |
 | `S3_*` | com `s3` | — | Bucket, região, endpoint e credenciais. |
 | `PUBLIC_APP_URL` | recomendada | `http://localhost:5173` | Origem pública da SPA: links dos e-mails e redirect do Google. |
@@ -29,6 +30,7 @@ Modelo comentado: `backend/.env.example`. O frontend não usa variáveis em prod
 | `PRIVACY_CONTACT_EMAIL` | não | `privacidade@ridersync.app` | Contato do encarregado (LGPD). |
 | `SWAGGER` | não | — | `true` habilita `/api/docs` em produção. |
 | `SEED_DEMO` | não | `false` | Habilita o seed de demonstração (nunca em produção). |
+| `ADMIN_USERNAME` / `ADMIN_PASSWORD_HASH` | juntas, para o `/adm` | — | Acesso ao painel de administração. O hash é Argon2id (gere com `npm run admin:hash -w backend`); nunca grave a senha em texto. Sem elas o painel fica desativado. |
 
 ## Situação na Vercel (projeto `ridersync`) — 2026-11-18
 

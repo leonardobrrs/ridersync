@@ -182,7 +182,7 @@ bloqueado com `NODE_ENV=production`, só roda com `SEED_DEMO=true` ou `--force`.
 - Limpeza periódica de sessões expiradas (hoje removidas sob demanda).
 - `npm audit` aponta `deepmerge-ts < 8` usado apenas pelo CLI do Prisma 6 (ferramenta de build/migration, não runtime da API).
 
-## Evolução de 2026-11-18 (requisitos em `requisitos_ridersync.md`)
+## Evolução de 2026-11-18 (requisitos em `docs/product/REQUISITOS_EVOLUCAO_2026-11-18.md`)
 
 Decisões do responsável que **substituem** regras anteriores (ordem de autoridade: decisão explícita mais recente):
 
@@ -252,7 +252,7 @@ Decisões do responsável que **substituem** regras anteriores (ordem de autorid
    nas subpáginas sem atalho próprio), número variável de itens, barra de salvar acima dela; em telas de toque some com
    o teclado aberto e volta com atraso (não rouba o toque que fechou o teclado).
 
-## Reunião de 18/11 (`docs/reuniao18_11.md`)
+## Reunião de 18/11 (`docs/product/reunioes/2026-11-18.md`)
 
 - **Feed por tipo de conta** (aba "Para você" da página inicial):
   - *Artista/banda*: o objetivo é conseguir apresentações → só **oportunidades abertas** (inclusive privadas, que só
@@ -287,7 +287,7 @@ Decisões do responsável que **substituem** regras anteriores (ordem de autorid
   Na URL ficam como `genre=MPB,Forró` (a API também aceita o parâmetro repetido). Dentro do mesmo filtro os valores
   se combinam por OU; entre filtros diferentes, por E. Cidades: sugestões em destaque + busca entre os 102 municípios.
 
-## Reunião com o professor (19/11) — `docs/reuniao_com_o_professor_19_11.md`
+## Reunião com o professor (19/11) — `docs/product/reunioes/2026-11-19-professor.md`
 
 - ~~**Rider = o que o artista possui.**~~ **Substituída em 23/11** (ver "Correção do conceito de rider" abaixo): essa leitura
   inverteu o conceito e foi desfeita. `EventApplication.needs` está descontinuada. Permanece válido: sem casa de show (evento
