@@ -20,6 +20,7 @@
     "db:status:neon:staging": "dotenv -o -e .env.neon-staging -- sh -c '[ \"$NEON_BRANCH\" = ridersync-staging ] || { echo \"ABORTADO: .env.neon-staging nao aponta para ridersync-staging\" >&2; exit 1; } && DATABASE_URL=\"$DATABASE_URL_UNPOOLED\" exec prisma migrate status'",
     "db:migrate:neon:staging": "dotenv -o -e .env.neon-staging -- sh -c '[ \"$NEON_BRANCH\" = ridersync-staging ] || { echo \"ABORTADO: .env.neon-staging nao aponta para ridersync-staging\" >&2; exit 1; } && DATABASE_URL=\"$DATABASE_URL_UNPOOLED\" exec prisma migrate deploy'",
     "seed": "tsx src/seed/demo-seed.ts --force",
+    "admin:hash": "node scripts/admin-hash.mjs",
     "seed:showcase": "tsx src/seed/showcase-seed.ts --force --with-demo",
     "test": "jest --config jest.config.js --runInBand",
     "test:unit": "jest --config jest.config.js --selectProjects unit",

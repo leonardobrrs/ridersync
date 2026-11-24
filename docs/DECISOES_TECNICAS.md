@@ -422,3 +422,27 @@ schema genérico; as diferenças abaixo vêm do modelo real do repositório e s�
   `needs` devolve 400). A coluna `EventApplication.needs` foi mantida (sem apagar dados) como DESCONTINUADA, sem leitura nem
   escrita. Migration `20261123140000_rider_quantidade_possuida` (aditiva).
 - O rider público do artista mostra "Já possui N" por item; o inventário da casa não tem esse campo.
+
+## Painel de administração (23/11)
+
+Para limpar dados de teste sem resetar o banco (que é compartilhado por produção e staging).
+
+- **Acesso só por URL:** `/adm` na SPA, `/api/admin/*` na API. Nenhum link no sistema, fora do Swagger
+  (`@ApiExcludeController`), `noindex` na página. Com o painel desativado, todas as rotas respondem 404.
+- **Login próprio, separado das contas:** `ADMIN_USERNAME` + `ADMIN_PASSWORD_HASH` (Argon2id, gerado com
+  `npm run admin:hash -w backend`). A senha nunca fica no código nem em texto puro no ambiente. Sem os dois (ou com um hash que
+  não é Argon2), o painel fica desativado — a API sobe normalmente.
+- **Sessão:** cookie `rs_admin` (HttpOnly, SameSite=Strict, `Path=/api/admin`, 8 h) com token assinado por HMAC
+  (`APP_SECRET`) que inclui o hash da senha: trocar a senha encerra as sessões abertas. Uma sessão de usuário não dá acesso ao
+  painel e vice-versa. Login limitado a 5 tentativas por minuto; tempo de resposta igual para usuário inexistente.
+- **Exclusões definitivas (hard delete), em transação**, apoiadas nas cascatas do banco:
+  - evento → candidaturas e negociações ligadas a ele (com propostas, mensagens, contrato e apresentação);
+  - negociação → propostas, mensagens, contrato, apresentação;
+  - perfil artístico/banda → rider, portfólio, candidaturas, negociações (as contas continuam);
+  - casa/contratante → inventário, eventos, negociações (as contas continuam);
+  - conta → perfil individual, sessões, notificações, e-mails pendentes e arquivos enviados; bandas e casas em que ela é a
+    única integrante ativa saem junto; onde há outras pessoas, a propriedade passa para quem está há mais tempo
+    (administradores primeiro).
+  - Os arquivos de mídia (fotos, imagens de evento, portfólio) são apagados do storage depois do commit.
+- Diferente da exclusão de conta pelo titular (LGPD, anonimiza e preserva o histórico da contraparte): o painel é para
+  dados de teste e apaga tudo.

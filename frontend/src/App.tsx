@@ -21,6 +21,7 @@ import { VenuePublicPage, VenuesPage } from './features/marketplace/VenuePages';
 import { OpportunitiesPage, OpportunityPage } from './features/opportunities/OpportunityPages';
 import { EventManagePage, IndependentEventsPage, NewEventPage, NewIndependentEventPage } from './features/venues/EventPages';
 import { MyVenuesPage, VenueManagePage } from './features/venues/VenuePages';
+import { AdminPage } from './features/admin/AdminPage';
 
 const artistOnly = (el: ReactNode) => <RequireAccountType type="ARTIST">{el}</RequireAccountType>;
 const contractorOnly = (el: ReactNode) => <RequireAccountType type="CONTRACTOR">{el}</RequireAccountType>;
@@ -69,6 +70,8 @@ function Root() {
 }
 
 const router = createBrowserRouter([
+  // Painel de administração: só por URL, fora do layout do site (sem cabeçalho, menu nem link em lugar nenhum).
+  { path: '/adm', element: <AdminPage /> },
   {
     element: <Root />,
     children: [

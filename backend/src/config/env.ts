@@ -41,6 +41,12 @@ const EnvSchema = z
     PRIVACY_CONTACT_EMAIL: z.string().default('privacidade@ridersync.app'),
     LOGIN_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
     LOGIN_LOCK_MINUTES: z.coerce.number().int().positive().default(15),
+    /**
+     * Painel de administração (/adm). Desativado (404) se faltar qualquer um dos dois. A senha nunca fica no código nem
+     * no ambiente em texto puro: ADMIN_PASSWORD_HASH é um hash Argon2id (gere com `npm run admin:hash -w backend`).
+     */
+    ADMIN_USERNAME: z.string().trim().optional(),
+    ADMIN_PASSWORD_HASH: z.string().trim().optional(),
   })
   .superRefine((env, ctx) => {
     if (env.STORAGE_DRIVER === 's3') {

@@ -204,3 +204,10 @@ Antes de publicar no staging: aplicar a migration nova (`npm run db:migrate:neon
 - Migration `20261123140000_rider_quantidade_possuida` (aditiva).
 - Riders salvos antes da mudança (`updatedAt` < 23/11 20:00, Maceió) mostram o aviso “Revise seu rider” no painel até o próximo salvamento (`riderNeedsReview`), porque os itens cadastrados como “o que você possui” passam a valer como “o que você precisa”.
 - Validação (já sobre a `feat/evolucao-ridersync`): backend 362 testes passando (36 suítes, incl. 9 unitários e 3 de integração novos do rider) contra `ridersync_test` local; frontend 52 (6 novos); Playwright 32 (desktop, tablet, celular); lint, typecheck e build ok.
+
+## Painel de administração (23/11)
+
+- `/adm` (sem link no sistema) com login próprio (`ADMIN_USERNAME` + `ADMIN_PASSWORD_HASH` em Argon2id). Totais, busca e exclusão definitiva (individual ou em lote, com confirmação) de contas, artistas/bandas, casas/contratantes, eventos e negociações. Detalhes em `DECISOES_TECNICAS.md`.
+- API `AdminModule` (`/api/admin/*`, fora do Swagger; 404 quando desativado). Mídias removidas do storage após o commit.
+- Card de candidatura recebida reorganizado (ações abaixo do conteúdo; com 4 botões o texto era espremido em uma coluna).
+- Validação: backend 368 testes (2 unitários e 4 de integração novos); frontend 59 (3 novos); Playwright 33 (1 novo, `/adm`); lint, typecheck e build ok.

@@ -636,7 +636,7 @@ export function EventManagePage() {
         ) : (
           <div className="stack-sm">
             {ev.applications.map((a) => (
-              <article className="prow" key={a.id}>
+              <article className="prow app-card" key={a.id}>
                 <Poster name={a.artist.name} photoUrl={a.artist.photoUrl} top={[a.artist.city ?? '', '']} bottom={[a.artist.genres[0] ?? '', '']} />
                 <div>
                   <h3>
@@ -645,10 +645,11 @@ export function EventManagePage() {
                     </Link>
                   </h3>
                   <div className="meta">
-                    <Status value={a.status} map={APPLICATION_STATUS} />
-                    <span>{a.artist.kind === 'BAND' ? 'Banda' : 'Músico'}</span>
-                    <span>enviada {dateTime(a.createdAt)}</span>
-                    {a.booking && <Status value={a.booking.status} map={BOOKING_STATUS} />}
+                    {/* Com negociação aberta, o estado dela é o que importa; sem ela, o da candidatura. */}
+                    {a.booking ? <Status value={a.booking.status} map={BOOKING_STATUS} /> : <Status value={a.status} map={APPLICATION_STATUS} />}
+                    <span>
+                      {a.artist.kind === 'BAND' ? 'Banda' : 'Músico'} · enviada {dateTime(a.createdAt)}
+                    </span>
                   </div>
                   {a.proposedFeeCents != null && (
                     <p className="counter-note" role="note">
@@ -656,8 +657,11 @@ export function EventManagePage() {
                       {ev.feeCents != null && <> (cachê publicado: {money(ev.feeCents)})</>}
                     </p>
                   )}
-                  {a.message && <p style={{ marginTop: 6, fontSize: 14 }}>“{a.message}”</p>}
-                  {!independent && <small className="hint">O rider do artista é comparado automaticamente com o inventário da casa.</small>}
+                  {a.message && (
+                    <p className="app-msg" title={a.message}>
+                      “{a.message}”
+                    </p>
+                  )}
                 </div>
                 <div className="acts">
                   {!independent && (
@@ -717,6 +721,7 @@ export function EventManagePage() {
           </div>
         )}
         <p className="note">
+          {!independent && 'Use “Comparar rider” para ver o rider do artista diante do inventário da casa. '}
           Selecionar uma candidatura abre a negociação com o artista e não ocupa vaga — você pode negociar com mais de um. A vaga só é ocupada quando uma
           contratação é confirmada.
         </p>

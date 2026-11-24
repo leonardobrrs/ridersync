@@ -140,3 +140,7 @@ sozinhos: depois que ficarem *Ready*, rode `vercel alias set <url-api> ridersync
 
 `APP_SECRET` é o mesmo do Preview porque assina os links de descadastro gravados em e-mails e o banco é compartilhado.
 Pendente: autorizar o callback de Production no cliente OAuth do Google Cloud Console.
+
+**Painel de administração (`/adm`, 23/11):** variáveis `ADMIN_USERNAME` e `ADMIN_PASSWORD_HASH` (hash Argon2id, gerado com
+`npm run admin:hash -w backend`; nunca a senha) no projeto `ridersync`, em Production e Preview (o banco é o mesmo). Sem elas o
+painel responde 404. Para trocar a senha: gere outro hash, substitua `ADMIN_PASSWORD_HASH` e faça redeploy (as sessões abertas caem).

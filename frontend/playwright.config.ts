@@ -22,6 +22,9 @@ const apiEnv = {
   MAIL_DEV_OUTBOX_DIR: './test-storage/e2e-mail',
   PUBLIC_APP_URL: 'http://127.0.0.1:5174',
   LOGIN_MAX_ATTEMPTS: '50',
+  // Painel /adm só nos testes (senha de teste Painel@Teste2026; o hash não vale em nenhum ambiente real).
+  ADMIN_USERNAME: 'adm-teste',
+  ADMIN_PASSWORD_HASH: '$argon2id$v=19$m=19456,t=2,p=1$DXKH9VPyMJLQUhYrJg6lgg$cyLAiJGIP2apReM8msuHupDAudgOMqB1pbUjQJTD2/Q',
 };
 
 export default defineConfig({

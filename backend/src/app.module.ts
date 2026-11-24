@@ -16,6 +16,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { EventsModule } from './modules/events/events.module';
 import { MailModule } from './modules/mail/mail.module';
 import { MaintenanceModule } from './modules/maintenance/maintenance.module';
+import { AdminModule } from './modules/admin/admin.module';
 import { MarketplaceModule } from './modules/marketplace/marketplace.module';
 import { MediaModule } from './modules/media/media.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
@@ -59,6 +60,7 @@ class HealthController {
     ContractsModule,
     DashboardModule,
     MaintenanceModule,
+    AdminModule,
   ],
   controllers: [HealthController],
   providers: [
