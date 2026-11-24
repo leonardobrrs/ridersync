@@ -29,7 +29,8 @@
   <a href="#contas-de-demonstração">Contas demo</a> ·
   <a href="#testes">Testes</a> ·
   <a href="#deploy">Deploy</a> ·
-  <a href="#documentação">Docs</a>
+  <a href="#documentação">Docs</a> ·
+  <a href="#equipe">Equipe</a>
 </p>
 
 <br>
@@ -450,9 +451,20 @@ Inventário de dados, bases legais e direitos do titular em [`docs/product/LGPD.
 editais e oportunidades culturais (adiados), recomendações por IA, substituição automática de equipamentos, agenda
 avançada e produtoras/agências.
 
+## Equipe
+
+Projeto desenvolvido na disciplina **Projeto e Desenvolvimento de Sistemas** da Universidade Federal de Alagoas.
+
+| Integrantes |
+|---|
+| Leonardo Barbosa |
+| José Herberty |
+| Luiz Guilherme |
+| Cleversson Lucas |
+
 ---
 
 <p align="center">
-  <sub><b>RiderSync</b> · projeto acadêmico desenvolvido no Projetão da Universidade Federal de Alagoas<br>
+  <sub><b>RiderSync</b> · projeto acadêmico da disciplina Projeto e Desenvolvimento de Sistemas · Universidade Federal de Alagoas<br>
   Imagens de demonstração com licença CC0 ou domínio público · todos os dados exibidos são fictícios</sub>
 </p>
