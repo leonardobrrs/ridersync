@@ -21,6 +21,7 @@
 
 <p align="center">
   <a href="#visão-geral">Visão geral</a> ·
+  <a href="#vídeo-de-demonstração">Vídeo</a> ·
   <a href="#funcionalidades">Funcionalidades</a> ·
   <a href="#como-a-contratação-funciona">Fluxo</a> ·
   <a href="#arquitetura">Arquitetura</a> ·
@@ -62,6 +63,17 @@ do show, o contrato em PDF e a avaliação pós-show ficam registrados para os d
 > [!IMPORTANT]
 > O RiderSync **não processa pagamentos**: valores e condições são registrados na negociação e combinados entre as partes.
 
+## Vídeo de demonstração
+
+<p align="center">
+  <a href="docs/videos/RiderSync-demonstracao-v2.mp4">
+    <img src="docs/images/readme/video-capa.png" alt="Vídeo de demonstração do RiderSync — clique para assistir" width="85%">
+  </a>
+</p>
+
+<p align="center"><sub>Cerca de 6 minutos: cadastro, bandas, convites, eventos, candidatura, negociação e contratação, lado a lado no computador e no celular.
+<a href="docs/videos/RiderSync-demonstracao-v2.mp4">Assistir ao vídeo</a>.</sub></p>
+
 ## Funcionalidades
 
 ### Vitrine pública
@@ -98,14 +110,14 @@ do show, o contrato em PDF e a avaliação pós-show ficam registrados para os d
     <td width="50%"><img src="docs/images/readme/inventario.png" alt="Inventário técnico da casa"></td>
   </tr>
   <tr>
-    <td><b>Rider do artista.</b> O que o show precisa (itens de um catálogo técnico) e quanto disso o artista já leva. Riders de banda e de integrantes são independentes.</td>
+    <td><b>Rider do artista.</b> O que o show precisa (itens de um catálogo técnico), com a quantidade necessária e quanto disso o artista já possui e leva. Riders de banda e de integrantes são independentes.</td>
     <td><b>Inventário da casa.</b> O que o palco tem e em que quantidade. Nunca altera o rider dos artistas.</td>
   </tr>
   <tr>
     <td colspan="2"><img src="docs/images/readme/comparar.png" alt="Comparação entre rider e inventário"></td>
   </tr>
   <tr>
-    <td colspan="2"><b>Comparação determinística.</b> A casa só precisa cobrir a diferença entre o que o show pede e o que o artista leva. Cada item sai como <i>compatível</i>, <i>parcialmente disponível</i>, <i>indisponível</i> ou <i>conferir com a casa</i>, com quantidades e motivo. Só há correspondência exata de catálogo: nenhum equipamento é tratado como substituto de outro.</td>
+    <td colspan="2"><b>Comparação determinística.</b> A casa só precisa cobrir a diferença entre o que o show pede e o que o artista leva (colunas <i>necessário</i>, <i>você possui</i>, <i>a casa tem</i> e <i>você leva</i>), com um aviso do que ainda falta cobrir. Cada item sai como <i>compatível</i>, <i>parcialmente disponível</i>, <i>indisponível</i> ou <i>conferir com a casa</i>, com quantidades e motivo. Só há correspondência exata de catálogo: nenhum equipamento é tratado como substituto de outro.</td>
   </tr>
 </table>
 
@@ -121,10 +133,12 @@ do show, o contrato em PDF e a avaliação pós-show ficam registrados para os d
     <td><b>Negociação.</b> Começa com o cachê do evento (ou com a contraproposta enviada na candidatura); contraproposta com histórico, mensagens, aceite com confirmação e confirmação explícita do contratante, que gera o contrato em PDF.</td>
   </tr>
   <tr>
-    <td colspan="2"><img src="docs/images/readme/notificacoes.png" alt="Central de notificações"></td>
+    <td width="50%"><img src="docs/images/readme/contrato.png" alt="Contrato gerado na contratação confirmada"></td>
+    <td width="50%"><img src="docs/images/readme/notificacoes.png" alt="Central de notificações"></td>
   </tr>
   <tr>
-    <td colspan="2"><b>Central de notificações.</b> Sino com tudo o que precisa de atenção, preferências por categoria e e-mails com descadastro em um clique. As telas abertas se atualizam sozinhas quando algo muda (sem recarregar).</td>
+    <td><b>Contrato.</b> Gerado em PDF na confirmação, o mesmo documento para as duas partes, com o que ainda falta preencher e quem deve completar. Pode ser atualizado depois que os dados forem completados.</td>
+    <td><b>Central de notificações.</b> Sino com tudo o que precisa de atenção, preferências por categoria e e-mails com descadastro em um clique. As telas abertas se atualizam sozinhas quando algo muda (sem recarregar).</td>
   </tr>
 </table>
 
@@ -362,6 +376,7 @@ Senha de todas: `Demo@RiderSync2026`.
 | `rafael@demo.ridersync.local` | contratante | Galpão Jaraguá: inventário, eventos em vários estados, negociações |
 | `marina@` · `helena@demo.ridersync.local` | contratante | Casa Sururu e Teatro Ribeirinho |
 | `carla@` · `eduardo@demo.ridersync.local` | contratante | Contratantes independentes (eventos particulares) |
+| `fernanda@` · `caio@` · `marilia@demo.ridersync.local` | vitrine | Contratante com duas casas (Armazém Pajuçara e Bar do Cais) e artistas com histórico de shows e avaliações |
 
 O seed de vitrine acrescenta artistas, bandas, casas, eventos em todos os estados, candidaturas, negociações, histórico
 de shows com avaliações e imagens (créditos em `backend/seed-assets/showcase/CREDITS.json`). Roteiro passo a passo em [`docs/development/DEMO.md`](docs/development/DEMO.md);

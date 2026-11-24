@@ -49,8 +49,9 @@ Mapa da documentação. **Vigente** = descreve o sistema como ele é hoje. **His
 | [`VARIAVEIS_DE_AMBIENTE.md`](operations/VARIAVEIS_DE_AMBIENTE.md) | Todas as variáveis do backend e onde estão configuradas |
 | [`PROVEDORES_EXTERNOS.md`](operations/PROVEDORES_EXTERNOS.md) | E-mail (Brevo/Resend), Google OAuth e Cron |
 
-### `images/`
-Imagens usadas no README principal (`images/readme/`).
+### `images/` e `videos/`
+Imagens usadas no README principal (`images/readme/`) e o vídeo de demonstração
+([`videos/RiderSync-demonstracao-v2.mp4`](videos/RiderSync-demonstracao-v2.mp4)).
 
 ## Histórico e referência
 
